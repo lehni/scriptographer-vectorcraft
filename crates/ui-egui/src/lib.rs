@@ -156,6 +156,8 @@ pub struct VectorcraftApp {
     pub(crate) updates_rt: updates_ui::Runtime,
     /// The status bar's frame rate ([`frame_rate`]).
     frame_rate: frame_rate::FrameRate,
+    /// When the current frame started, by the app's clock ([`now_secs`]): the time scripts run by.
+    last_time: f64,
     /// Canvas rect of the last frame (screen points), for control-channel coordinate mapping.
     pub canvas_rect: Option<egui::Rect>,
     /// Hover position in document coordinates.
@@ -164,6 +166,8 @@ pub struct VectorcraftApp {
     /// uses the lossless internal clipboard) and what came with a paste (a Paste event's text, a
     /// picture or file the host read: [`Self::paste_from_host`]).
     clipboard_out: Option<String>,
+    /// PaperCraft scripts that keep running ([`scripts`]).
+    scripts: scripts::Scripts,
     clipboard_published: Option<String>,
     pub(crate) clipboard_in: Option<vectorcraft_engine::cmd::clipboard::Flavour>,
     /// The Copy or Cut whose formats go to the system clipboard ([`Self::publish_clipboard`]).

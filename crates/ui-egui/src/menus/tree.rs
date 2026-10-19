@@ -641,7 +641,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Links", crate::panels::links::ID),
                 panel("Magic Wand", "magicWand"),
                 panel("Navigator", "navigator"),
-                sub("PaperCraft", vec![c("Run Script…", "ui.runScript")]),
+                sub("PaperCraft", vec![c("Run Script…", "ui.runScript"), c("Stop Running Scripts", "ui.stopScripts")]),
                 panel("Pathfinder", "pathfinder"),
                 panel("Pattern Options", "patternOptions"),
                 panel("Properties", "properties"),

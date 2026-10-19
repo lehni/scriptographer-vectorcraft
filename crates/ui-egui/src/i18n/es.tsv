@@ -1574,6 +1574,7 @@ font-technology	Variable	Variables
 	Inspect Object	Inspeccionar objeto
 	Patch Document	Aplicar parche al documento
 	Run Script…	Ejecutar script…
+	Stop Running Scripts	Detener scripts en ejecución
 	PaperCraft	PaperCraft
 	Install Plug-in	Instalar plugin
 	Install Plug-in…	Instalar plugin…

@@ -11,8 +11,8 @@ use super::state::{
 use super::{
     Arc, AutomationRoots, ControlRequest, Ordering, Receiver, Session, UiState, Value, VectorcraftApp, View, ViewInfo, background, canvas, chrome,
     clipboard_probe, dialogs, export_progress, file_access, fileio, font_menu, graphics, i18n, io, json, menus, native_menu, opening, palette,
-    panel_docking, panels, picks, place, placing, plugin_runs, prefs_dialog, recovery, screen_color, scrub, shortcut_editor, shortcuts, theme,
-    titlebar, toolbar, tools_float, trace_runs, unsaved, updates_ui, widgets,
+    panel_docking, panels, picks, place, placing, plugin_runs, prefs_dialog, recovery, screen_color, scripts, scrub, shortcut_editor, shortcuts,
+    theme, titlebar, toolbar, tools_float, trace_runs, unsaved, updates_ui, widgets,
 };
 
 mod clipboard;
@@ -82,6 +82,7 @@ impl VectorcraftApp {
             character_focus: None,
             run_count: 0,
             clipboard_out: None,
+            scripts: Default::default(),
             clipboard_published: None,
             clipboard_in: None,
             clipboard_publishing: Default::default(),
@@ -99,6 +100,7 @@ impl VectorcraftApp {
             ui_fonts: Default::default(),
             updates_rt: Default::default(),
             frame_rate: Default::default(),
+            last_time: 0.0,
             canvas_rect: None,
             hover_doc: None,
             custom_titlebar: false,
@@ -257,8 +259,10 @@ impl VectorcraftApp {
         let now = self.now_override.unwrap_or_else(now_secs);
         #[cfg(not(test))]
         let now = now_secs();
+        self.last_time = now;
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
+        scripts::frame(self, ctx, now);
         updates_ui::tick(self, ctx);
         // Read the system clipboard only when that alone decides whether Paste is enabled. A
         // background thread reads it where the host installs one (an unresponsive owner must never
