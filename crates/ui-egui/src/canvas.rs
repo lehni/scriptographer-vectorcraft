@@ -393,7 +393,8 @@ fn canvas_cursor(app: &mut VectorcraftApp, ui: &Ui, view_info: vectorcraft_engin
         None
     };
     // In Presentation Mode the pointer is the default one, with no tool cursor.
-    let tool_cursor = (app.ui.screen_mode < 3).then(|| view_cursor.or_else(|| hover_cursor(app, mods(m, space), view_info, hover_still)));
+    let tool_cursor = (app.ui.screen_mode < 3)
+        .then(|| view_cursor.or_else(|| crate::scripts::cursor(app)).or_else(|| hover_cursor(app, mods(m, space), view_info, hover_still)));
     let cur = if let Some(c) = tool_cursor.flatten() {
         let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("tool-cursor")));
         // The loaded place cursor carries the file's thumbnail.
