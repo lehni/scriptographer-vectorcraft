@@ -4045,6 +4045,7 @@ axis	Both	Обидві
 @msg	PDF writer error: {0}	Помилка запису PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файли: {n} {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
+@msg	Running scripts needs the desktop app	Для запуску скриптів потрібна настільна програма
 @msg	Release Guides: no guides	Звільнення напрямних: немає напрямних
 @msg	Release: no layer to put the rectangle in	Звільнення: немає шару для приміщення прямокутника
 @msg	Replace Spine: select a blend and a path	Заміна осі: виділіть перехід і контур

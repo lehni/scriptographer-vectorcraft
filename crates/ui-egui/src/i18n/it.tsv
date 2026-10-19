@@ -4061,6 +4061,7 @@ axis	Both	Entrambi
 @msg	PDF writer error: {0}	Errore del generatore PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Pacchetto creato con {n} file in {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Anteprima nel browser richiede l'app desktop (sul web i file vengono invece scaricati)
+@msg	Running scripts needs the desktop app	L'esecuzione di script richiede l'app desktop
 @msg	Release Guides: no guides	Rilascia guide: nessuna guida
 @msg	Release: no layer to put the rectangle in	Rilascia: nessun livello in cui inserire il rettangolo
 @msg	Replace Spine: select a blend and a path	Sostituisci dorsale: seleziona una fusione e un tracciato

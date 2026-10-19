@@ -3930,6 +3930,7 @@ axis	Both	Båda
 @msg	PDF writer error: {0}	fel i PDF-skrivaren: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Paketerade {n} fil i {folder} ({note})|Paketerade {n} filer i {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Förhandsgranska i webbläsare kräver skrivbordsappen (webbversionen hämtar filer i stället)
+@msg	Running scripts needs the desktop app	Att köra skript kräver skrivbordsappen
 @msg	Release Guides: no guides	Släpp stödlinjer: inga stödlinjer
 @msg	Release: no layer to put the rectangle in	Släpp: inget lager att placera rektangeln i
 @msg	Replace Spine: select a blend and a path	Ersätt ryggrad: markera en blandning och en bana

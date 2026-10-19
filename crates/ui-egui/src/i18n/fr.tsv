@@ -4009,6 +4009,7 @@ axis	Both	Les deux
 @msg	PDF writer error: {0}	Erreur du générateur PDF : {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} fichier assemblé dans {folder} ({note})|{n} fichiers assemblés dans {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Aperçu dans le navigateur nécessite l’application de bureau (la version web télécharge les fichiers à la place)
+@msg	Running scripts needs the desktop app	L’exécution de scripts nécessite l’application de bureau
 @msg	Release Guides: no guides	Annuler les repères : aucun repère
 @msg	Release: no layer to put the rectangle in	Annuler : aucun calque où placer le rectangle
 @msg	Replace Spine: select a blend and a path	Remplacer la dorsale : sélectionnez un dégradé de formes et un tracé

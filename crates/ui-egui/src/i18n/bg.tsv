@@ -3910,6 +3910,7 @@ axis	Both	И двете
 @msg	PDF writer error: {0}	Грешка на PDF записа: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Пакетиран е {n} файл в {folder} ({note})|Пакетирани са {n} файла в {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Прегледът в браузър изисква настолното приложение (уеб версията изтегля файловете вместо това)
+@msg	Running scripts needs the desktop app	Изпълнението на скриптове изисква настолното приложение
 @msg	Release Guides: no guides	Освобождаване на водачи: няма водачи
 @msg	Release: no layer to put the rectangle in	Освобождаване: няма слой, в който да се постави правоъгълникът
 @msg	Replace Spine: select a blend and a path	Замяна на оста: изберете плавно преливане и път

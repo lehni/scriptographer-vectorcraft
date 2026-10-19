@@ -3806,6 +3806,7 @@ font-technology	Variable	ცვლადი
 @msg	PDF writer error: {0}	PDF-ის ჩამწერის შეცდომა: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	ბრაუზერში წინასწარ ნახვას დესკტოპის აპი სჭირდება (ვებში ფაილები ჩამოიტვირთება)
+@msg	Running scripts needs the desktop app	სკრიპტების გაშვებას დესკტოპის აპი სჭირდება
 @msg	Release Guides: no guides	დამხმარე ხაზების მოხსნა: დამხმარე ხაზები არ არის
 @msg	Release: no layer to put the rectangle in	მოხსნა: მართკუთხედის ჩასასმელი შრე არ არის
 @msg	Replace Spine: select a blend and a path	ხერხემლის ჩანაცვლება: მონიშნეთ გადასვლა და ტრაექტორია

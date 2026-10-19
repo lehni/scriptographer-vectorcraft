@@ -4040,6 +4040,7 @@ imageTrace	Outline	Contour
 @msg	PDF writer error: {0}	PDF-schrijffout: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} bestand verpakt in {folder} ({note})|{n} bestanden verpakt in {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Voorvertoning in browser heeft de desktop-app nodig (het web downloadt in plaats daarvan bestanden)
+@msg	Running scripts needs the desktop app	Scripts uitvoeren heeft de desktop-app nodig
 @msg	Release Guides: no guides	Hulplijnen vrijgeven: geen hulplijnen
 @msg	Release: no layer to put the rectangle in	Vrijgeven: geen laag om de rechthoek in te plaatsen
 @msg	Replace Spine: select a blend and a path	Ruggengraat vervangen: selecteer een mengsel en een pad

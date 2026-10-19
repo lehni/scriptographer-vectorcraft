@@ -2218,6 +2218,7 @@ axis	Both	Και τα δύο
 @msg	PDF writer error: {0}	Σφάλμα εγγραφής PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Συσκευάστηκε {n} αρχείο στον φάκελο {folder} ({note})|Συσκευάστηκαν {n} αρχεία στον φάκελο {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Η προεπισκόπηση σε πρόγραμμα περιήγησης απαιτεί την εφαρμογή υπολογιστή (η έκδοση ιστού πραγματοποιεί λήψη αρχείων)
+@msg	Running scripts needs the desktop app	Η εκτέλεση σεναρίων απαιτεί την εφαρμογή υπολογιστή
 @msg	Release Guides: no guides	Αποδέσμευση οδηγών: δεν υπάρχουν οδηγοί
 @msg	Release: no layer to put the rectangle in	Αποδέσμευση: δεν υπάρχει επίπεδο για να τοποθετηθεί το ορθογώνιο
 @msg	Replace Spine: select a blend and a path	Αντικατάσταση κεντρικής καμπύλης: επιλέξτε ανάμειξη και διαδρομή

@@ -4026,6 +4026,7 @@ imageTrace	Outline	Kontur
 @msg	PDF writer error: {0}	Kesalahan penulis PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Berhasil mengemas {n} file di {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Pratinjau di Peramban memerlukan aplikasi desktop (versi web mengunduh file sebagai gantinya)
+@msg	Running scripts needs the desktop app	Menjalankan skrip memerlukan aplikasi desktop
 @msg	Release Guides: no guides	Lepaskan panduan: tidak ada panduan
 @msg	Release: no layer to put the rectangle in	Lepaskan: tidak ada lapisan untuk menaruh persegi panjangnya
 @msg	Replace Spine: select a blend and a path	Ganti rangka: pilih satu blend dan satu jalur

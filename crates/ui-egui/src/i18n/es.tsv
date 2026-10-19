@@ -4019,6 +4019,7 @@ axis	Both	Ambos
 @msg	PDF writer error: {0}	error del escritor de PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Se empaquetó {n} archivo en {folder} ({note})|Se empaquetaron {n} archivos en {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Previsualizar en el navegador requiere la aplicación de escritorio (la versión web descarga los archivos)
+@msg	Running scripts needs the desktop app	Ejecutar scripts requiere la aplicación de escritorio
 @msg	Release Guides: no guides	Soltar guías: no hay guías
 @msg	Release: no layer to put the rectangle in	Soltar: no hay ninguna capa donde poner el rectángulo
 @msg	Replace Spine: select a blend and a path	Reemplazar eje: selecciona una fusión y un trazado

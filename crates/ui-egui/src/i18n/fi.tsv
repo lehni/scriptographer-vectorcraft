@@ -4241,6 +4241,7 @@ imageTrace	Outline	Ääriviiva
 @msg	PDF writer error: {0}	PDF-kirjoittimen virhe: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Paketoitiin {n} tiedosto kansioon {folder} ({note})|Paketoitiin {n} tiedostoa kansioon {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Esikatselu selaimessa vaatii työpöytäsovelluksen (verkkoversio lataa tiedostot sen sijaan)
+@msg	Running scripts needs the desktop app	Komentosarjojen suorittaminen vaatii työpöytäsovelluksen
 @msg	Release Guides: no guides	Vapauta apuviivat: ei apuviivoja
 @msg	Release: no layer to put the rectangle in	Vapauta: ei tasoa, johon suorakulmion voisi sijoittaa
 @msg	Replace Spine: select a blend and a path	Korvaa selkäranka: valitse sulautus ja polku
