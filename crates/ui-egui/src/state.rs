@@ -343,6 +343,15 @@ pub struct ReplaceFontWarning {
     pub styles: Vec<(String, String)>,
 }
 
+/// A folder of PaperCraft scripts: a root of the PaperCraft panel's tree, under its name.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScriptFolder {
+    pub name: String,
+    pub path: String,
+    /// Hidden folders stay in the list, out of the tree.
+    pub visible: bool,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiState {
@@ -518,8 +527,9 @@ pub struct UiState {
     /// Shift-click on a set's name added. Delete Selection deletes them. Not saved.
     #[serde(skip)]
     pub action_sets_selected: Vec<usize>,
-    /// The folder the PaperCraft panel lists scripts from.
-    pub papercraft_folder: Option<String>,
+    /// The folders the PaperCraft panel lists scripts from, in order (Scriptographer's
+    /// repositories).
+    pub papercraft_folders: Vec<ScriptFolder>,
     /// Where the user put PaperCraft scripts' palettes, by script and palette title
     /// ([`crate::scripts::palettes`]): a palette opens there again.
     pub papercraft_palettes: std::collections::BTreeMap<String, [f32; 2]>,
@@ -1011,7 +1021,7 @@ impl Default for UiState {
             about: false,
             action_sets: crate::panels::actions::default_sets(),
             action_set: None,
-            papercraft_folder: None,
+            papercraft_folders: Vec::new(),
             papercraft_palettes: Default::default(),
             action_sets_selected: vec![],
             recording: None,
