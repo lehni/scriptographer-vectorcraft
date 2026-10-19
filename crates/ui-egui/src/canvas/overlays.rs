@@ -9,7 +9,10 @@ pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) 
     if !app.ui.view.smart_guides || !app.session.prefs.object_highlighting || app.ui.view.snap_to_grid || app.ui.view.pixel_preview {
         return;
     }
-    if app.session.tool_busy() || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection") {
+    if app.session.tool_busy()
+        || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection")
+        || app.scripts.active_tool().is_some()
+    {
         return;
     }
     let Some(st) = app.session.active() else { return };
