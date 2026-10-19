@@ -843,6 +843,10 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.newScript" => crate::scripts::new_script(app, p),
         "ui.newScriptFolder" => crate::scripts::new_folder(app, p),
         "ui.editScript" => crate::scripts::edit_script(app, p),
+        "ui.scriptTool" => {
+            app.scripts.select_tool();
+            Ok(json!({ "active": app.scripts.active_tool().is_some() }))
+        }
         "ui.scriptFolders" => {
             crate::dialogs::script_folders::open(app);
             Ok(Value::Null)
