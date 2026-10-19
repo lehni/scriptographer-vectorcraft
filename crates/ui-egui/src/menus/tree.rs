@@ -61,7 +61,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Export Selection…", "file.exportSelection"),
                 Sep,
                 c("Package…", "ui.packageDialog"),
-                sub("Scripts", vec![c("Check Script…", "ui.checkScript"), c("Other Script…", "ui.runScript")]),
+                sub("Scripts", vec![c("Check Script…", "ui.checkScript"), todos("Other Script…", "Cmd+F12")]),
                 Sep,
                 c("Document Setup…", "file.documentSetup"),
                 sub(
@@ -641,6 +641,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Links", crate::panels::links::ID),
                 panel("Magic Wand", "magicWand"),
                 panel("Navigator", "navigator"),
+                sub("PaperCraft", vec![c("Run Script…", "ui.runScript")]),
                 panel("Pathfinder", "pathfinder"),
                 panel("Pattern Options", "patternOptions"),
                 panel("Properties", "properties"),

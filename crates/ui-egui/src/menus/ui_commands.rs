@@ -1195,8 +1195,8 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     (
         "ui.runScript",
-        "Other Script…",
-        "Cmd+F12",
+        "Run Script…",
+        "",
         "{path?: a .js file} run a PaperScript file on the active document with PaperCraft, as one undo step (its console.log output shows in the status bar and returns as `output`); without a path pick one",
     ),
     (
