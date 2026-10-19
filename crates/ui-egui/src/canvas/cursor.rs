@@ -114,6 +114,7 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::RemoveStop => C::NotAllowed,
         Cursor::Slice => C::Crosshair,
         Cursor::SliceSelect => C::Default,
+        Cursor::Script => C::Crosshair,
         Cursor::Width | Cursor::WidthAdd => C::Crosshair,
         Cursor::WidthPoint => C::Move,
         Cursor::PencilNew => C::Crosshair,
