@@ -102,6 +102,7 @@ mod save_pdf;
 pub mod save_style_library;
 pub mod save_swatch_library;
 pub mod save_symbol_library;
+pub(crate) mod script;
 pub mod script_check;
 pub mod shape_builder_options;
 pub(crate) mod shapes;
@@ -310,6 +311,7 @@ registry! {
     Confirm: [confirm::KIND] => confirm::SPEC,
     BrushDelete: [brush_delete::KIND] => brush_delete::SPEC,
     Message: [confirm::MESSAGE] => confirm::MESSAGE_SPEC,
+    ScriptDialog: [script::KIND] => script::SPEC,
     Replace: [confirm::REPLACE] => confirm::REPLACE_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
