@@ -1201,6 +1201,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("ui.stopScripts", "Stop Running Scripts", "Cmd+.", "{} stop the PaperCraft scripts that keep running (onFrame, intervals) → {stopped}"),
     (
+        "ui.evaluateScript",
+        "Evaluate Script",
+        "",
+        "{code} run PaperScript in the PaperCraft console's own project on the active document, as one undo step; what it prints goes to the console → {changed}",
+    ),
+    (
+        "ui.newScript",
+        "New Script",
+        "",
+        "{folder?: default the PaperCraft scripts folder} make an empty Untitled.js (or Untitled N.js) script there → {path}",
+    ),
+    (
         "ui.perspectiveGridDialog",
         "Define Perspective Grid…",
         "",
