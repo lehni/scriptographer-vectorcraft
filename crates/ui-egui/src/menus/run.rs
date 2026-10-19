@@ -843,6 +843,10 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.newScript" => crate::scripts::new_script(app, p),
         "ui.newScriptFolder" => crate::scripts::new_folder(app, p),
         "ui.editScript" => crate::scripts::edit_script(app, p),
+        "ui.scriptFolders" => {
+            crate::dialogs::script_folders::open(app);
+            Ok(Value::Null)
+        }
         "ui.perspectiveGridDialog" => crate::dialogs::perspective_grid::open(app),
         "ui.perspectivePresetsDialog" => {
             crate::dialogs::perspective_presets::open(app, s("selected").as_deref());

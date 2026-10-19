@@ -1215,7 +1215,20 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.newScript",
         "New Script",
         "",
-        "{folder?: default the PaperCraft scripts folder} make an empty Untitled.js (or Untitled N.js) script there → {path}",
+        "{folder?: default the first PaperCraft scripts folder shown, name?: without one, a save dialog asks for it, suggesting the first free Untitled N.js} make an empty script there → {path}",
+    ),
+    (
+        "ui.newScriptFolder",
+        "Create New Folder…",
+        "",
+        "{folder?: default the first PaperCraft scripts folder shown, name?} make a folder there; without a name, dialog `newScriptFolder` (fields `folder`, `name`, suggesting the first free Untitled N) asks for it → {path} or {pending}",
+    ),
+    ("ui.editScript", "Edit Script…", "", "{path} open a PaperCraft script in the system's editor for its kind of file"),
+    (
+        "ui.scriptFolders",
+        "Manage Script Folders…",
+        "",
+        "{} open the PaperCraft panel's Script Folders (dialog `scriptFolders`, field `folders`: [{name, path, visible}] in the panel's order); OK keeps them",
     ),
     (
         "ui.perspectiveGridDialog",
