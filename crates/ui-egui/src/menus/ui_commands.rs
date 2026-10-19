@@ -1194,6 +1194,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{path? | data? | dataBase64?, name?, includes?: true with a path} check a script written for the reference app without running it (script.check; with a path, the files its #include lines name are checked too) and show the report (dialog `scriptCheck`: `report`, script.check's result; Copy Report copies it as JSON); without a file pick one (the web opens the browser's file picker; File › Open of a .jsx, .jsxinc or .jsxbin file shows the report too)",
     ),
     (
+        "ui.runScript",
+        "Other Script…",
+        "Cmd+F12",
+        "{path?: a .js file} run a PaperScript file on the active document with PaperCraft, as one undo step (its console.log output shows in the status bar and returns as `output`); without a path pick one",
+    ),
+    (
         "ui.perspectiveGridDialog",
         "Define Perspective Grid…",
         "",
