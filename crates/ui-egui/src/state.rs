@@ -205,6 +205,8 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::asset_export::ID, "Asset Export", "share-2"),
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
     (crate::panels::variables::ID, "Variables", "chart-column"),
+    (crate::panels::papercraft::ID, "PaperCraft", "file-code"),
+    (crate::panels::papercraft_console::ID, "PaperCraft Console", "terminal"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
@@ -227,6 +229,7 @@ pub const ICON_PANEL_GROUPS: &[&[&str]] = &[
     &["character", "paragraph", "glyphs"],
     &["history", "actions", "info", "navigator"],
     &["variables"],
+    &["papercraft", "papercraftConsole"],
 ];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -515,6 +518,8 @@ pub struct UiState {
     /// Shift-click on a set's name added. Delete Selection deletes them. Not saved.
     #[serde(skip)]
     pub action_sets_selected: Vec<usize>,
+    /// The folder the PaperCraft panel lists scripts from.
+    pub papercraft_folder: Option<String>,
     /// Recording in progress: (set index, action name, journal length when recording started).
     #[serde(skip)]
     pub recording: Option<(usize, String, usize)>,
@@ -1003,6 +1008,7 @@ impl Default for UiState {
             about: false,
             action_sets: crate::panels::actions::default_sets(),
             action_set: None,
+            papercraft_folder: None,
             action_sets_selected: vec![],
             recording: None,
             recording_into: None,
