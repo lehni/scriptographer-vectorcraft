@@ -226,6 +226,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let escape_ended_gesture = escape_ended_gesture(ctx);
     let escape_held_by_drag = crate::canvas::dragging(ctx) || escape_ended_gesture;
     let typing = ctx.egui_wants_keyboard_input();
+    // The PaperCraft Tool's script takes the plain keys it handles, ahead of their shortcuts.
+    if !typing {
+        crate::scripts::keys(app, ctx);
+    }
     // Escape closes Edit Toolbar's drawer first (egui drops a drag from it on Escape already).
     if app.ui.tools_drawer && !typing && !escape_held_by_drag && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
         app.ui.tools_drawer = false;
