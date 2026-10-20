@@ -12,6 +12,12 @@ fn legacy_prefs_path() -> Option<std::path::PathBuf> {
     prefs_dir::prefs_path_for("DrawCraft", "drawcraft")
 }
 
+/// The user's documents folder: `Documents` in their home folder.
+pub(crate) fn documents_dir() -> Option<std::path::PathBuf> {
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).filter(|h| !h.is_empty())?;
+    Some(std::path::PathBuf::from(home).join("Documents"))
+}
+
 /// Where the log files live: `logs` in the preferences folder (see `logging`).
 pub(crate) fn log_dir() -> Option<std::path::PathBuf> {
     Some(prefs_path()?.parent()?.join("logs"))

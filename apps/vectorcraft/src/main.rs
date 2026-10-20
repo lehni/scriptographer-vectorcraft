@@ -74,7 +74,7 @@ use app::open_files;
 use host_services::services;
 #[cfg(all(test, feature = "wgpu"))]
 use prefs::{KEEP_UI_PREFS, decode_saved_prefs, keep_prefs_copy, prefs_bytes};
-use prefs::{load_prefs, log_dir, prefs_enabled, prefs_path, read_prefs};
+use prefs::{documents_dir, load_prefs, log_dir, prefs_enabled, prefs_path, read_prefs};
 #[cfg(all(test, feature = "wgpu", any(target_os = "macos", target_os = "windows")))]
 use titlebar::CUSTOM_TITLEBAR;
 #[cfg(feature = "wgpu")]
@@ -399,8 +399,13 @@ fn main() -> std::process::ExitCode {
                 if prefs_enabled() {
                     let libraries = prefs_path().and_then(|p| Some(p.parent()?.join("Libraries").to_string_lossy().to_string()));
                     app.session.libraries.set_dir(libraries);
-                    // Scriptographer scripts' `localStorage`, likewise.
+                    // Scriptographer scripts' `localStorage`, likewise, and the Examples; the first
+                    // run also makes "My Scripts" in the user's documents.
                     app.ui.scriptographer_storage = prefs_path().and_then(|p| Some(p.parent()?.join("Scriptographer Storage")));
+                    if let Some(examples) = prefs_path().and_then(|p| Some(p.parent()?.join("Scriptographer Examples"))) {
+                        let my_scripts = documents_dir().map(|d| d.join("Scriptographer"));
+                        vectorcraft_ui_egui::set_up_script_folders(&mut app, &examples, my_scripts.as_deref());
+                    }
                 }
                 // Data Recovery copies live next to the preferences too (none for runs without
                 // preferences, such as agents' test runs, unless the recoveryFolder preference is set).
