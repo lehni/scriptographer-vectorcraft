@@ -4,7 +4,7 @@ use super::{CornerRadius, Drag, Point, Pos2, Rect, SCROLL_BAR, Sense, Stroke, To
 /// The system's own times of this frame's pointer events, by the app's clock
 /// ([`crate::now_secs`]) in seconds, oldest first, where the platform knows them (macOS): egui
 /// leaves them out. The platform sets them before
-/// each frame; a PaperCraft tool script measures the mouse's speed by them.
+/// each frame; a Scriptographer tool script measures the mouse's speed by them.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PointerTimes {
     /// Of the moves and drags.

@@ -847,7 +847,7 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
             app.scripts.select_tool();
             Ok(json!({ "active": app.scripts.active_tool().is_some() }))
         }
-        "ui.papercraftAbout" => crate::dialogs::papercraft_about::open(app),
+        "ui.scriptographerAbout" => crate::dialogs::scriptographer_about::open(app),
         "ui.revealScript" => crate::scripts::reveal(app, p),
         "ui.paperReference" => {
             app.open_url("https://paperjs.org/reference/global/");

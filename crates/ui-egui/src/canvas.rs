@@ -782,7 +782,7 @@ fn selection_visuals(
     revolve_edit: bool,
     view_info: vectorcraft_engine::ViewInfo,
 ) -> Vec<Overlay> {
-    // View → Hide Gradient Annotator hides the Gradient tool's annotator. While a PaperCraft tool
+    // View → Hide Gradient Annotator hides the Gradient tool's annotator. While a Scriptographer tool
     // script has the mouse, the app's tool shows nothing.
     let script_tool = app.scripts.active_tool().is_some();
     let mut overlays = if !revolve_edit && !script_tool && (app.session.tool_id() != "gradient" || app.ui.view.gradient_annotator) {
