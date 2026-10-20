@@ -143,7 +143,8 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> Vec<(Pos2, Op
 /// pairs the next frame's with its own.
 pub(super) fn tool_frame_moves(ui: &Ui, app: &VectorcraftApp) -> Vec<(Pos2, Option<f32>)> {
     let moves = frame_moves(ui, app.services.stylus.as_ref());
-    if app.session.tool_wants_samples() { moves } else { vec![] }
+    // A Scriptographer tool script gets every move too, as scripts do in browsers.
+    if app.session.tool_wants_samples() || app.scripts.active_tool().is_some() { moves } else { vec![] }
 }
 
 pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
