@@ -381,6 +381,9 @@ impl eframe::App for WebShell {
         // A Cmd+V comes as its key and as a Paste: one paste (#5555).
         crate::keys::drop_paste_key_presses(&mut raw.events);
         if let Some(app) = &mut self.app {
+            // The browser's times are `performance.now()`'s, the app's clock starts later.
+            let performance = web_sys::window().and_then(|w| w.performance()).map_or(0.0, |p| p.now() / 1000.0);
+            app.pointer_times = self.host.pointers.borrow_mut().take_times(vectorcraft_ui_egui::now_secs() - performance);
             app.raw_input_hook(ctx, raw);
         }
     }
