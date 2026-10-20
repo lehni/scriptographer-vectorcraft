@@ -258,7 +258,8 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>, release: Option<
 pub(super) fn tool_frame_moves(ui: &Ui, app: &VectorcraftApp, released: bool) -> (Vec<FrameMove>, Option<PenPose>) {
     let release = released.then_some(egui::PointerButton::Primary);
     let (moves, last_pose) = frame_moves(ui, app.services.stylus.as_ref(), release);
-    (if app.session.tool_wants_samples() { moves } else { vec![] }, last_pose)
+    // A Scriptographer tool script gets every move too, as scripts do in browsers.
+    (if app.session.tool_wants_samples() || app.scripts.active_tool().is_some() { moves } else { vec![] }, last_pose)
 }
 
 pub fn mods(m: egui::Modifiers, space: bool) -> Mods {

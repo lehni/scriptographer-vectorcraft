@@ -1,8 +1,8 @@
 use super::artboards::{artboard_name_at, begin_artboard_name_edit, name_press_id, select_named_artboard};
 use super::drag::{
     FrameMove, HoverContext, apply_requests, backquote_at_release, backquote_seen, dispatch, drag_art_out, drag_id, drag_layer_id, drag_pos_id,
-    drop_press, mods, move_pose, on_canvas, pen_pose, pen_pressure, tool_drag_doc_id, tool_drag_mods_changed, tool_drag_moved, tool_frame_moves,
-    tool_holds, tool_press_doc_id,
+    drop_press, frame_moves, mods, move_pose, on_canvas, pen_pose, pen_pressure, tool_drag_doc_id, tool_drag_mods_changed, tool_drag_moved,
+    tool_frame_moves, tool_holds, tool_press_doc_id,
 };
 use super::view::{
     HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, pan_pixels, rotate_about, scroll_view, touch_gestures, trackpad_turn,
@@ -130,14 +130,16 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     } else if let Some(p) = hover_tool
         && (pointer.is_moving() || mods_changed || !was_over || tool_switched || (context_changed && app.session.tool_wants_rehover()))
     {
-        let ev = PointerEvent {
-            kind: PointerKind::Move,
-            pos: xf.to_doc(p),
-            mods: mods(m, space),
-            backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
-            pressure: 1.0,
-            pen: None,
-        };
+        let backquote = ui.input(|i| i.key_down(egui::Key::Backtick));
+        // A tool script gets every move this frame, the app's tools the last one.
+        for (at, _, _) in if app.scripts.active_tool().is_some() { frame_moves(ui, None, None).0 } else { vec![] } {
+            dispatch(
+                app,
+                &PointerEvent { kind: PointerKind::Move, pos: xf.to_doc(at), mods: mods(m, space), backquote, pressure: 1.0, pen: None },
+                view,
+            );
+        }
+        let ev = PointerEvent { kind: PointerKind::Move, pos: xf.to_doc(p), mods: mods(m, space), backquote, pressure: 1.0, pen: None };
         dispatch(app, &ev, view);
     }
     // The pointer left the canvas (for a panel, or out of the window) or went under a floating
