@@ -126,6 +126,7 @@ impl VectorcraftApp {
             trace_runs: Default::default(),
             recovery: Default::default(),
             pointer_times: Default::default(),
+            key_panel: None,
             host_modifiers: Default::default(),
             forwarded: Vec::new(),
             forwarded_modifiers: None,
