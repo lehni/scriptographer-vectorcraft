@@ -6057,3 +6057,6 @@ breakText	Glyphs	Glifi
 # 3D Box add-on
 	3D Box	Scatola 3D
 	3D Box Tool	Strumento Scatola 3D
+	The script asks for a file to open.	Lo script chiede un file da aprire.
+	The script asks where to save a file.	Lo script chiede dove salvare un file.
+	The script asks for a folder.	Lo script chiede una cartella.

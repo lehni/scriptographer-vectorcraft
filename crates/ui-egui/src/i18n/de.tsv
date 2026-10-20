@@ -6023,3 +6023,6 @@ breakText	Glyphs	Glyphen
 # 3D Box add-on
 	3D Box	3D-Quader
 	3D Box Tool	3D-Quader-Werkzeug
+	The script asks for a file to open.	Das Skript fragt nach einer Datei zum Öffnen.
+	The script asks where to save a file.	Das Skript fragt, wo es eine Datei sichern soll.
+	The script asks for a folder.	Das Skript fragt nach einem Ordner.

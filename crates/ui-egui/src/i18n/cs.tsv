@@ -6437,3 +6437,6 @@ breakText	Glyphs	Glyfy
 # 3D Box add-on
 	3D Box	3D kvádr
 	3D Box Tool	Nástroj 3D kvádr
+	The script asks for a file to open.	Skript žádá soubor k otevření.
+	The script asks where to save a file.	Skript se ptá, kam uložit soubor.
+	The script asks for a folder.	Skript žádá složku.

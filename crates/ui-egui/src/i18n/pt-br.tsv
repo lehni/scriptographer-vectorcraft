@@ -6510,3 +6510,6 @@ swatch	Yellow Green	Verde-amarelado
 # 3D Box add-on
 	3D Box	Caixa 3D
 	3D Box Tool	Ferramenta Caixa 3D
+	The script asks for a file to open.	O script pede um arquivo para abrir.
+	The script asks where to save a file.	O script pergunta onde salvar um arquivo.
+	The script asks for a folder.	O script pede uma pasta.

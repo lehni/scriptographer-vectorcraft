@@ -32,6 +32,14 @@ impl FilePick {
 }
 
 pub type PickOpen = Box<dyn FnMut(&FilePick) -> Option<String>>;
+/// What the browser's file picker gave a script ([`ScriptPick`]).
+#[cfg(target_arch = "wasm32")]
+pub use vectorcraft_scriptographer::Picked;
+/// Shows the browser's file picker for a script's file dialog (`question`, as `Dialog` asks it:
+/// `type`, `name`, `filters`), in the click it's called in; `done` gets what the user picked, later
+/// (the web).
+#[cfg(target_arch = "wasm32")]
+pub type ScriptPick = Box<dyn FnMut(&serde_json::Value, Box<dyn FnOnce(Option<vectorcraft_scriptographer::Picked>)>)>;
 
 pub type PickSave = Box<dyn FnMut(&FilePick) -> Option<String>>;
 
@@ -79,6 +87,9 @@ pub struct Services {
     pub pick_open: Option<PickOpen>,
     /// Show a save dialog (suggested name, folder, file types); returns a path.
     pub pick_save: Option<PickSave>,
+    /// The browser's file pickers for scripts' file dialogs (the web).
+    #[cfg(target_arch = "wasm32")]
+    pub script_pick: Option<ScriptPick>,
     pub read: Option<ReadFn>,
     /// Read at most a number of bytes from a file (desktop). A file with a size limit is read one
     /// byte past the limit, so a larger file is refused without reading all of it. Without it, the

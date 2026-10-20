@@ -6389,3 +6389,6 @@ breakText	Glyphs	Γλύφοι
 # 3D Box add-on
 	3D Box	Κουτί 3D
 	3D Box Tool	Εργαλείο κουτιού 3D
+	The script asks for a file to open.	Η δέσμη ενεργειών ζητά ένα αρχείο για άνοιγμα.
+	The script asks where to save a file.	Η δέσμη ενεργειών ρωτά πού να αποθηκεύσει ένα αρχείο.
+	The script asks for a folder.	Η δέσμη ενεργειών ζητά έναν φάκελο.

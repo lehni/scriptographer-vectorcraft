@@ -6526,3 +6526,6 @@ shape	Open	Открытый
 # 3D Box add-on
 	3D Box	3D-параллелепипед
 	3D Box Tool	Инструмент «3D-параллелепипед»
+	The script asks for a file to open.	Сценарий запрашивает файл для открытия.
+	The script asks where to save a file.	Сценарий спрашивает, куда сохранить файл.
+	The script asks for a folder.	Сценарий запрашивает папку.

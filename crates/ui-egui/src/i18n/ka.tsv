@@ -6449,3 +6449,6 @@ font-script	Japanese	იაპონური
 # 3D Box add-on
 	3D Box	3D ყუთი
 	3D Box Tool	3D ყუთის ხელსაწყო
+	The script asks for a file to open.	სკრიპტი ითხოვს გასახსნელ ფაილს.
+	The script asks where to save a file.	სკრიპტი გეკითხებათ, სად შეინახოს ფაილი.
+	The script asks for a folder.	სკრიპტი ითხოვს საქაღალდეს.

@@ -314,6 +314,7 @@ registry! {
     BrushDelete: [brush_delete::KIND] => brush_delete::SPEC,
     Message: [confirm::MESSAGE] => confirm::MESSAGE_SPEC,
     ScriptDialog: [script::KIND] => script::SPEC,
+    ScriptFileDialog: [script::FILE_KIND] => script::FILE_SPEC,
     ScriptographerAbout: [scriptographer_about::KIND] => scriptographer_about::SPEC,
     ScriptFolders: [script_folders::KIND] => script_folders::SPEC,
     NewScriptFolder: [script_folders::NEW_FOLDER] => script_folders::NEW_FOLDER_SPEC,

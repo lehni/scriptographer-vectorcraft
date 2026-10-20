@@ -6301,3 +6301,6 @@ breakText	Glyphs	Glif
 # 3D Box add-on
 	3D Box	Kotak 3D
 	3D Box Tool	Alat Kotak 3D
+	The script asks for a file to open.	Skrip meminta file untuk dibuka.
+	The script asks where to save a file.	Skrip menanyakan tempat menyimpan file.
+	The script asks for a folder.	Skrip meminta folder.

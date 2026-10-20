@@ -6287,3 +6287,6 @@ breakText	Glyphs	Глифи
 # 3D Box add-on
 	3D Box	3D кутия
 	3D Box Tool	Инструмент за 3D кутия
+	The script asks for a file to open.	Скриптът иска файл за отваряне.
+	The script asks where to save a file.	Скриптът пита къде да запише файл.
+	The script asks for a folder.	Скриптът иска папка.

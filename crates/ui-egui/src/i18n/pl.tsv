@@ -6292,3 +6292,6 @@ breakText	Glyphs	Glify
 # 3D Box add-on
 	3D Box	Bryła 3D
 	3D Box Tool	Narzędzie Bryła 3D
+	The script asks for a file to open.	Skrypt prosi o plik do otwarcia.
+	The script asks where to save a file.	Skrypt pyta, gdzie zapisać plik.
+	The script asks for a folder.	Skrypt prosi o folder.
