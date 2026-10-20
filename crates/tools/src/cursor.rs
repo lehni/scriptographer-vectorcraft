@@ -202,7 +202,7 @@ pub enum Cursor {
     /// The Smart Pen Tool (Smart Pen add-on) away from paths, where a click starts a new path (over
     /// a path or while drawing it shows the Pen's and Direct Selection's cursors).
     SmartPen,
-    /// The PaperCraft Tool, while it is the active tool: the tool script gets the mouse.
+    /// The Scriptographer Tool, while it is the active tool: the tool script gets the mouse.
     Script,
 }
 

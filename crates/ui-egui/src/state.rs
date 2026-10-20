@@ -205,8 +205,8 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::asset_export::ID, "Asset Export", "share-2"),
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
     (crate::panels::variables::ID, "Variables", "chart-column"),
-    (crate::panels::papercraft::ID, "PaperCraft", "file-code"),
-    (crate::panels::papercraft_console::ID, "PaperCraft Console", "terminal"),
+    (crate::panels::scriptographer::ID, "Scriptographer", "file-code"),
+    (crate::panels::scriptographer_console::ID, "Scriptographer Console", "terminal"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
@@ -229,7 +229,7 @@ pub const ICON_PANEL_GROUPS: &[&[&str]] = &[
     &["character", "paragraph", "glyphs"],
     &["history", "actions", "info", "navigator"],
     &["variables"],
-    &["papercraft", "papercraftConsole"],
+    &["scriptographer", "scriptographerConsole"],
 ];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -343,7 +343,7 @@ pub struct ReplaceFontWarning {
     pub styles: Vec<(String, String)>,
 }
 
-/// A folder of PaperCraft scripts: a root of the PaperCraft panel's tree, under its name.
+/// A folder of Scriptographer scripts: a root of the Scriptographer panel's tree, under its name.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScriptFolder {
     pub name: String,
@@ -527,19 +527,19 @@ pub struct UiState {
     /// Shift-click on a set's name added. Delete Selection deletes them. Not saved.
     #[serde(skip)]
     pub action_sets_selected: Vec<usize>,
-    /// The folders the PaperCraft panel lists scripts from, in order (Scriptographer's
+    /// The folders the Scriptographer panel lists scripts from, in order (Scriptographer's
     /// repositories).
-    pub papercraft_folders: Vec<ScriptFolder>,
-    /// PaperCraft scripts' `script.preferences`, by script file.
-    pub papercraft_preferences: std::collections::BTreeMap<String, Value>,
-    /// The folder PaperCraft scripts keep their `localStorage` in, next to the preferences; none
+    pub scriptographer_folders: Vec<ScriptFolder>,
+    /// Scriptographer scripts' `script.preferences`, by script file.
+    pub scriptographer_preferences: std::collections::BTreeMap<String, Value>,
+    /// The folder Scriptographer scripts keep their `localStorage` in, next to the preferences; none
     /// in runs without preferences, whose scripts keep it while they run. Not saved: the app sets
     /// it at launch.
     #[serde(skip)]
-    pub papercraft_storage: Option<std::path::PathBuf>,
-    /// Where the user put PaperCraft scripts' palettes, by script and palette title
+    pub scriptographer_storage: Option<std::path::PathBuf>,
+    /// Where the user put Scriptographer scripts' palettes, by script and palette title
     /// ([`crate::scripts::palettes`]): a palette opens there again.
-    pub papercraft_palettes: std::collections::BTreeMap<String, [f32; 2]>,
+    pub scriptographer_palettes: std::collections::BTreeMap<String, [f32; 2]>,
     /// Recording in progress: (set index, action name, journal length when recording started).
     #[serde(skip)]
     pub recording: Option<(usize, String, usize)>,
@@ -1028,10 +1028,10 @@ impl Default for UiState {
             about: false,
             action_sets: crate::panels::actions::default_sets(),
             action_set: None,
-            papercraft_folders: Vec::new(),
-            papercraft_palettes: Default::default(),
-            papercraft_preferences: Default::default(),
-            papercraft_storage: None,
+            scriptographer_folders: Vec::new(),
+            scriptographer_palettes: Default::default(),
+            scriptographer_preferences: Default::default(),
+            scriptographer_storage: None,
             action_sets_selected: vec![],
             recording: None,
             recording_into: None,
