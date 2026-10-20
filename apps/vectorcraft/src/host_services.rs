@@ -14,7 +14,6 @@ pub(crate) type Parent = Option<std::sync::Arc<winit::window::Window>>;
 /// What rfd's blocking and asynchronous file dialogs are both set up with.
 trait DialogSettings: Sized {
     fn parent(self, window: &winit::window::Window) -> Self;
-    fn title(self, title: &str) -> Self;
     fn filter(self, name: &str, exts: &[impl ToString]) -> Self;
     fn folder(self, folder: &str) -> Self;
     fn file_name(self, name: &str) -> Self;
@@ -25,9 +24,6 @@ macro_rules! dialog_settings {
         impl DialogSettings for $dialog {
             fn parent(self, window: &winit::window::Window) -> Self {
                 self.set_parent(window)
-            }
-            fn title(self, title: &str) -> Self {
-                self.set_title(title)
             }
             fn filter(self, name: &str, exts: &[impl ToString]) -> Self {
                 self.add_filter(name, exts)
@@ -68,21 +64,13 @@ fn open_extensions(exts: &[impl AsRef<str>], any_case: bool) -> Vec<String> {
     out
 }
 
-/// `d` set up for `request`: its title, file types, folder and suggested name.
+/// `d` set up for `request`: its file types, folder and suggested name.
 fn dialog_for<D: DialogSettings>(d: D, request: &PickRequest) -> D {
     let pick = match request {
-        PickRequest::Open(pick) | PickRequest::Save(pick) => pick,
-        PickRequest::OpenMany => {
-            return fileio::place_filters().fold(d.title(vectorcraft_ui_egui::i18n::t("Place")), |d, (name, exts)| {
-                d.filter(
-                    vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name),
-                    &open_extensions(exts, CASE_SENSITIVE_FILTERS),
-                )
-            });
-        }
+        PickRequest::Open(pick) | PickRequest::OpenMany(pick) | PickRequest::Save(pick) => pick,
         PickRequest::Folder => return d,
     };
-    let any_case = CASE_SENSITIVE_FILTERS && matches!(request, PickRequest::Open(_));
+    let any_case = CASE_SENSITIVE_FILTERS && matches!(request, PickRequest::Open(_) | PickRequest::OpenMany(_));
     let d = pick.filters.iter().fold(d, |d, (name, exts)| {
         d.filter(
             vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name.as_str()),
@@ -129,7 +117,7 @@ fn show_dialog(dialog: rfd::FileDialog, request: &PickRequest, parent: &Parent) 
     }
     let paths = match request {
         PickRequest::Open(_) => dialog.pick_file().into_iter().collect(),
-        PickRequest::OpenMany => dialog.pick_files().unwrap_or_default(),
+        PickRequest::OpenMany(_) => dialog.pick_files().unwrap_or_default(),
         PickRequest::Save(_) => dialog.save_file().into_iter().collect(),
         PickRequest::Folder => dialog.pick_folder().into_iter().collect(),
     };
@@ -290,7 +278,7 @@ fn start_pick(request: PickRequest, parent: &Parent, ui: &egui::Context) -> Opti
             let picked = dialog.pick_file();
             Box::pin(async move { picked.await.iter().map(path).collect() })
         }
-        PickRequest::OpenMany => {
+        PickRequest::OpenMany(_) => {
             let picked = dialog.pick_files();
             Box::pin(async move { picked.await.unwrap_or_default().iter().map(path).collect() })
         }
@@ -332,7 +320,7 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
     let sampled_ui = ui.clone();
     Services {
         pick_open: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::Open(pick.clone()), &p1).into_iter().next())),
-        pick_open_multi: Some(Box::new(move || pick_now(PickRequest::OpenMany, &p2))),
+        pick_open_multi: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::OpenMany(pick.clone()), &p2))),
         pick_save: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::Save(pick.clone()), &p3).into_iter().next())),
         // Linux shows dialogs on a thread of their own (#592), macOS as sheets (#867); Windows
         // dialogs run the window's events while they are open.
@@ -730,9 +718,6 @@ mod dialog_tests {
         fn parent(self, _window: &winit::window::Window) -> Self {
             self
         }
-        fn title(self, _title: &str) -> Self {
-            self
-        }
         fn filter(mut self, name: &str, exts: &[impl ToString]) -> Self {
             self.0.push((name.to_string(), exts.iter().map(ToString::to_string).collect()));
             self
@@ -793,7 +778,8 @@ mod dialog_tests {
         assert_eq!(opened[0].1, expected(CASE_SENSITIVE_FILTERS));
         let saved = dialog_for(Filters::default(), &PickRequest::Save(pick)).0;
         assert_eq!(saved, dib);
-        let placed = dialog_for(Filters::default(), &PickRequest::OpenMany).0;
+        let place = FilePick { filters: FilePick::filters(fileio::place_filters()), ..Default::default() };
+        let placed = dialog_for(Filters::default(), &PickRequest::OpenMany(place)).0;
         let first = fileio::place_filters().next().map(|(_, exts)| open_extensions(exts, CASE_SENSITIVE_FILTERS));
         assert_eq!(placed.first().map(|(_, exts)| exts.clone()), first);
     }
