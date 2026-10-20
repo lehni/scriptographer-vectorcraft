@@ -379,6 +379,9 @@ impl eframe::App for WebShell {
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         raw.events.extend(self.host.pointers.borrow_mut().take());
         if let Some(app) = &mut self.app {
+            // The browser's times are `performance.now()`'s, the app's clock starts later.
+            let performance = web_sys::window().and_then(|w| w.performance()).map_or(0.0, |p| p.now() / 1000.0);
+            app.pointer_times = self.host.pointers.borrow_mut().take_times(vectorcraft_ui_egui::now_secs() - performance);
             app.raw_input_hook(ctx, raw);
         }
     }
