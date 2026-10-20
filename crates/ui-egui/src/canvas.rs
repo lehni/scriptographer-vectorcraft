@@ -75,8 +75,8 @@ use tool_overlays::{
     print_tiling_overlay, rotate_view_dial, shaper_widget_overlay, slice_overlay, thread_overlays,
 };
 pub(crate) use view::animated_zoom;
-pub use view::fit;
 use view::scroll_bars;
+pub use view::{PointerTimes, fit};
 #[cfg(test)]
 use view::{ScrollRest, Span, scroll_by, scroll_spans, scroll_tracks};
 
