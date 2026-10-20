@@ -171,3 +171,7 @@ eframe = { git = "https://github.com/storytold/egui.git", rev = "6d518fc79968157
 egui_demo_lib = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
 egui_inspection = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
 winit = { git = "https://github.com/storytold/winit.git", rev = "a517b3846ee8457d84ee4975110bfda6797c44dc" }
+# Boa 0.22.0 with the fix for boa-dev/boa#5600 (a getter that defines an own property ran again from
+# the same property read: PaperCraft's lost move in the Boa engine). Drop it for the Boa release with
+# the fix.
+boa_engine = { git = "https://github.com/lehni/boa", rev = "11304bd4baeb5c7c5293bfc3f0d350ade16e4a7a" }
