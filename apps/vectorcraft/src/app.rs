@@ -5,7 +5,7 @@ use super::prefs::save_prefs;
 use super::windows_stylus;
 use super::{App, VectorcraftApp, file_access, window};
 #[cfg(target_os = "macos")]
-use super::{mac_menu, mac_window, open_documents};
+use super::{mac_menu, mac_pointer_times, mac_window, open_documents};
 
 /// The parts of [`App::raw_input_hook`] that every window needs, for the OS windows of floating
 /// panels: a click or Escape that closes the macOS menu bar's open menu, and the pen barrel
@@ -49,6 +49,10 @@ impl eframe::App for App {
         // A pen contact with the barrel button held presses the secondary button (Windows Ink).
         #[cfg(windows)]
         windows_stylus::raw_input_hook(raw);
+        #[cfg(target_os = "macos")]
+        {
+            self.app.pointer_times = mac_pointer_times::take(vectorcraft_ui_egui::now_secs());
+        }
         file_access::unconfined(|| self.app.raw_input_hook(ctx, raw));
         // A mouse-up that never reached the window (#4326) is delivered once AppKit reports
         // that no mouse button is down.

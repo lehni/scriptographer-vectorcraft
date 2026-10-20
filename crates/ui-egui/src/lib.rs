@@ -225,6 +225,8 @@ pub struct VectorcraftApp {
     pub trace_runs: trace_runs::TraceRuns,
     /// Data Recovery's timer and startup question ([`recovery`]).
     pub recovery: recovery::Timer,
+    /// The system's times of this frame's pointer events, where the platform knows them.
+    pub pointer_times: canvas::PointerTimes,
     /// Modifiers the keyboard holds (from the host's input), given back after synthetic input.
     host_modifiers: egui::Modifiers,
     /// Key, text and clipboard events a floating panel's own OS window forwarded, for the main

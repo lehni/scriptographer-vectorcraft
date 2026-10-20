@@ -33,6 +33,8 @@ mod mac_fonts;
 #[cfg(target_os = "macos")]
 mod mac_menu;
 #[cfg(target_os = "macos")]
+mod mac_pointer_times;
+#[cfg(target_os = "macos")]
 mod mac_save_format;
 #[cfg(target_os = "macos")]
 mod mac_screen_color;
@@ -341,6 +343,8 @@ fn main() -> std::process::ExitCode {
     // Files opened from Finder and the Dock arrive as events, not arguments.
     #[cfg(target_os = "macos")]
     open_documents::install();
+    #[cfg(target_os = "macos")]
+    mac_pointer_times::install();
     #[cfg(feature = "wgpu")]
     let created = startup.clone();
     // A panic that ends the window (egui-wgpu's own, #502) is caught here: never a crash.
