@@ -226,6 +226,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let escape_ended_gesture = escape_ended_gesture(ctx);
     let escape_held_by_drag = crate::canvas::dragging(ctx) || escape_ended_gesture;
     let typing = ctx.egui_wants_keyboard_input();
+    // A panel that has the keys takes those it uses first.
+    if !typing && app.key_panel == Some(crate::panels::papercraft::ID) {
+        crate::panels::papercraft::keys(app, ctx);
+    }
     // The PaperCraft Tool's script takes the plain keys it handles, ahead of their shortcuts.
     if !typing {
         crate::scripts::keys(app, ctx);
