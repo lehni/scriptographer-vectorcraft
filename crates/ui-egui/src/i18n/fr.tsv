@@ -5728,3 +5728,6 @@ axis	Y Axis	Axe Y
 	Glyph Bounds	Limites du glyphe
 	Proximity Guides	Repères de proximité
 	Angular Guides	Repères angulaires
+	The script asks for a file to open.	Le script demande un fichier à ouvrir.
+	The script asks where to save a file.	Le script demande où enregistrer un fichier.
+	The script asks for a folder.	Le script demande un dossier.

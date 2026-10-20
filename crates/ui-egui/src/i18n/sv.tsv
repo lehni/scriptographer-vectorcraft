@@ -5753,3 +5753,6 @@ axis	Y Axis	Y-axel
 	Glyph Bounds	Glyfgränser
 	Proximity Guides	Närhetsstödlinjer
 	Angular Guides	Vinkelstödlinjer
+	The script asks for a file to open.	Skriptet ber om en fil att öppna.
+	The script asks where to save a file.	Skriptet frågar var en fil ska sparas.
+	The script asks for a folder.	Skriptet ber om en mapp.

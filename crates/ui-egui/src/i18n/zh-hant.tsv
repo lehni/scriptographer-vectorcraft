@@ -5364,3 +5364,6 @@ axis	Y Axis	Y 軸
 	Glyph Bounds	字符邊界
 	Proximity Guides	鄰近參考線
 	Angular Guides	角度參考線
+	The script asks for a file to open.	指令碼要求開啟一個檔案。
+	The script asks where to save a file.	指令碼詢問檔案的儲存位置。
+	The script asks for a folder.	指令碼要求一個資料夾。

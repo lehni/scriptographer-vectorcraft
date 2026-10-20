@@ -5715,3 +5715,6 @@ axis	Y Axis	Y tengely
 	Glyph Bounds	Glifahatárok
 	Proximity Guides	Közelségi segédvonalak
 	Angular Guides	Szög-segédvonalak
+	The script asks for a file to open.	A szkript egy megnyitandó fájlt kér.
+	The script asks where to save a file.	A szkript azt kérdezi, hová mentsen egy fájlt.
+	The script asks for a folder.	A szkript egy mappát kér.

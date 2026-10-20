@@ -5707,3 +5707,6 @@ theme	Appearance	Оформление
 	Glyph Bounds	Границы глифа
 	Proximity Guides	Направляющие близости
 	Angular Guides	Угловые направляющие
+	The script asks for a file to open.	Сценарий запрашивает файл для открытия.
+	The script asks where to save a file.	Сценарий спрашивает, куда сохранить файл.
+	The script asks for a folder.	Сценарий запрашивает папку.

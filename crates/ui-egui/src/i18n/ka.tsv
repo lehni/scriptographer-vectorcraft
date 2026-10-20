@@ -5718,3 +5718,6 @@ swatch	Bright Violet	კაშკაშა იისფერი
 	Glyph Bounds	გლიფის საზღვრები
 	Proximity Guides	სიახლოვის დამხმარე ხაზები
 	Angular Guides	კუთხური დამხმარე ხაზები
+	The script asks for a file to open.	სკრიპტი ითხოვს გასახსნელ ფაილს.
+	The script asks where to save a file.	სკრიპტი გეკითხებათ, სად შეინახოს ფაილი.
+	The script asks for a folder.	სკრიპტი ითხოვს საქაღალდეს.

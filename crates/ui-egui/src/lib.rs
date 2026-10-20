@@ -108,6 +108,8 @@ pub(crate) use services::browsable_url;
 pub use services::{
     DownloadFn, ExistsFn, FileFilter, FilePick, Inbox, NativeInputHook, OpenUrlFn, PickOpen, PickSave, ReadFn, RevealFn, Services, WriteFn,
 };
+#[cfg(target_arch = "wasm32")]
+pub use services::{Picked, ScriptPick};
 use state::{GeometryStamp, InputGeneration, PendingScreenshot, QueuedScreenshot};
 pub(crate) use state::{InputFrame, take_frame_once};
 

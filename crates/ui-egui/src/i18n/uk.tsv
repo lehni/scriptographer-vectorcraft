@@ -5325,3 +5325,6 @@ axis	Y Axis	Вісь Y
 	Glyph Bounds	Межі гліфа
 	Proximity Guides	Напрямні близькості
 	Angular Guides	Кутові напрямні
+	The script asks for a file to open.	Сценарій просить файл для відкриття.
+	The script asks where to save a file.	Сценарій питає, куди зберегти файл.
+	The script asks for a folder.	Сценарій просить папку.

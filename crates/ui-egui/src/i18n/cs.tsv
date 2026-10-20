@@ -5729,3 +5729,6 @@ axis	Y Axis	osa Y
 	Glyph Bounds	Hranice glyfů
 	Proximity Guides	Vodítka blízkosti
 	Angular Guides	Úhlová vodítka
+	The script asks for a file to open.	Skript žádá soubor k otevření.
+	The script asks where to save a file.	Skript se ptá, kam uložit soubor.
+	The script asks for a folder.	Skript žádá složku.

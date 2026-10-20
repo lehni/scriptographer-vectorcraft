@@ -5619,3 +5619,6 @@ axis	Y Axis	Y ос
 	Glyph Bounds	Граници на глифа
 	Proximity Guides	Водачи за близост
 	Angular Guides	Ъглови водачи
+	The script asks for a file to open.	Скриптът иска файл за отваряне.
+	The script asks where to save a file.	Скриптът пита къде да запише файл.
+	The script asks for a folder.	Скриптът иска папка.

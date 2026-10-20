@@ -5568,3 +5568,6 @@ axis	Y Axis	Y 轴
 	Glyph Bounds	字形边界
 	Proximity Guides	邻近参考线
 	Angular Guides	角度参考线
+	The script asks for a file to open.	脚本请求打开一个文件。
+	The script asks where to save a file.	脚本询问文件的保存位置。
+	The script asks for a folder.	脚本请求一个文件夹。
