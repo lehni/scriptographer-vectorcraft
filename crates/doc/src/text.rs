@@ -361,17 +361,13 @@ impl CharStyle {
         self.stroke_dash = st.dash.clone();
         self.stroke_align = st.align;
     }
-    /// How far the character stroke paints past the glyph outlines (text space): half the weight
-    /// centred, the whole weight outside, nothing inside (miter spikes aside).
+    /// How far the character stroke paints past the glyph outlines (text space), its miter spikes
+    /// and square caps included, as an object stroke's reach ([`StrokeLayer::reach`]).
     pub fn stroke_outset(&self) -> f64 {
         if !self.has_stroke() {
             return 0.0;
         }
-        match self.stroke_align {
-            StrokeAlign::Center => self.stroke_width / 2.0,
-            StrokeAlign::Outside => self.stroke_width,
-            StrokeAlign::Inside => 0.0,
-        }
+        self.stroke_layer().reach()
     }
     /// The character fill as a fill layer, overprinting as the characters do.
     fn fill_layer(&self) -> FillLayer {
@@ -1709,6 +1705,12 @@ impl TextObject {
             TextKind::OnPath { path, .. } => path.bounds().map(|b| self.xf.transform_rect_bbox(b)),
             TextKind::Point => Some(self.xf.transform_rect_bbox(self.cached_bounds.unwrap_or_else(|| self.estimate_bounds()))),
         }
+    }
+    /// How far the characters' strokes paint past their glyphs, in document space: they scale
+    /// with the type.
+    pub fn char_stroke_outset(&self) -> f64 {
+        let k = crate::node::Scaling::factor(self.xf).unwrap_or(1.0);
+        self.runs.iter().map(|r| r.style.stroke_outset()).fold(0.0, f64::max) * k
     }
     pub fn transform(&mut self, a: Affine) {
         self.xf = a * self.xf;
