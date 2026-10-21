@@ -6,7 +6,8 @@
 //! shared them), the `Error` classes, boxed primitives, `Blob`, `ImageData` and the geometry classes
 //! as themselves. Functions, symbols and other objects throw a `DataCloneError`.
 //!
-//! `structuredClone(value)` is both in one realm. Transferring isn't supported.
+//! `structuredClone(value)` is both in one realm. Of what can be transferred, a message transfers
+//! `MessagePort`s ([`crate::message_port`]); `structuredClone()` transfers nothing.
 
 use crate::{Call, Engine, Error, Value, method, object};
 
@@ -66,6 +67,8 @@ pub(crate) enum Data {
     Pixels(Box<Data>, f64, f64),
     /// A geometry object: its class's name, and its numbers ([`geometry_values`]).
     Geometry(String, Vec<f64>),
+    /// The port of this number in the message's transfer list.
+    Port(usize),
 }
 
 /// The realm's global object and `Object.prototype.toString`, which names an object's class.
@@ -128,17 +131,31 @@ fn length<H: Clone>(call: &mut dyn Call<H>, object: &H) -> Result<usize, Error> 
 
 /// `value`, serialized.
 pub(crate) fn serialize<H: Clone>(call: &mut dyn Call<H>, value: &Value<H>) -> Result<Data, Error> {
+    serialize_with(call, value, &Value::Undefined)
+}
+
+/// `value`, serialized, the objects in the array `transferred` as their numbers in it.
+pub(crate) fn serialize_with<H: Clone>(call: &mut dyn Call<H>, value: &Value<H>, transferred: &Value<H>) -> Result<Data, Error> {
     let (global, to_string) = classes(call)?;
     let seen = new_map(call, &global)?;
-    let mut serializer = Serializer { global, to_string, seen, count: 0 };
+    let transfers = new_map(call, &global)?;
+    if let Value::Js(list) = transferred {
+        for i in 0..length(call, list)? {
+            let object = call.get(list, &i.to_string())?;
+            method(call, &transfers, "set", &[object, Value::Number(i as f64)])?;
+        }
+    }
+    let mut serializer = Serializer { global, to_string, seen, transfers, count: 0 };
     serializer.serialize(call, value, 0)
 }
 
-/// A serialization in progress: what it uses of the realm, and the objects met so far, by number.
+/// A serialization in progress: what it uses of the realm, the objects met so far, by number, and
+/// those it transfers.
 struct Serializer<H> {
     global: H,
     to_string: H,
     seen: H,
+    transfers: H,
     count: usize,
 }
 
@@ -157,6 +174,9 @@ impl<H: Clone> Serializer<H> {
         }
         if let Value::Number(number) = method(call, &self.seen, "get", std::slice::from_ref(value))? {
             return Ok(Data::Seen(number as usize));
+        }
+        if let Value::Number(number) = method(call, &self.transfers, "get", std::slice::from_ref(value))? {
+            return Ok(Data::Port(number as usize));
         }
         let class = call.call(&self.to_string, value, &[])?;
         let class = call.to_string(&class)?;
@@ -239,7 +259,7 @@ impl<H: Clone> Serializer<H> {
                 let kind = call.get(original, "type")?;
                 Data::Blob(bytes, call.to_string(&kind)?)
             }
-            _ => match geometry_values(call, original, &name)? {
+            _ => match geometry_values(call, original)? {
                 Some(values) => Data::Geometry(name.clone(), values),
                 None => return Err(data_clone_error(&class)),
             },
@@ -265,17 +285,18 @@ impl<H: Clone> Serializer<H> {
 
 /// `data`, made again in the realm `call` is in.
 pub(crate) fn deserialize<H: Clone>(call: &mut dyn Call<H>, data: &Data) -> Result<Value<H>, Error> {
-    let (global, _) = classes(call)?;
-    let mut made = Vec::new();
-    make(call, &global, data, &mut made)
+    deserialize_with(call, data, &[])
 }
 
-/// `data` made, with `made` the objects made so far, by number.
-fn make<H: Clone>(call: &mut dyn Call<H>, global: &H, data: &Data, made: &mut Vec<Value<H>>) -> Result<Value<H>, Error> {
-    let construct = |call: &mut dyn Call<H>, class: &str, args: &[Value<H>]| -> Result<Value<H>, Error> {
-        let class = object(call, global, class)?;
-        call.construct(&class, args)
-    };
+/// `data`, made again in the realm `call` is in, with `ports` the ports its message transferred.
+pub(crate) fn deserialize_with<H: Clone>(call: &mut dyn Call<H>, data: &Data, ports: &[Value<H>]) -> Result<Value<H>, Error> {
+    let (global, _) = classes(call)?;
+    let mut made = Vec::new();
+    make(call, &global, ports, data, &mut made)
+}
+
+/// `data` made, with `made` the objects made so far, by number, and `ports` those transferred.
+fn make<H: Clone>(call: &mut dyn Call<H>, global: &H, ports: &[Value<H>], data: &Data, made: &mut Vec<Value<H>>) -> Result<Value<H>, Error> {
     // An object is numbered when it's made, before what it holds is.
     let number = made.len();
     let value = match data {
@@ -289,48 +310,13 @@ fn make<H: Clone>(call: &mut dyn Call<H>, global: &H, data: &Data, made: &mut Ve
             return call.call(&big_int, &Value::Undefined, &[Value::String(digits.clone())]);
         }
         Data::Seen(number) => return made.get(*number).cloned().ok_or_else(|| Error::Script("the serialized value is broken".into())),
-        Data::Object(members) | Data::Array(_, members) => {
-            let made_object = match data {
-                Data::Array(length, _) => construct(call, "Array", &[Value::Number(*length)])?,
-                _ => Value::Js(call.new_object()?),
-            };
-            made.push(made_object.clone());
-            if let Value::Js(target) = &made_object {
-                for (key, member) in members {
-                    let member = make(call, global, member, made)?;
-                    call.set(target, key, &member)?;
-                }
-            }
-            return Ok(made_object);
-        }
-        Data::Map(pairs) => {
-            let map = construct(call, "Map", &[])?;
-            made.push(map.clone());
-            if let Value::Js(target) = &map {
-                for (key, item) in pairs {
-                    let (key, item) = (make(call, global, key, made)?, make(call, global, item, made)?);
-                    method(call, target, "set", &[key, item])?;
-                }
-            }
-            return Ok(map);
-        }
-        Data::Set(items) => {
-            let set = construct(call, "Set", &[])?;
-            made.push(set.clone());
-            if let Value::Js(target) = &set {
-                for item in items {
-                    let item = make(call, global, item, made)?;
-                    method(call, target, "add", &[item])?;
-                }
-            }
-            return Ok(set);
-        }
-        Data::Date(time) => construct(call, "Date", &[Value::Number(*time)])?,
-        Data::RegExp(source, flags) => construct(call, "RegExp", &[Value::String(source.clone()), Value::String(flags.clone())])?,
+        Data::Object(_) | Data::Array(..) | Data::Map(_) | Data::Set(_) => return make_container(call, global, ports, data, made),
+        Data::Date(time) => construct(call, global, "Date", &[Value::Number(*time)])?,
+        Data::RegExp(source, flags) => construct(call, global, "RegExp", &[Value::String(source.clone()), Value::String(flags.clone())])?,
         Data::Boxed(class, primitive) => {
             made.push(Value::Undefined);
-            let primitive = make(call, global, primitive, made)?;
-            let boxed = construct(call, class, &[primitive])?;
+            let primitive = make(call, global, ports, primitive, made)?;
+            let boxed = construct(call, global, class, &[primitive])?;
             if let Some(slot) = made.get_mut(number) {
                 *slot = boxed.clone();
             }
@@ -342,15 +328,15 @@ fn make<H: Clone>(call: &mut dyn Call<H>, global: &H, data: &Data, made: &mut Ve
         }
         Data::View(class, buffer, offset, length) => {
             made.push(Value::Undefined);
-            let buffer = make(call, global, buffer, made)?;
-            let view = construct(call, class, &[buffer, Value::Number(*offset), Value::Number(*length)])?;
+            let buffer = make(call, global, ports, buffer, made)?;
+            let view = construct(call, global, class, &[buffer, Value::Number(*offset), Value::Number(*length)])?;
             if let Some(slot) = made.get_mut(number) {
                 *slot = view.clone();
             }
             return Ok(view);
         }
         Data::Error(class, message, stack) => {
-            let error = construct(call, class, &[Value::String(message.clone())])?;
+            let error = construct(call, global, class, &[Value::String(message.clone())])?;
             if let (Value::Js(target), Some(stack)) = (&error, stack) {
                 call.set(target, "stack", &Value::String(stack.clone()))?;
             }
@@ -358,8 +344,8 @@ fn make<H: Clone>(call: &mut dyn Call<H>, global: &H, data: &Data, made: &mut Ve
         }
         Data::Pixels(data, width, height) => {
             made.push(Value::Undefined);
-            let data = make(call, global, data, made)?;
-            let image = construct(call, "ImageData", &[data, Value::Number(*width), Value::Number(*height)])?;
+            let data = make(call, global, ports, data, made)?;
+            let image = construct(call, global, "ImageData", &[data, Value::Number(*width), Value::Number(*height)])?;
             if let Some(slot) = made.get_mut(number) {
                 *slot = image.clone();
             }
@@ -368,41 +354,73 @@ fn make<H: Clone>(call: &mut dyn Call<H>, global: &H, data: &Data, made: &mut Ve
         #[cfg(not(target_arch = "wasm32"))]
         Data::Blob(bytes, kind) => crate::blob::new_blob(call, bytes, kind)?,
         Data::Geometry(class, values) => geometry_object(call, class, values)?.ok_or_else(|| data_clone_error(class))?,
+        Data::Port(number) => return ports.get(*number).cloned().ok_or_else(|| Error::Script("the serialized value is broken".into())),
     };
     made.push(value.clone());
     Ok(value)
 }
 
-/// The numbers of a geometry object, whose class `class` names (`DOMPoint` …): a point's `x`, `y`,
-/// `z` and `w`, a rect's `x`, `y`, `width` and `height`, a quad's points' sixteen, a matrix's
-/// sixteen and whether it's 2D. None for another class.
-fn geometry_values<H: Clone>(call: &mut dyn Call<H>, original: &H, class: &str) -> Result<Option<Vec<f64>>, Error> {
-    let numbers = |call: &mut dyn Call<H>, object: &H, keys: &[&str]| -> Result<Vec<f64>, Error> {
-        let mut values = Vec::with_capacity(keys.len());
-        for key in keys {
-            let value = call.get(object, key)?;
-            values.push(call.to_number(&value)?);
-        }
-        Ok(values)
+/// A new `class` of the realm with `global`, made with `args`.
+fn construct<H: Clone>(call: &mut dyn Call<H>, global: &H, class: &str, args: &[Value<H>]) -> Result<Value<H>, Error> {
+    let class = object(call, global, class)?;
+    call.construct(&class, args)
+}
+
+/// The object, array, map or set `data` made, numbered before what it holds is made into it.
+fn make_container<H: Clone>(
+    call: &mut dyn Call<H>,
+    global: &H,
+    ports: &[Value<H>],
+    data: &Data,
+    made: &mut Vec<Value<H>>,
+) -> Result<Value<H>, Error> {
+    let container = match data {
+        Data::Array(length, _) => construct(call, global, "Array", &[Value::Number(*length)])?,
+        Data::Map(_) => construct(call, global, "Map", &[])?,
+        Data::Set(_) => construct(call, global, "Set", &[])?,
+        _ => Value::Js(call.new_object()?),
     };
-    Ok(Some(match class {
-        "DOMPoint" | "DOMPointReadOnly" => numbers(call, original, &POINT)?,
-        "DOMRect" | "DOMRectReadOnly" => numbers(call, original, &["x", "y", "width", "height"])?,
-        "DOMQuad" => {
-            let mut values = Vec::with_capacity(16);
-            for key in ["p1", "p2", "p3", "p4"] {
-                let point = crate::handle(call.get(original, key)?, key)?;
-                values.extend(numbers(call, &point, &POINT)?);
+    made.push(container.clone());
+    let Value::Js(target) = &container else {
+        return Ok(container);
+    };
+    match data {
+        Data::Object(members) | Data::Array(_, members) => {
+            for (key, member) in members {
+                let member = make(call, global, ports, member, made)?;
+                call.set(target, key, &member)?;
             }
-            values
         }
-        "DOMMatrix" | "DOMMatrixReadOnly" => {
-            let mut values = numbers(call, original, &MATRIX)?;
-            values.push(if crate::truthy(&call.get(original, "is2D")?) { 1.0 } else { 0.0 });
-            values
+        Data::Map(pairs) => {
+            for (key, item) in pairs {
+                let (key, item) = (make(call, global, ports, key, made)?, make(call, global, ports, item, made)?);
+                method(call, target, "set", &[key, item])?;
+            }
         }
-        _ => return Ok(None),
-    }))
+        Data::Set(items) => {
+            for item in items {
+                let item = make(call, global, ports, item, made)?;
+                method(call, target, "add", &[item])?;
+            }
+        }
+        _ => {}
+    }
+    Ok(container)
+}
+
+/// The numbers of a geometry object (`getGeometryValues()` in `js/src/geometry.js`, from its own
+/// fields): a point's `x`, `y`, `z` and `w`, a rect's `x`, `y`, `width` and `height`, a quad's
+/// points' sixteen, a matrix's sixteen and whether it's 2D. None for another object.
+fn geometry_values<H: Clone>(call: &mut dyn Call<H>, original: &H) -> Result<Option<Vec<f64>>, Error> {
+    let Value::Js(list) = crate::call_bundle(call, "getGeometryValues", &[Value::Js(original.clone())])? else {
+        return Ok(None);
+    };
+    let mut values = Vec::new();
+    for i in 0..length(call, &list)? {
+        let value = call.get(&list, &i.to_string())?;
+        values.push(call.to_number(&value)?);
+    }
+    Ok(Some(values))
 }
 
 /// The geometry object of class `class` with `values`, as [`geometry_values`] gives them; none for
@@ -435,7 +453,3 @@ fn geometry_object<H: Clone>(call: &mut dyn Call<H>, class: &str, values: &[f64]
     };
     Ok(Some(made))
 }
-
-/// The values of a point, and of a matrix, by name.
-const POINT: [&str; 4] = ["x", "y", "z", "w"];
-const MATRIX: [&str; 16] = ["m11", "m12", "m13", "m14", "m21", "m22", "m23", "m24", "m31", "m32", "m33", "m34", "m41", "m42", "m43", "m44"];
