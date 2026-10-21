@@ -56,7 +56,7 @@ use names::{native_family_name, norm, pick_native_label};
 pub(crate) use scan::file_face_names_within;
 #[cfg(test)]
 use scan::{MAX_FACES, enumerate_faces};
-pub use scan::{is_font_file, is_suitcase};
+pub use scan::{font_families, is_font_file, is_suitcase};
 use traits::Alias;
 #[cfg(test)]
 use traits::{FaceKeys, face_names};
