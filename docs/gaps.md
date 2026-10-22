@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-29 · **Change:** minor (G12: Pathfinder: live compound shapes (#4522): the panel menu's Make, Release and Expand Compound Shape, Alt-clicking a Shape Mode, a selected member's Shape Mode and the Expand button act; no entry closed, estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-29 · **Change:** minor (G4: a per-character language for shaping noted as missing, estimate unchanged; G12: Pathfinder: live compound shapes (#4522): the panel menu's Make, Release and Expand Compound Shape, Alt-clicking a Shape Mode, a selected member's Shape Mode and the Expand button act; no entry closed, estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -368,7 +368,10 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Missing:** CJK vertical
   composition (mojikumi sets and dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern
   features beyond bidi and digit types (Character Direction, kashidas, composers), spell check with an open dictionary,
-  Touch Type, Retype, Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement).
+  Touch Type, Retype, Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement);
+  a per-character language (the Character panel's Language): the shaper gets none, so OpenType's localized forms
+  (`locl`: Turkish i and its ligatures, Serbian and Bulgarian Cyrillic, Chinese and Japanese glyph variants) don't
+  follow it, and Scriptographer's canvas keeps `ctx.lang` without effect until it does.
   Itemized in [type-parity.md](type-parity.md).
 - **Impact:** professional typography and Japanese/Chinese publishing.
 - **Estimate:** 34–47 h (type core 14–19 h blocks beta).
