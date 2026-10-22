@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Hindi catalog and contributor loanword preferences; agent wording pass complete; wider native proofreading welcome; an image zoomed in on is separated, colorized or proofed only where it shows (#4155); scores and estimates unchanged; a document's first frame renders on the render worker, so opening a heavy file no longer freezes the window; scores and estimates unchanged; large images in CMYK documents are shrunk before they are separated into ink planes (#4155); scores and estimates unchanged; `.ai` paths with a Calligraphic brush open brushed, with the 6D Art Pen's channels, and Windows reads the pen's tilt and barrel rotation, #372; scores and estimates unchanged; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (G4: a per-character language for shaping noted as missing, estimate unchanged; Hindi catalog and contributor loanword preferences; agent wording pass complete; wider native proofreading welcome; an image zoomed in on is separated, colorized or proofed only where it shows (#4155); scores and estimates unchanged; a document's first frame renders on the render worker, so opening a heavy file no longer freezes the window; scores and estimates unchanged; large images in CMYK documents are shrunk before they are separated into ink planes (#4155); scores and estimates unchanged; `.ai` paths with a Calligraphic brush open brushed, with the 6D Art Pen's channels, and Windows reads the pen's tilt and barrel rotation, #372; scores and estimates unchanged; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -415,7 +415,10 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Missing:** CJK vertical
   composition (mojikumi sets and dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern
   features beyond bidi, digit types, Character Direction and Kashidas (Middle Eastern composers, a split caret), spell check with an open dictionary,
-  Touch Type, Retype, Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement).
+  Touch Type, Retype, Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement);
+  a per-character language (the Character panel's Language): the shaper gets none, so OpenType's localized forms
+  (`locl`: Turkish i and its ligatures, Serbian and Bulgarian Cyrillic, Chinese and Japanese glyph variants) don't
+  follow it, and Scriptographer's canvas keeps `ctx.lang` without effect until it does.
   Itemized in [type-parity.md](type-parity.md).
 - **Impact:** professional typography and Japanese/Chinese publishing.
 - **Estimate:** 34–47 h (type core 14–19 h blocks beta).
