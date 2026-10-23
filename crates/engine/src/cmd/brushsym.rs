@@ -32,7 +32,7 @@ use brushes::{
     brush_apply, brush_delete, brush_duplicate, brush_freehand, brush_get, brush_list, brush_move, brush_new, brush_options, brush_remove,
     brush_selection_art, brush_set_current, brush_unused, expand_brush,
 };
-pub(crate) use symbols::{natural_size, normalize, place_xf, set_natural_size};
+pub(crate) use symbols::{natural_size, normalize, place_xf, set_natural_size, set_symbol};
 use symbols::{
     symbol_adjust, symbol_break_link, symbol_delete, symbol_duplicate, symbol_edit, symbol_list, symbol_new, symbol_options, symbol_place,
     symbol_replace, symbol_select_instances, symbol_set_current, symbol_spray, symbol_update,
