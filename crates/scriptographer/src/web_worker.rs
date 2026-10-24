@@ -3,8 +3,9 @@
 //! of its own, in a runtime of its own, with the same APIs (and Paper.js, but no document).
 //! Messages go both ways as structured serialization keeps them ([`crate::clone`]), with the ports
 //! they transfer ([`crate::message_port`]), on the receiver's turn ([`poll`] in the parent). An uncaught error in the worker goes to the `Worker`,
-//! and the worker goes on. The worker's console writes to its parent's. A worker ends with
-//! `close()`, `worker.terminate()`, or its parent; while it runs, its parent does.
+//! and the worker goes on. The worker's console writes to its parent's, and it shares its parent's
+//! own files (`navigator.storage`). A worker ends with `close()`, `worker.terminate()`, or its
+//! parent; while it runs, its parent does.
 //!
 //! `new SharedWorker(path, name)` connects to the one worker of that script and name that all of
 //! the app's scripts share, as of one origin, started by the first: the script's `MessagePort`'s
@@ -27,6 +28,13 @@ enum FromWorker {
     Error(String),
     Output(Vec<String>),
     Closed,
+}
+
+/// What kind of worker a worker is: one of its parent's, which shares the folder of its parent's
+/// own files (`navigator.storage`), or one the scripts share, which has none.
+enum Kind {
+    Dedicated(Option<std::path::PathBuf>),
+    Shared,
 }
 
 /// What a worker gets: its parent's messages, or a shared worker the ports of the scripts that
@@ -135,10 +143,11 @@ fn start<E: Engine>(call: &mut dyn Call<E::Handle>, _this: &Value<E::Handle>, ar
     let Some(Value::Js(receive)) = args.get(2) else {
         return Err(Error::Type("Worker: nothing to receive with".into()));
     };
-    let (file, directory, language, cache) = {
+    let (file, directory, language, cache, private_directory) = {
         let host = call.host()?;
         let host = host.borrow();
-        (host.file.as_ref().map(|f| f.to_string_lossy().into_owned()), host.directory.clone(), host.language.clone(), host.cache.clone())
+        let file = host.file.as_ref().map(|f| f.to_string_lossy().into_owned());
+        (file, host.directory.clone(), host.language.clone(), host.cache.clone(), host.private_directory.clone())
     };
     // A script that isn't there fires an error at the worker, as a page's does.
     let key = crate::modules::locate(&path, file.as_deref(), directory).map_err(|e| e.to_string());
@@ -147,7 +156,8 @@ fn start<E: Engine>(call: &mut dyn Call<E::Handle>, _this: &Value<E::Handle>, ar
     let link = Arc::new(());
     let outbox = Outbox::new(sent, &link);
     let interrupt = Arc::new(Mutex::new(None));
-    spawn::<E>(key, name, Setup { language, cache, ..Setup::default() }, inbox, outbox, interrupt.clone(), false)?;
+    let kind = Kind::Dedicated(private_directory);
+    spawn::<E>(key, name, Setup { language, cache, ..Setup::default() }, inbox, outbox, interrupt.clone(), kind)?;
     add_child(call, Child { number: 0, receive: receive.clone(), to, from, interrupt, _link: link, shared: false })
 }
 
@@ -170,11 +180,11 @@ fn spawn<E: Engine>(
     inbox: Receiver<ToWorker>,
     outbox: Arc<Outbox>,
     interrupt: Arc<Mutex<Option<Interrupt>>>,
-    shared: bool,
+    kind: Kind,
 ) -> Result<(), Error> {
     std::thread::Builder::new()
         .name("scriptographer worker".into())
-        .spawn(move || run::<E>(key, &name, setup, &inbox, &outbox, &interrupt, shared))
+        .spawn(move || run::<E>(key, &name, setup, &inbox, &outbox, &interrupt, kind))
         .map(|_| ())
         .map_err(|e| Error::Script(format!("Worker: no thread for it: {e}")))
 }
@@ -228,7 +238,7 @@ fn connect<E: Engine>(call: &mut dyn Call<E::Handle>, _this: &Value<E::Handle>, 
             if let Ok(key) = &key {
                 shared.push(Shared { key: key.clone(), name: name.clone(), to: to.clone(), outbox: outbox.clone() });
             }
-            spawn::<E>(key, name, Setup { language, cache, ..Setup::default() }, inbox, outbox, interrupt.clone(), true)?;
+            spawn::<E>(key, name, Setup { language, cache, ..Setup::default() }, inbox, outbox, interrupt.clone(), Kind::Shared)?;
             to
         }
         (None, None) => return Err(Error::Script("SharedWorker: the port went missing".into())),
@@ -246,7 +256,7 @@ fn run<E: Engine>(
     inbox: &Receiver<ToWorker>,
     outbox: &Arc<Outbox>,
     interrupt: &Arc<Mutex<Option<Interrupt>>>,
-    shared: bool,
+    kind: Kind,
 ) {
     // Those it tells may be gone: then nobody listens.
     let report = |message: String| {
@@ -261,7 +271,10 @@ fn run<E: Engine>(
         if let (Some(stop), Ok(mut slot)) = (runtime.interrupt(), interrupt.lock()) {
             *slot = Some(stop);
         }
-        become_worker(&mut runtime, name, outbox.clone(), shared).map_err(|e| e.to_string())?;
+        if let Kind::Dedicated(directory) = &kind {
+            runtime.host.borrow_mut().private_directory.clone_from(directory);
+        }
+        become_worker(&mut runtime, name, outbox.clone(), matches!(kind, Kind::Shared)).map_err(|e| e.to_string())?;
         Ok((runtime, source))
     })();
     let (mut runtime, source) = match started {
