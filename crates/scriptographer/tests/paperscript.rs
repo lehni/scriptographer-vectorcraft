@@ -429,6 +429,21 @@ fn compression_streams_round_trip<E: Engine>() {
     );
 }
 
+/// `URLPattern` matches URLs and gives the groups it matched.
+fn url_patterns_match_urls<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    runtime
+        .execute(
+            &scope,
+            "const pattern = new URLPattern({ pathname: '/books/:id(\\\\d+)' })\n\
+             const match = pattern.exec('https://example.com/books/42')\n\
+             console.log(pattern.test('https://example.com/books/x'), match.pathname.groups.id, new URLPattern('https://*.example.com/*').test('https://a.example.com/b'))",
+        )
+        .unwrap();
+    assert_eq!(runtime.take_output(), ["false 42 true"]);
+}
+
 /// Encoding as the Encoding standard has it, and base64 as browsers read it.
 fn text_encodes_as_the_standard_has_it<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
@@ -2052,6 +2067,11 @@ macro_rules! engine_tests {
             #[test]
             fn bodies_are_streams() {
                 super::bodies_are_streams::<$engine>();
+            }
+
+            #[test]
+            fn url_patterns_match_urls() {
+                super::url_patterns_match_urls::<$engine>();
             }
 
             #[test]

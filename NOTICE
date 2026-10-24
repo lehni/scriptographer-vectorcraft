@@ -44,9 +44,11 @@ linkedom and uhyphen: Andrea Giammarchi, ISC; htmlparser2: Chris Winberry, MIT; 
 Cheerio contributors, MIT; cssom: Nikita Vasilyev, MIT; entities, domhandler, domutils,
 domelementtype, css-select, css-what, nth-check: Felix Böhm, BSD-2-Clause; boolbase: Felix Böhm,
 ISC; all licence texts in
-crates/scriptographer/vendor/LICENSE-linkedom.txt), and streams from web-streams-polyfill 4.3.0
+crates/scriptographer/vendor/LICENSE-linkedom.txt), streams from web-streams-polyfill 4.3.0
 (crates/scriptographer/vendor/web-streams-polyfill.mjs; Mattias Buelens, Diwank Singh Tomer and
-other contributors, MIT, see crates/scriptographer/vendor/LICENSE-web-streams-polyfill.txt). Desktop
+other contributors, MIT, see crates/scriptographer/vendor/LICENSE-web-streams-polyfill.txt), and
+URLPattern from urlpattern-polyfill 10.1.0 (crates/scriptographer/vendor/urlpattern-polyfill.mjs;
+Intel Corporation, MIT, see crates/scriptographer/vendor/LICENSE-urlpattern-polyfill.txt). Desktop
 builds run them in V8 (BSD-3-Clause, Google; linked through the v8 crate, MIT, the Deno authors);
 other builds in the browser's engine or in Boa (Unlicense OR MIT). On desktop, scripts' fetch() runs
 over ureq (MIT OR Apache-2.0) and their WebSockets over tungstenite (MIT OR Apache-2.0), both on

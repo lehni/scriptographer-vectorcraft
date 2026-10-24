@@ -37,6 +37,7 @@ import {
 } from './palette.js'
 import { Storage, createStorage } from './storage.js'
 import { URL, URLSearchParams } from './url.js'
+import { URLPattern } from './url-pattern.js'
 import { WebSocket } from './websocket.js'
 import { MessageChannel, MessagePort, makePort } from './message-port.js'
 import { Worker, setupWorker } from './worker.js'
@@ -114,6 +115,9 @@ if (!globalThis.localStorage) {
 }
 if (!globalThis.URL) {
   inject(globalThis, { URL, URLSearchParams })
+}
+if (!globalThis.URLPattern) {
+  inject(globalThis, { URLPattern })
 }
 if (!globalThis.WebSocket) {
   inject(globalThis, { WebSocket })

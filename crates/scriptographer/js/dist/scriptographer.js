@@ -154,8 +154,8 @@
     }
     let result = "";
     for (let i2 = 0; i2 < text.length; i2 += 3) {
-      const [a2, b2, c2] = [0, 1, 2].map((j2) => text.charCodeAt(i2 + j2));
-      const bits = a2 << 16 | (b2 || 0) << 8 | (c2 || 0);
+      const [a3, b3, c2] = [0, 1, 2].map((j3) => text.charCodeAt(i2 + j3));
+      const bits = a3 << 16 | (b3 || 0) << 8 | (c2 || 0);
       result += alphabet[bits >> 18 & 63] + alphabet[bits >> 12 & 63] + (i2 + 1 < text.length ? alphabet[bits >> 6 & 63] : "=") + (i2 + 2 < text.length ? alphabet[bits & 63] : "=");
     }
     return result;
@@ -1298,8 +1298,8 @@
   function $e(e2, t2) {
     const r2 = Math.min(e2._queueTotalSize, t2.byteLength - t2.bytesFilled), o2 = t2.bytesFilled + r2;
     let n2 = r2, i2 = false;
-    const a2 = o2 - o2 % t2.elementSize;
-    a2 >= t2.minimumFill && (n2 = a2 - t2.bytesFilled, i2 = true);
+    const a3 = o2 - o2 % t2.elementSize;
+    a3 >= t2.minimumFill && (n2 = a3 - t2.bytesFilled, i2 = true);
     const s2 = e2._queue;
     for (; n2 > 0; ) {
       const r3 = s2.peek(), o3 = Math.min(n2, r3.byteLength), i3 = t2.byteOffset + t2.bytesFilled;
@@ -1387,7 +1387,7 @@
     if (e2._closeRequested || "readable" !== r2._state) return;
     const { buffer: o2, byteOffset: n2, byteLength: i2 } = t2;
     if (de(o2)) throw new TypeError("chunk's buffer is detached and so cannot be enqueued");
-    const a2 = ce(o2);
+    const a3 = ce(o2);
     if (e2._pendingPullIntos.length > 0) {
       const t3 = e2._pendingPullIntos.peek();
       if (de(t3.buffer)) throw new TypeError("The BYOB request's buffer has been detached and so cannot be filled with an enqueued chunk");
@@ -1399,15 +1399,15 @@
         if (0 === e3._queueTotalSize) return;
         Je(e3, t3._readRequests.shift());
       }
-    })(e2), 0 === X(r2)) Fe(e2, a2, n2, i2);
+    })(e2), 0 === X(r2)) Fe(e2, a3, n2, i2);
     else {
       e2._pendingPullIntos.length > 0 && He(e2);
-      G(r2, new Uint8Array(a2, n2, i2), false);
+      G(r2, new Uint8Array(a3, n2, i2), false);
     }
     else if (ut(r2)) {
-      Fe(e2, a2, n2, i2);
+      Fe(e2, a3, n2, i2);
       ze(r2, Qe(e2));
-    } else Fe(e2, a2, n2, i2);
+    } else Fe(e2, a3, n2, i2);
     je(e2);
   }
   __name(Ge, "Ge");
@@ -1461,8 +1461,8 @@
     r2.buffer = ce(t2.buffer), Ne(e2, o2);
   }
   __name(tt, "tt");
-  function rt(e2, t2, r2, o2, n2, i2, a2) {
-    t2._controlledReadableByteStream = e2, t2._pullAgain = false, t2._pulling = false, t2._byobRequest = null, t2._queue = t2._queueTotalSize = void 0, qe(t2), t2._closeRequested = false, t2._started = false, t2._strategyHWM = i2, t2._pullAlgorithm = o2, t2._cancelAlgorithm = n2, t2._autoAllocateChunkSize = a2, t2._pendingPullIntos = new v(), e2._readableStreamController = t2;
+  function rt(e2, t2, r2, o2, n2, i2, a3) {
+    t2._controlledReadableByteStream = e2, t2._pullAgain = false, t2._pulling = false, t2._byobRequest = null, t2._queue = t2._queueTotalSize = void 0, qe(t2), t2._closeRequested = false, t2._started = false, t2._strategyHWM = i2, t2._pullAlgorithm = o2, t2._cancelAlgorithm = n2, t2._autoAllocateChunkSize = a3, t2._pendingPullIntos = new v(), e2._readableStreamController = t2;
     h(c(r2()), () => (t2._started = true, je(t2), null), (e3) => (Xe(t2, e3), null));
   }
   __name(rt, "rt");
@@ -1538,8 +1538,8 @@
       const n2 = (function(e3, t3, r3) {
         const o3 = e3._ownerReadableStream;
         return "errored" === o3._state || (function(e4, t4, r4) {
-          const o4 = e4._controlledReadableByteStream, n3 = We(t4.constructor), { byteLength: i2 } = t4, a2 = r4 * n3;
-          return !(e4._pendingPullIntos.length > 0) && ("closed" === o4._state || e4._queueTotalSize >= a2);
+          const o4 = e4._controlledReadableByteStream, n3 = We(t4.constructor), { byteLength: i2 } = t4, a3 = r4 * n3;
+          return !(e4._pendingPullIntos.length > 0) && ("closed" === o4._state || e4._queueTotalSize >= a3);
         })(o3._readableStreamController, t3, r3);
       })(this, e2, o2) ? new dt() : new ct();
       return ht(this, e2, o2, n2), n2._promise;
@@ -1597,14 +1597,14 @@
   function ht(e2, t2, r2, o2) {
     const n2 = e2._ownerReadableStream;
     n2._disturbed = true, "errored" === n2._state ? o2._errorSteps(n2._storedError) : (function(e3, t3, r3, o3) {
-      const n3 = e3._controlledReadableByteStream, i2 = t3.constructor, a2 = We(i2), { byteOffset: s2, byteLength: l2 } = t3, u2 = r3 * a2;
+      const n3 = e3._controlledReadableByteStream, i2 = t3.constructor, a3 = We(i2), { byteOffset: s2, byteLength: l2 } = t3, u2 = r3 * a3;
       let c2;
       try {
         c2 = ce(t3.buffer);
       } catch (e4) {
         return void o3._errorSteps(e4);
       }
-      const d2 = { buffer: c2, bufferByteLength: c2.byteLength, byteOffset: s2, byteLength: l2, bytesFilled: 0, minimumFill: u2, elementSize: a2, viewConstructor: i2, readerType: "byob" };
+      const d2 = { buffer: c2, bufferByteLength: c2.byteLength, byteOffset: s2, byteLength: l2, bytesFilled: 0, minimumFill: u2, elementSize: a3, viewConstructor: i2, readerType: "byob" };
       if (e3._pendingPullIntos.length > 0) return e3._pendingPullIntos.push(d2), void st(n3, o3);
       if ("closed" === n3._state) {
         const e4 = new i2(d2.buffer, d2.byteOffset, 0);
@@ -1685,21 +1685,21 @@
       void 0 === e2 ? e2 = null : $(e2, "First parameter");
       const r2 = yt(t2, "Second parameter"), o2 = (function(e3, t3) {
         L(e3, t3);
-        const r3 = null == e3 ? void 0 : e3.abort, o3 = null == e3 ? void 0 : e3.close, n3 = null == e3 ? void 0 : e3.start, i2 = null == e3 ? void 0 : e3.type, a2 = null == e3 ? void 0 : e3.write;
-        return { abort: void 0 === r3 ? void 0 : gt(r3, e3, `${t3} has member 'abort' that`), close: void 0 === o3 ? void 0 : vt(o3, e3, `${t3} has member 'close' that`), start: void 0 === n3 ? void 0 : wt(n3, e3, `${t3} has member 'start' that`), write: void 0 === a2 ? void 0 : Rt(a2, e3, `${t3} has member 'write' that`), type: i2 };
+        const r3 = null == e3 ? void 0 : e3.abort, o3 = null == e3 ? void 0 : e3.close, n3 = null == e3 ? void 0 : e3.start, i2 = null == e3 ? void 0 : e3.type, a3 = null == e3 ? void 0 : e3.write;
+        return { abort: void 0 === r3 ? void 0 : gt(r3, e3, `${t3} has member 'abort' that`), close: void 0 === o3 ? void 0 : vt(o3, e3, `${t3} has member 'close' that`), start: void 0 === n3 ? void 0 : wt(n3, e3, `${t3} has member 'start' that`), write: void 0 === a3 ? void 0 : Rt(a3, e3, `${t3} has member 'write' that`), type: i2 };
       })(e2, "First parameter");
       Ct(this);
       if (void 0 !== o2.type) throw new RangeError("Invalid type is specified");
       const n2 = pt(r2);
       !(function(e3, t3, r3, o3) {
         const n3 = Object.create(WritableStreamDefaultController.prototype);
-        let i2, a2, s2, l2;
+        let i2, a3, s2, l2;
         i2 = void 0 !== t3.start ? () => t3.start(n3) : () => {
         };
-        a2 = void 0 !== t3.write ? (e4) => t3.write(e4, n3) : () => c(void 0);
+        a3 = void 0 !== t3.write ? (e4) => t3.write(e4, n3) : () => c(void 0);
         s2 = void 0 !== t3.close ? () => t3.close() : () => c(void 0);
         l2 = void 0 !== t3.abort ? (e4) => t3.abort(e4) : () => c(void 0);
-        Nt(e3, n3, i2, a2, s2, l2, r3, o3);
+        Nt(e3, n3, i2, a3, s2, l2, r3, o3);
       })(this, o2, mt(r2, 1), n2);
     }
     get locked() {
@@ -1892,7 +1892,7 @@
     if ("errored" === i2) return d(r2._storedError);
     if (At(r2) || "closed" === i2) return d(new TypeError("The stream is closing or closed and cannot be written to"));
     if ("erroring" === i2) return d(r2._storedError);
-    const a2 = (function(e3) {
+    const a3 = (function(e3) {
       return u((t3, r3) => {
         const o3 = { _resolve: t3, _reject: r3 };
         e3._writeRequests.push(o3);
@@ -1909,7 +1909,7 @@
         Dt(o3, Xt(e3));
       }
       Ut(e3);
-    })(o2, t2, n2), a2;
+    })(o2, t2, n2), a3;
   }
   __name(Yt, "Yt");
   Object.defineProperties(WritableStreamDefaultWriter.prototype, { abort: { enumerable: true }, close: { enumerable: true }, releaseLock: { enumerable: true }, write: { enumerable: true }, closed: { enumerable: true }, desiredSize: { enumerable: true }, ready: { enumerable: true } }), o(WritableStreamDefaultWriter.prototype.abort, "abort"), o(WritableStreamDefaultWriter.prototype.close, "close"), o(WritableStreamDefaultWriter.prototype.releaseLock, "releaseLock"), o(WritableStreamDefaultWriter.prototype.write, "write"), "symbol" == typeof Symbol.toStringTag && Object.defineProperty(WritableStreamDefaultWriter.prototype, Symbol.toStringTag, { value: "WritableStreamDefaultWriter", configurable: true });
@@ -1946,10 +1946,10 @@
     return !!t(e2) && (!!Object.prototype.hasOwnProperty.call(e2, "_controlledWritableStream") && e2 instanceof WritableStreamDefaultController);
   }
   __name(Qt, "Qt");
-  function Nt(e2, t2, r2, o2, n2, i2, a2, s2) {
+  function Nt(e2, t2, r2, o2, n2, i2, a3, s2) {
     t2._controlledWritableStream = e2, e2._writableStreamController = t2, t2._queue = void 0, t2._queueTotalSize = void 0, qe(t2), t2._abortReason = void 0, t2._abortController = (function() {
       if ("function" == typeof AbortController) return new AbortController();
-    })(), t2._started = false, t2._strategySizeAlgorithm = s2, t2._strategyHWM = a2, t2._writeAlgorithm = o2, t2._closeAlgorithm = n2, t2._abortAlgorithm = i2;
+    })(), t2._started = false, t2._strategySizeAlgorithm = s2, t2._strategyHWM = a3, t2._writeAlgorithm = o2, t2._closeAlgorithm = n2, t2._abortAlgorithm = i2;
     const l2 = Xt(t2);
     Dt(e2, l2);
     h(c(r2()), () => (t2._started = true, Ut(t2), null), (r3) => (t2._started = true, Bt(e2, r3), null));
@@ -2094,50 +2094,50 @@
     return o(e2, "DOMException"), e2.prototype = Object.create(Error.prototype), Object.defineProperty(e2.prototype, "constructor", { value: e2, writable: true, configurable: true }), e2;
   })();
   function hr(e2, t2, r2, o2, n2, i2) {
-    const a2 = V(e2), s2 = Pt(t2);
+    const a3 = V(e2), s2 = Pt(t2);
     e2._disturbed = true;
-    const l2 = new br(s2), _2 = new mr(l2);
+    const l2 = new br(s2), _3 = new mr(l2);
     return u((m2, y2) => {
       let S2;
       if (void 0 !== i2) {
         if (S2 = /* @__PURE__ */ __name(() => {
-          const r3 = void 0 !== i2.reason ? i2.reason : new fr("Aborted", "AbortError"), a3 = [];
-          o2 || a3.push(() => "writable" === t2._state ? Wt(t2, r3) : c(void 0)), n2 || a3.push(() => "readable" === e2._state ? Mr(e2, r3) : c(void 0)), T2(() => Promise.all(a3.map((e3) => e3())), true, r3);
+          const r3 = void 0 !== i2.reason ? i2.reason : new fr("Aborted", "AbortError"), a4 = [];
+          o2 || a4.push(() => "writable" === t2._state ? Wt(t2, r3) : c(void 0)), n2 || a4.push(() => "readable" === e2._state ? Mr(e2, r3) : c(void 0)), T3(() => Promise.all(a4.map((e3) => e3())), true, r3);
         }, "S"), i2.aborted) return void S2();
         i2.addEventListener("abort", S2);
       }
       function g2() {
-        for (; !l2._shuttingDown && !t2._backpressure && "writable" === t2._state && !At(t2) && "readable" === e2._state && re(a2); ) te(a2, _2);
+        for (; !l2._shuttingDown && !t2._backpressure && "writable" === t2._state && !At(t2) && "readable" === e2._state && re(a3); ) te(a3, _3);
         if (l2._shuttingDown) return c(true);
         if (t2._backpressure) return f(s2._readyPromise, g2);
         const r3 = new _r(l2);
-        return te(a2, r3), r3._promise;
+        return te(a3, r3), r3._promise;
       }
       __name(g2, "g");
-      var v2, w2, R2;
-      if (pr(e2, a2._closedPromise, (e3) => (o2 ? P2(true, e3) : T2(() => Wt(t2, e3), true, e3), null)), pr(t2, s2._closedPromise, (t3) => (n2 ? P2(true, t3) : T2(() => Mr(e2, t3), true, t3), null)), v2 = e2, w2 = a2._closedPromise, R2 = /* @__PURE__ */ __name(() => (r2 ? P2() : T2(() => (function(e3) {
+      var v3, w3, R3;
+      if (pr(e2, a3._closedPromise, (e3) => (o2 ? P3(true, e3) : T3(() => Wt(t2, e3), true, e3), null)), pr(t2, s2._closedPromise, (t3) => (n2 ? P3(true, t3) : T3(() => Mr(e2, t3), true, t3), null)), v3 = e2, w3 = a3._closedPromise, R3 = /* @__PURE__ */ __name(() => (r2 ? P3() : T3(() => (function(e3) {
         const t3 = e3._ownerWritableStream, r3 = t3._state;
         return At(t3) || "closed" === r3 ? c(void 0) : "errored" === r3 ? d(t3._storedError) : Lt(e3);
-      })(s2)), null), "R"), "closed" === v2._state ? R2() : b(w2, R2), At(t2) || "closed" === t2._state) {
+      })(s2)), null), "R"), "closed" === v3._state ? R3() : b(w3, R3), At(t2) || "closed" === t2._state) {
         const t3 = new TypeError("the destination writable stream closed before all data could be piped to it");
-        n2 ? P2(true, t3) : T2(() => Mr(e2, t3), true, t3);
+        n2 ? P3(true, t3) : T3(() => Mr(e2, t3), true, t3);
       }
-      function T2(e3, r3, o3) {
+      function T3(e3, r3, o3) {
         function n3() {
-          return h(e3(), () => C2(r3, o3), (e4) => C2(true, e4)), null;
+          return h(e3(), () => C3(r3, o3), (e4) => C3(true, e4)), null;
         }
         __name(n3, "n");
         l2._shuttingDown || (l2._shuttingDown = true, "writable" !== t2._state || At(t2) ? n3() : b(l2._waitForWritesToFinish(), n3));
       }
-      __name(T2, "T");
-      function P2(e3, r3) {
-        l2._shuttingDown || (l2._shuttingDown = true, "writable" !== t2._state || At(t2) ? C2(e3, r3) : b(l2._waitForWritesToFinish(), () => C2(e3, r3)));
+      __name(T3, "T");
+      function P3(e3, r3) {
+        l2._shuttingDown || (l2._shuttingDown = true, "writable" !== t2._state || At(t2) ? C3(e3, r3) : b(l2._waitForWritesToFinish(), () => C3(e3, r3)));
       }
-      __name(P2, "P");
-      function C2(e3, t3) {
-        return Mt(s2), O(a2), void 0 !== i2 && i2.removeEventListener("abort", S2), e3 ? y2(t3) : m2(void 0), null;
+      __name(P3, "P");
+      function C3(e3, t3) {
+        return Mt(s2), O(a3), void 0 !== i2 && i2.removeEventListener("abort", S2), e3 ? y2(t3) : m2(void 0), null;
       }
-      __name(C2, "C");
+      __name(C3, "C");
       p(u((e3, t3) => {
         !(/* @__PURE__ */ __name(function r3(o3) {
           o3 ? e3() : f(g2(), r3, t3);
@@ -2303,8 +2303,8 @@
     return !e2._closeRequested && "readable" === t2;
   }
   __name(Cr, "Cr");
-  function qr(e2, t2, r2, o2, n2, i2, a2) {
-    t2._controlledReadableStream = e2, t2._queue = void 0, t2._queueTotalSize = void 0, qe(t2), t2._started = false, t2._closeRequested = false, t2._pullAgain = false, t2._pulling = false, t2._strategySizeAlgorithm = a2, t2._strategyHWM = i2, t2._pullAlgorithm = o2, t2._cancelAlgorithm = n2, e2._readableStreamController = t2;
+  function qr(e2, t2, r2, o2, n2, i2, a3) {
+    t2._controlledReadableStream = e2, t2._queue = void 0, t2._queueTotalSize = void 0, qe(t2), t2._started = false, t2._closeRequested = false, t2._pullAgain = false, t2._pulling = false, t2._strategySizeAlgorithm = a3, t2._strategyHWM = i2, t2._pullAlgorithm = o2, t2._cancelAlgorithm = n2, e2._readableStreamController = t2;
     h(c(r2()), () => (t2._started = true, Sr(t2), null), (e3) => (Tr(t2, e3), null));
   }
   __name(qr, "qr");
@@ -2314,27 +2314,27 @@
   __name(Er, "Er");
   function Wr(e2, t2) {
     return Oe(e2._readableStreamController) ? (function(e3) {
-      let t3, r2, o2, n2, i2, a2 = V(e3), s2 = false, l2 = false, d2 = false, f2 = false, h2 = false;
-      const b2 = u((e4) => {
+      let t3, r2, o2, n2, i2, a3 = V(e3), s2 = false, l2 = false, d2 = false, f2 = false, h2 = false;
+      const b3 = u((e4) => {
         i2 = e4;
       });
       function m2(e4) {
-        _(e4._closedPromise, (t4) => (e4 !== a2 || (Xe(o2._readableStreamController, t4), Xe(n2._readableStreamController, t4), f2 && h2 || i2(void 0)), null));
+        _(e4._closedPromise, (t4) => (e4 !== a3 || (Xe(o2._readableStreamController, t4), Xe(n2._readableStreamController, t4), f2 && h2 || i2(void 0)), null));
       }
       __name(m2, "m");
       function p2() {
-        ft(a2) && (O(a2), a2 = V(e3), m2(a2));
-        te(a2, { _chunkSteps: /* @__PURE__ */ __name((t4) => {
+        ft(a3) && (O(a3), a3 = V(e3), m2(a3));
+        te(a3, { _chunkSteps: /* @__PURE__ */ __name((t4) => {
           y(() => {
             l2 = false, d2 = false;
             const r3 = t4;
-            let a3 = t4;
+            let a4 = t4;
             if (!f2 && !h2) try {
-              a3 = Te(t4);
+              a4 = Te(t4);
             } catch (t5) {
               return Xe(o2._readableStreamController, t5), Xe(n2._readableStreamController, t5), void i2(Mr(e3, t5));
             }
-            f2 || Ge(o2._readableStreamController, r3), h2 || Ge(n2._readableStreamController, a3), s2 = false, l2 ? g2() : d2 && v2();
+            f2 || Ge(o2._readableStreamController, r3), h2 || Ge(n2._readableStreamController, a4), s2 = false, l2 ? g2() : d2 && v3();
           });
         }, "_chunkSteps"), _closeSteps: /* @__PURE__ */ __name(() => {
           s2 = false, f2 || Ue(o2._readableStreamController), h2 || Ue(n2._readableStreamController), o2._readableStreamController._pendingPullIntos.length > 0 && et(o2._readableStreamController, 0), n2._readableStreamController._pendingPullIntos.length > 0 && et(n2._readableStreamController, 0), f2 && h2 || i2(void 0);
@@ -2344,9 +2344,9 @@
       }
       __name(p2, "p");
       function S2(t4, r3) {
-        ee(a2) && (O(a2), a2 = at(e3), m2(a2));
+        ee(a3) && (O(a3), a3 = at(e3), m2(a3));
         const u2 = r3 ? n2 : o2, c2 = r3 ? o2 : n2;
-        ht(a2, t4, 1, { _chunkSteps: /* @__PURE__ */ __name((t5) => {
+        ht(a3, t4, 1, { _chunkSteps: /* @__PURE__ */ __name((t5) => {
           y(() => {
             l2 = false, d2 = false;
             const o3 = r3 ? h2 : f2;
@@ -2360,7 +2360,7 @@
               }
               o3 || tt(u2._readableStreamController, t5), Ge(c2._readableStreamController, r4);
             }
-            s2 = false, l2 ? g2() : d2 && v2();
+            s2 = false, l2 ? g2() : d2 && v3();
           });
         }, "_chunkSteps"), _closeSteps: /* @__PURE__ */ __name((e4) => {
           s2 = false;
@@ -2378,59 +2378,59 @@
         return null === e4 ? p2() : S2(e4._view, false), c(void 0);
       }
       __name(g2, "g");
-      function v2() {
+      function v3() {
         if (s2) return d2 = true, c(void 0);
         s2 = true;
         const e4 = Ke(n2._readableStreamController);
         return null === e4 ? p2() : S2(e4._view, true), c(void 0);
       }
-      __name(v2, "v");
-      function w2(o3) {
+      __name(v3, "v");
+      function w3(o3) {
         if (f2 = true, t3 = o3, h2) {
           const o4 = le([t3, r2]), n3 = Mr(e3, o4);
           i2(n3);
         }
-        return b2;
+        return b3;
       }
-      __name(w2, "w");
-      function R2(o3) {
+      __name(w3, "w");
+      function R3(o3) {
         if (h2 = true, r2 = o3, f2) {
           const o4 = le([t3, r2]), n3 = Mr(e3, o4);
           i2(n3);
         }
-        return b2;
+        return b3;
       }
-      __name(R2, "R");
-      function T2() {
+      __name(R3, "R");
+      function T3() {
       }
-      __name(T2, "T");
-      return o2 = Fr(T2, g2, w2), n2 = Fr(T2, v2, R2), m2(a2), [o2, n2];
+      __name(T3, "T");
+      return o2 = Fr(T3, g2, w3), n2 = Fr(T3, v3, R3), m2(a3), [o2, n2];
     })(e2) : (function(e3) {
       const t3 = V(e3);
-      let r2, o2, n2, i2, a2, s2 = false, l2 = false, d2 = false, f2 = false;
+      let r2, o2, n2, i2, a3, s2 = false, l2 = false, d2 = false, f2 = false;
       const h2 = u((e4) => {
-        a2 = e4;
+        a3 = e4;
       });
-      function b2() {
+      function b3() {
         if (s2) return l2 = true, c(void 0);
         s2 = true;
         return te(t3, { _chunkSteps: /* @__PURE__ */ __name((e4) => {
           y(() => {
             l2 = false;
             const t4 = e4, r3 = e4;
-            d2 || Rr(n2._readableStreamController, t4), f2 || Rr(i2._readableStreamController, r3), s2 = false, l2 && b2();
+            d2 || Rr(n2._readableStreamController, t4), f2 || Rr(i2._readableStreamController, r3), s2 = false, l2 && b3();
           });
         }, "_chunkSteps"), _closeSteps: /* @__PURE__ */ __name(() => {
-          s2 = false, d2 || wr(n2._readableStreamController), f2 || wr(i2._readableStreamController), d2 && f2 || a2(void 0);
+          s2 = false, d2 || wr(n2._readableStreamController), f2 || wr(i2._readableStreamController), d2 && f2 || a3(void 0);
         }, "_closeSteps"), _errorSteps: /* @__PURE__ */ __name(() => {
           s2 = false;
         }, "_errorSteps") }), c(void 0);
       }
-      __name(b2, "b");
+      __name(b3, "b");
       function m2(t4) {
         if (d2 = true, r2 = t4, f2) {
           const t5 = le([r2, o2]), n3 = Mr(e3, t5);
-          a2(n3);
+          a3(n3);
         }
         return h2;
       }
@@ -2438,7 +2438,7 @@
       function p2(t4) {
         if (f2 = true, o2 = t4, d2) {
           const t5 = le([r2, o2]), n3 = Mr(e3, t5);
-          a2(n3);
+          a3(n3);
         }
         return h2;
       }
@@ -2446,7 +2446,7 @@
       function S2() {
       }
       __name(S2, "S");
-      return n2 = Dr(S2, b2, m2), i2 = Dr(S2, b2, p2), _(t3._closedPromise, (e4) => (Tr(n2._readableStreamController, e4), Tr(i2._readableStreamController, e4), d2 && f2 || a2(void 0), null)), [n2, i2];
+      return n2 = Dr(S2, b3, m2), i2 = Dr(S2, b3, p2), _(t3._closedPromise, (e4) => (Tr(n2._readableStreamController, e4), Tr(i2._readableStreamController, e4), d2 && f2 || a3(void 0), null)), [n2, i2];
     })(e2);
   }
   __name(Wr, "Wr");
@@ -2499,7 +2499,7 @@
         });
       }
       __name(i2, "i");
-      function a2(e2) {
+      function a3(e2) {
         const r4 = n2.iterator;
         let o4;
         try {
@@ -2512,8 +2512,8 @@
           if (!t(e3)) throw new TypeError("The promise returned by the iterator.return() method must fulfill with an object");
         });
       }
-      __name(a2, "a");
-      return o3 = Dr(e, i2, a2, 0), o3;
+      __name(a3, "a");
+      return o3 = Dr(e, i2, a3, 0), o3;
     })(r2);
     var o2;
   }
@@ -2559,27 +2559,27 @@
       void 0 === e2 ? e2 = null : $(e2, "First parameter");
       const r2 = yt(t2, "Second parameter"), o2 = (function(e3, t3) {
         L(e3, t3);
-        const r3 = e3, o3 = null == r3 ? void 0 : r3.autoAllocateChunkSize, n2 = null == r3 ? void 0 : r3.cancel, i2 = null == r3 ? void 0 : r3.pull, a2 = null == r3 ? void 0 : r3.start, s2 = null == r3 ? void 0 : r3.type;
-        return { autoAllocateChunkSize: void 0 === o3 ? void 0 : N(o3, `${t3} has member 'autoAllocateChunkSize' that`), cancel: void 0 === n2 ? void 0 : Br(n2, r3, `${t3} has member 'cancel' that`), pull: void 0 === i2 ? void 0 : jr(i2, r3, `${t3} has member 'pull' that`), start: void 0 === a2 ? void 0 : kr(a2, r3, `${t3} has member 'start' that`), type: void 0 === s2 ? void 0 : Ar(s2, `${t3} has member 'type' that`) };
+        const r3 = e3, o3 = null == r3 ? void 0 : r3.autoAllocateChunkSize, n2 = null == r3 ? void 0 : r3.cancel, i2 = null == r3 ? void 0 : r3.pull, a3 = null == r3 ? void 0 : r3.start, s2 = null == r3 ? void 0 : r3.type;
+        return { autoAllocateChunkSize: void 0 === o3 ? void 0 : N(o3, `${t3} has member 'autoAllocateChunkSize' that`), cancel: void 0 === n2 ? void 0 : Br(n2, r3, `${t3} has member 'cancel' that`), pull: void 0 === i2 ? void 0 : jr(i2, r3, `${t3} has member 'pull' that`), start: void 0 === a3 ? void 0 : kr(a3, r3, `${t3} has member 'start' that`), type: void 0 === s2 ? void 0 : Ar(s2, `${t3} has member 'type' that`) };
       })(e2, "First parameter");
       if (Lr(this), "bytes" === o2.type) {
         if (void 0 !== r2.size) throw new RangeError("The strategy for a byte stream cannot have a size function");
         !(function(e3, t3, r3) {
           const o3 = Object.create(ReadableByteStreamController.prototype);
-          let n2, i2, a2;
+          let n2, i2, a3;
           n2 = void 0 !== t3.start ? () => t3.start(o3) : () => {
-          }, i2 = void 0 !== t3.pull ? () => t3.pull(o3) : () => c(void 0), a2 = void 0 !== t3.cancel ? (e4) => t3.cancel(e4) : () => c(void 0);
+          }, i2 = void 0 !== t3.pull ? () => t3.pull(o3) : () => c(void 0), a3 = void 0 !== t3.cancel ? (e4) => t3.cancel(e4) : () => c(void 0);
           const s2 = t3.autoAllocateChunkSize;
           if (0 === s2) throw new TypeError("autoAllocateChunkSize must be greater than 0");
-          rt(e3, o3, n2, i2, a2, r3, s2);
+          rt(e3, o3, n2, i2, a3, r3, s2);
         })(this, o2, mt(r2, 0));
       } else {
         const e3 = pt(r2);
         !(function(e4, t3, r3, o3) {
           const n2 = Object.create(ReadableStreamDefaultController.prototype);
-          let i2, a2, s2;
+          let i2, a3, s2;
           i2 = void 0 !== t3.start ? () => t3.start(n2) : () => {
-          }, a2 = void 0 !== t3.pull ? () => t3.pull(n2) : () => c(void 0), s2 = void 0 !== t3.cancel ? (e5) => t3.cancel(e5) : () => c(void 0), qr(e4, n2, i2, a2, s2, r3, o3);
+          }, a3 = void 0 !== t3.pull ? () => t3.pull(n2) : () => c(void 0), s2 = void 0 !== t3.cancel ? (e5) => t3.cancel(e5) : () => c(void 0), qr(e4, n2, i2, a3, s2, r3, o3);
         })(this, o2, mt(r2, 1), e3);
       }
     }
@@ -2790,18 +2790,18 @@
       void 0 === e2 && (e2 = null);
       const o2 = yt(t2, "Second parameter"), n2 = yt(r2, "Third parameter"), i2 = (function(e3, t3) {
         L(e3, t3);
-        const r3 = null == e3 ? void 0 : e3.cancel, o3 = null == e3 ? void 0 : e3.flush, n3 = null == e3 ? void 0 : e3.readableType, i3 = null == e3 ? void 0 : e3.start, a3 = null == e3 ? void 0 : e3.transform, s3 = null == e3 ? void 0 : e3.writableType;
-        return { cancel: void 0 === r3 ? void 0 : to(r3, e3, `${t3} has member 'cancel' that`), flush: void 0 === o3 ? void 0 : Kr(o3, e3, `${t3} has member 'flush' that`), readableType: n3, start: void 0 === i3 ? void 0 : Zr(i3, e3, `${t3} has member 'start' that`), transform: void 0 === a3 ? void 0 : eo(a3, e3, `${t3} has member 'transform' that`), writableType: s3 };
+        const r3 = null == e3 ? void 0 : e3.cancel, o3 = null == e3 ? void 0 : e3.flush, n3 = null == e3 ? void 0 : e3.readableType, i3 = null == e3 ? void 0 : e3.start, a4 = null == e3 ? void 0 : e3.transform, s3 = null == e3 ? void 0 : e3.writableType;
+        return { cancel: void 0 === r3 ? void 0 : to(r3, e3, `${t3} has member 'cancel' that`), flush: void 0 === o3 ? void 0 : Kr(o3, e3, `${t3} has member 'flush' that`), readableType: n3, start: void 0 === i3 ? void 0 : Zr(i3, e3, `${t3} has member 'start' that`), transform: void 0 === a4 ? void 0 : eo(a4, e3, `${t3} has member 'transform' that`), writableType: s3 };
       })(e2, "First parameter");
       if (void 0 !== i2.readableType) throw new RangeError("Invalid readableType specified");
       if (void 0 !== i2.writableType) throw new RangeError("Invalid writableType specified");
-      const a2 = mt(n2, 0), s2 = pt(n2), l2 = mt(o2, 1), f2 = pt(o2);
-      let b2;
+      const a3 = mt(n2, 0), s2 = pt(n2), l2 = mt(o2, 1), f2 = pt(o2);
+      let b3;
       !(function(e3, t3, r3, o3, n3, i3) {
-        function a3() {
+        function a4() {
           return t3;
         }
-        __name(a3, "a");
+        __name(a4, "a");
         function s3(t4) {
           return (function(e4, t5) {
             const r4 = e4._transformStreamController;
@@ -2862,12 +2862,12 @@
         }
         __name(f3, "f");
         e3._writable = (function(e4, t4, r4, o4, n4 = 1, i4 = () => 1) {
-          const a4 = Object.create(WritableStream.prototype);
-          return Ct(a4), Nt(a4, Object.create(WritableStreamDefaultController.prototype), e4, t4, r4, o4, n4, i4), a4;
-        })(a3, s3, c2, l3, r3, o3), e3._readable = Dr(a3, d2, f3, n3, i3), e3._backpressure = void 0, e3._backpressureChangePromise = void 0, e3._backpressureChangePromise_resolve = void 0, ao(e3, true), e3._transformStreamController = void 0;
+          const a5 = Object.create(WritableStream.prototype);
+          return Ct(a5), Nt(a5, Object.create(WritableStreamDefaultController.prototype), e4, t4, r4, o4, n4, i4), a5;
+        })(a4, s3, c2, l3, r3, o3), e3._readable = Dr(a4, d2, f3, n3, i3), e3._backpressure = void 0, e3._backpressureChangePromise = void 0, e3._backpressureChangePromise_resolve = void 0, ao(e3, true), e3._transformStreamController = void 0;
       })(this, u((e3) => {
-        b2 = e3;
-      }), l2, f2, a2, s2), (function(e3, t3) {
+        b3 = e3;
+      }), l2, f2, a3, s2), (function(e3, t3) {
         const r3 = Object.create(TransformStreamDefaultController.prototype);
         let o3, n3, i3;
         o3 = void 0 !== t3.transform ? (e4) => t3.transform(e4, r3) : (e4) => {
@@ -2882,7 +2882,7 @@
         !(function(e4, t4, r4, o4, n4) {
           t4._controlledTransformStream = e4, e4._transformStreamController = t4, t4._transformAlgorithm = r4, t4._flushAlgorithm = o4, t4._cancelAlgorithm = n4, t4._finishPromise = void 0, t4._finishPromise_resolve = void 0, t4._finishPromise_reject = void 0;
         })(e3, r3, o3, n3, i3);
-      })(this, i2), void 0 !== i2.start ? b2(i2.start(this._transformStreamController)) : b2(void 0);
+      })(this, i2), void 0 !== i2.start ? b3(i2.start(this._transformStreamController)) : b3(void 0);
     }
     get readable() {
       if (!ro(this)) throw _o("readable");
@@ -3384,8 +3384,8 @@
       __name(this, "DOMPointReadOnly");
     }
     #values;
-    constructor(x2 = 0, y2 = 0, z2 = 0, w2 = 1) {
-      this.#values = [+x2, +y2, +z2, +w2];
+    constructor(x3 = 0, y2 = 0, z3 = 0, w3 = 1) {
+      this.#values = [+x3, +y2, +z3, +w3];
     }
     static {
       getPoint = /* @__PURE__ */ __name((point) => point.#values, "getPoint");
@@ -3394,12 +3394,12 @@
       return DOMMatrixReadOnly.fromMatrix(matrix).transformPoint(this);
     }
     toJSON() {
-      const { x: x2, y: y2, z: z2, w: w2 } = this;
-      return { x: x2, y: y2, z: z2, w: w2 };
+      const { x: x3, y: y2, z: z3, w: w3 } = this;
+      return { x: x3, y: y2, z: z3, w: w3 };
     }
     static fromPoint(point) {
-      const { x: x2, y: y2, z: z2, w: w2 } = getPointInit(point);
-      return new this(x2, y2, z2, w2);
+      const { x: x3, y: y2, z: z3, w: w3 } = getPointInit(point);
+      return new this(x3, y2, z3, w3);
     }
   };
   var DOMPoint = class extends DOMPointReadOnly {
@@ -3412,8 +3412,8 @@
       __name(this, "DOMRectReadOnly");
     }
     #values;
-    constructor(x2 = 0, y2 = 0, width = 0, height = 0) {
-      this.#values = [+x2, +y2, +width, +height];
+    constructor(x3 = 0, y2 = 0, width = 0, height = 0) {
+      this.#values = [+x3, +y2, +width, +height];
     }
     static {
       getRect = /* @__PURE__ */ __name((rect) => rect.#values, "getRect");
@@ -3432,12 +3432,12 @@
       return Math.min(this.x, this.x + this.width);
     }
     toJSON() {
-      const { x: x2, y: y2, width, height, top, right, bottom, left } = this;
-      return { x: x2, y: y2, width, height, top, right, bottom, left };
+      const { x: x3, y: y2, width, height, top, right, bottom, left } = this;
+      return { x: x3, y: y2, width, height, top, right, bottom, left };
     }
     static fromRect(rect) {
-      const { x: x2, y: y2, width, height } = getRectInit(rect);
-      return new this(x2, y2, width, height);
+      const { x: x3, y: y2, width, height } = getRectInit(rect);
+      return new this(x3, y2, width, height);
     }
   };
   var DOMRect = class extends DOMRectReadOnly {
@@ -3480,12 +3480,12 @@
       return { p1, p2, p3, p4 };
     }
     static fromRect(rect) {
-      const { x: x2, y: y2, width, height } = getRectInit(rect);
+      const { x: x3, y: y2, width, height } = getRectInit(rect);
       return new this(
-        { x: x2, y: y2 },
-        { x: x2 + width, y: y2 },
-        { x: x2 + width, y: y2 + height },
-        { x: x2, y: y2 + height }
+        { x: x3, y: y2 },
+        { x: x3 + width, y: y2 },
+        { x: x3 + width, y: y2 + height },
+        { x: x3, y: y2 + height }
       );
     }
     static fromQuad(quad) {
@@ -3544,11 +3544,11 @@
     rotate(rx = 0, ry, rz) {
       return operate(this, rotationXYZ(rx, ry, rz));
     }
-    rotateFromVector(x2 = 0, y2 = 0) {
-      return operate(this, rotationFromVector(+x2, +y2));
+    rotateFromVector(x3 = 0, y2 = 0) {
+      return operate(this, rotationFromVector(+x3, +y2));
     }
-    rotateAxisAngle(x2 = 0, y2 = 0, z2 = 0, angle = 0) {
-      return operate(this, rotation(+x2, +y2, +z2, +angle));
+    rotateAxisAngle(x3 = 0, y2 = 0, z3 = 0, angle = 0) {
+      return operate(this, rotation(+x3, +y2, +z3, +angle));
     }
     skewX(sx = 0) {
       return operate(this, get2D([1, 0, Math.tan(toRadians(+sx)), 1, 0, 0]));
@@ -3569,9 +3569,9 @@
       return setMatrix(new DOMMatrix2(), invert(getMatrix(this)));
     }
     transformPoint(point) {
-      const { x: x2, y: y2, z: z2, w: w2 } = getPointInit(point);
+      const { x: x3, y: y2, z: z3, w: w3 } = getPointInit(point);
       const m2 = this.#m;
-      const row = /* @__PURE__ */ __name((r2) => m2[r2] * x2 + m2[4 + r2] * y2 + m2[8 + r2] * z2 + m2[12 + r2] * w2, "row");
+      const row = /* @__PURE__ */ __name((r2) => m2[r2] * x3 + m2[4 + r2] * y2 + m2[8 + r2] * z3 + m2[12 + r2] * w3, "row");
       return new DOMPoint(row(0), row(1), row(2), row(3));
     }
     toFloat32Array() {
@@ -3626,11 +3626,11 @@
     rotateSelf(rx = 0, ry, rz) {
       return change(this, this.rotate(rx, ry, rz));
     }
-    rotateFromVectorSelf(x2 = 0, y2 = 0) {
-      return change(this, this.rotateFromVector(x2, y2));
+    rotateFromVectorSelf(x3 = 0, y2 = 0) {
+      return change(this, this.rotateFromVector(x3, y2));
     }
-    rotateAxisAngleSelf(x2 = 0, y2 = 0, z2 = 0, angle = 0) {
-      return change(this, this.rotateAxisAngle(x2, y2, z2, angle));
+    rotateAxisAngleSelf(x3 = 0, y2 = 0, z3 = 0, angle = 0) {
+      return change(this, this.rotateAxisAngle(x3, y2, z3, angle));
     }
     skewXSelf(sx = 0) {
       return change(this, this.skewX(sx));
@@ -3722,13 +3722,13 @@
     return setMatrix(new DOMMatrix2(), multiply(getMatrix(matrix), other));
   }
   __name(operate, "operate");
-  function multiply([a2, is2DA], [b2, is2DB]) {
+  function multiply([a3, is2DA], [b3, is2DB]) {
     const m2 = [];
     for (let i2 = 0; i2 < 16; i2++) {
       const column = Math.floor(i2 / 4);
       const row = i2 % 4;
       let value = 0;
-      for (let k2 = 0; k2 < 4; k2++) value += a2[k2 * 4 + row] * b2[column * 4 + k2];
+      for (let k2 = 0; k2 < 4; k2++) value += a3[k2 * 4 + row] * b3[column * 4 + k2];
       m2.push(value);
     }
     return [m2, is2DA && is2DB];
@@ -3739,55 +3739,55 @@
   }
   __name(getMatrixFromCSS, "getMatrixFromCSS");
   function getTransform(name, args) {
-    const [a2, b2, c2, d2] = args;
+    const [a3, b3, c2, d2] = args;
     const tan = /* @__PURE__ */ __name((degrees) => Math.tan(toRadians(degrees)), "tan");
     const [m2, is2D] = {
       matrix: /* @__PURE__ */ __name(() => get2D(args), "matrix"),
       matrix3d: /* @__PURE__ */ __name(() => [args, false], "matrix3d"),
-      translate: /* @__PURE__ */ __name(() => translation(a2, b2 ?? 0, 0), "translate"),
-      translatex: /* @__PURE__ */ __name(() => translation(a2, 0, 0), "translatex"),
-      translatey: /* @__PURE__ */ __name(() => translation(0, a2, 0), "translatey"),
-      translatez: /* @__PURE__ */ __name(() => translation(0, 0, a2), "translatez"),
-      translate3d: /* @__PURE__ */ __name(() => translation(a2, b2, c2), "translate3d"),
-      scale: /* @__PURE__ */ __name(() => scaling(a2, b2 ?? a2, 1), "scale"),
-      scalex: /* @__PURE__ */ __name(() => scaling(a2, 1, 1), "scalex"),
-      scaley: /* @__PURE__ */ __name(() => scaling(1, a2, 1), "scaley"),
-      scalez: /* @__PURE__ */ __name(() => scaling(1, 1, a2), "scalez"),
-      scale3d: /* @__PURE__ */ __name(() => scaling(a2, b2, c2), "scale3d"),
-      rotate: /* @__PURE__ */ __name(() => rotation(0, 0, 1, a2), "rotate"),
-      rotatex: /* @__PURE__ */ __name(() => rotation(1, 0, 0, a2), "rotatex"),
-      rotatey: /* @__PURE__ */ __name(() => rotation(0, 1, 0, a2), "rotatey"),
-      rotatez: /* @__PURE__ */ __name(() => rotation(0, 0, 1, a2), "rotatez"),
-      rotate3d: /* @__PURE__ */ __name(() => rotation(a2, b2, c2, d2), "rotate3d"),
-      skew: /* @__PURE__ */ __name(() => get2D([1, tan(b2 ?? 0), tan(a2), 1, 0, 0]), "skew"),
-      skewx: /* @__PURE__ */ __name(() => get2D([1, 0, tan(a2), 1, 0, 0]), "skewx"),
-      skewy: /* @__PURE__ */ __name(() => get2D([1, tan(a2), 0, 1, 0, 0]), "skewy"),
+      translate: /* @__PURE__ */ __name(() => translation(a3, b3 ?? 0, 0), "translate"),
+      translatex: /* @__PURE__ */ __name(() => translation(a3, 0, 0), "translatex"),
+      translatey: /* @__PURE__ */ __name(() => translation(0, a3, 0), "translatey"),
+      translatez: /* @__PURE__ */ __name(() => translation(0, 0, a3), "translatez"),
+      translate3d: /* @__PURE__ */ __name(() => translation(a3, b3, c2), "translate3d"),
+      scale: /* @__PURE__ */ __name(() => scaling(a3, b3 ?? a3, 1), "scale"),
+      scalex: /* @__PURE__ */ __name(() => scaling(a3, 1, 1), "scalex"),
+      scaley: /* @__PURE__ */ __name(() => scaling(1, a3, 1), "scaley"),
+      scalez: /* @__PURE__ */ __name(() => scaling(1, 1, a3), "scalez"),
+      scale3d: /* @__PURE__ */ __name(() => scaling(a3, b3, c2), "scale3d"),
+      rotate: /* @__PURE__ */ __name(() => rotation(0, 0, 1, a3), "rotate"),
+      rotatex: /* @__PURE__ */ __name(() => rotation(1, 0, 0, a3), "rotatex"),
+      rotatey: /* @__PURE__ */ __name(() => rotation(0, 1, 0, a3), "rotatey"),
+      rotatez: /* @__PURE__ */ __name(() => rotation(0, 0, 1, a3), "rotatez"),
+      rotate3d: /* @__PURE__ */ __name(() => rotation(a3, b3, c2, d2), "rotate3d"),
+      skew: /* @__PURE__ */ __name(() => get2D([1, tan(b3 ?? 0), tan(a3), 1, 0, 0]), "skew"),
+      skewx: /* @__PURE__ */ __name(() => get2D([1, 0, tan(a3), 1, 0, 0]), "skewx"),
+      skewy: /* @__PURE__ */ __name(() => get2D([1, tan(a3), 0, 1, 0, 0]), "skewy"),
       // `m34`, of a distance of 1 at least:
       perspective: /* @__PURE__ */ __name(() => {
         const m3 = [...identity];
-        m3[11] = -1 / Math.max(a2, 1);
+        m3[11] = -1 / Math.max(a3, 1);
         return [m3, false];
       }, "perspective")
     }[name]();
     return [m2, is2D && !/3d$|z$|^rotate[xy]$|^perspective$/.test(name)];
   }
   __name(getTransform, "getTransform");
-  function get2D([a2, b2, c2, d2, e2, f2]) {
+  function get2D([a3, b3, c2, d2, e2, f2]) {
     const m2 = [...identity];
-    [m2[0], m2[1], m2[4], m2[5], m2[12], m2[13]] = [a2, b2, c2, d2, e2, f2];
+    [m2[0], m2[1], m2[4], m2[5], m2[12], m2[13]] = [a3, b3, c2, d2, e2, f2];
     return [m2, true];
   }
   __name(get2D, "get2D");
-  function translation(x2, y2, z2) {
+  function translation(x3, y2, z3) {
     const m2 = [...identity];
-    [m2[12], m2[13], m2[14]] = [x2, y2, z2];
-    return [m2, z2 === 0];
+    [m2[12], m2[13], m2[14]] = [x3, y2, z3];
+    return [m2, z3 === 0];
   }
   __name(translation, "translation");
-  function scaling(x2, y2, z2) {
+  function scaling(x3, y2, z3) {
     const m2 = [...identity];
-    [m2[0], m2[5], m2[10]] = [x2, y2, z2];
-    return [m2, z2 === 1];
+    [m2[0], m2[5], m2[10]] = [x3, y2, z3];
+    return [m2, z3 === 1];
   }
   __name(scaling, "scaling");
   function scalingAround(sx, sy, sz, ox, oy, oz) {
@@ -3798,42 +3798,42 @@
   }
   __name(scalingAround, "scalingAround");
   function rotationXYZ(rx, ry, rz) {
-    const [x2, y2, z2] = ry === void 0 && rz === void 0 ? [0, 0, +rx] : [+rx, +(ry ?? 0), +(rz ?? 0)];
-    let result = rotation(0, 0, 1, z2);
+    const [x3, y2, z3] = ry === void 0 && rz === void 0 ? [0, 0, +rx] : [+rx, +(ry ?? 0), +(rz ?? 0)];
+    let result = rotation(0, 0, 1, z3);
     if (y2 !== 0) result = multiply(result, rotation(0, 1, 0, y2));
-    if (x2 !== 0) result = multiply(result, rotation(1, 0, 0, x2));
+    if (x3 !== 0) result = multiply(result, rotation(1, 0, 0, x3));
     return result;
   }
   __name(rotationXYZ, "rotationXYZ");
-  function rotationFromVector(x2, y2) {
+  function rotationFromVector(x3, y2) {
     return rotation(
       0,
       0,
       1,
-      x2 === 0 && y2 === 0 ? 0 : Math.atan2(y2, x2) * 180 / Math.PI
+      x3 === 0 && y2 === 0 ? 0 : Math.atan2(y2, x3) * 180 / Math.PI
     );
   }
   __name(rotationFromVector, "rotationFromVector");
-  function rotation(x2, y2, z2, degrees) {
-    const is2D = x2 === 0 && y2 === 0;
-    const length = Math.hypot(x2, y2, z2);
+  function rotation(x3, y2, z3, degrees) {
+    const is2D = x3 === 0 && y2 === 0;
+    const length = Math.hypot(x3, y2, z3);
     if (length === 0 || !Number.isFinite(length)) return [[...identity], is2D];
-    [x2, y2, z2] = [x2 / length, y2 / length, z2 / length];
+    [x3, y2, z3] = [x3 / length, y2 / length, z3 / length];
     const half = toRadians(degrees) / 2;
     const sc = Math.sin(half) * Math.cos(half);
     const sq = Math.sin(half) ** 2;
     const m2 = [
-      1 - 2 * (y2 * y2 + z2 * z2) * sq,
-      2 * (x2 * y2 * sq + z2 * sc),
-      2 * (x2 * z2 * sq - y2 * sc),
+      1 - 2 * (y2 * y2 + z3 * z3) * sq,
+      2 * (x3 * y2 * sq + z3 * sc),
+      2 * (x3 * z3 * sq - y2 * sc),
       0,
-      2 * (x2 * y2 * sq - z2 * sc),
-      1 - 2 * (x2 * x2 + z2 * z2) * sq,
-      2 * (y2 * z2 * sq + x2 * sc),
+      2 * (x3 * y2 * sq - z3 * sc),
+      1 - 2 * (x3 * x3 + z3 * z3) * sq,
+      2 * (y2 * z3 * sq + x3 * sc),
       0,
-      2 * (x2 * z2 * sq + y2 * sc),
-      2 * (y2 * z2 * sq - x2 * sc),
-      1 - 2 * (x2 * x2 + y2 * y2) * sq,
+      2 * (x3 * z3 * sq + y2 * sc),
+      2 * (y2 * z3 * sq - x3 * sc),
+      1 - 2 * (x3 * x3 + y2 * y2) * sq,
       0,
       0,
       0,
@@ -3847,15 +3847,15 @@
     const singular = [new Array(16).fill(NaN), false];
     if (!m2.every(Number.isFinite)) return singular;
     if (is2D) {
-      const [a2, b2, c2, d2, e2, f2] = aliases.map(([, , index]) => m2[index]);
-      const det2 = a2 * d2 - b2 * c2;
+      const [a3, b3, c2, d2, e2, f2] = aliases.map(([, , index]) => m2[index]);
+      const det2 = a3 * d2 - b3 * c2;
       return det2 === 0 ? singular : get2D([
         d2 / det2,
-        -b2 / det2,
+        -b3 / det2,
         -c2 / det2,
-        a2 / det2,
+        a3 / det2,
         (c2 * f2 - d2 * e2) / det2,
-        (b2 * e2 - a2 * f2) / det2
+        (b3 * e2 - a3 * f2) / det2
       ]);
     }
     const i2 = [
@@ -3894,22 +3894,22 @@
   __name(getDictionary, "getDictionary");
   function getPointInit(point) {
     const {
-      x: x2 = 0,
+      x: x3 = 0,
       y: y2 = 0,
-      z: z2 = 0,
-      w: w2 = 1
+      z: z3 = 0,
+      w: w3 = 1
     } = getDictionary(point, "DOMPointInit") ?? {};
-    return { x: +x2, y: +y2, z: +z2, w: +w2 };
+    return { x: +x3, y: +y2, z: +z3, w: +w3 };
   }
   __name(getPointInit, "getPointInit");
   function getRectInit(rect) {
     const {
-      x: x2 = 0,
+      x: x3 = 0,
       y: y2 = 0,
       width = 0,
       height = 0
     } = getDictionary(rect, "DOMRectInit") ?? {};
-    return { x: +x2, y: +y2, width: +width, height: +height };
+    return { x: +x3, y: +y2, width: +width, height: +height };
   }
   __name(getRectInit, "getRectInit");
   function getMatrixInit(init) {
@@ -4089,7 +4089,7 @@
         );
         return next ? next.left < cluster.left : previous ? previous.left > cluster.left : this.#settings.direction === "rtl";
       }, "isRightToLeft");
-      const visual = clusters.map((cluster, index) => ({ ...cluster, rtl: isRightToLeft(index) })).sort((a2, b2) => a2.left - b2.left);
+      const visual = clusters.map((cluster, index) => ({ ...cluster, rtl: isRightToLeft(index) })).sort((a3, b3) => a3.left - b3.left);
       for (const { start, end, left, advance, rtl } of visual) {
         if (offset <= left + advance / 2) {
           return rtl ? end : start;
@@ -4173,7 +4173,7 @@
     }
   };
   setToStringTag(TextMetrics, TextCluster);
-  function drawCluster(context, draw, cluster, x2, y2, options = {}) {
+  function drawCluster(context, draw, cluster, x3, y2, options = {}) {
     if (!(cluster instanceof TextCluster)) {
       throw new TypeError(`Invalid text cluster: '${cluster}'.`);
     }
@@ -4188,7 +4188,7 @@
       textAlign: align,
       textBaseline: baseline
     });
-    context[draw](cluster.text, Number(x2) + dx, Number(y2) + dy);
+    context[draw](cluster.text, Number(x3) + dx, Number(y2) + dy);
     context.restore();
   }
   __name(drawCluster, "drawCluster");
@@ -4347,13 +4347,13 @@
         settings
       );
     }
-    fillTextCluster(cluster, x2, y2, options) {
+    fillTextCluster(cluster, x3, y2, options) {
       checkArguments(arguments, 3, "fillTextCluster");
-      drawCluster(this, "fillText", cluster, x2, y2, options);
+      drawCluster(this, "fillText", cluster, x3, y2, options);
     }
-    strokeTextCluster(cluster, x2, y2, options) {
+    strokeTextCluster(cluster, x3, y2, options) {
       checkArguments(arguments, 3, "strokeTextCluster");
-      drawCluster(this, "strokeText", cluster, x2, y2, options);
+      drawCluster(this, "strokeText", cluster, x3, y2, options);
     }
     // Transparent black, of a size, either way round, or of another
     // `ImageData`'s.
@@ -4369,9 +4369,9 @@
         );
       }
     }
-    getImageData(x2, y2, width, height) {
+    getImageData(x3, y2, width, height) {
       checkArguments(arguments, 4, "getImageData");
-      const args = [x2, y2, width, height].map(getLong);
+      const args = [x3, y2, width, height].map(getLong);
       if (args[2] === 0 || args[3] === 0) {
         throw new DOMException(
           "Invalid getImageData(): the width and height must not be 0.",
@@ -4399,9 +4399,9 @@
       checkArguments(arguments, 6, "createRadialGradient");
       return createGradient("radial", x0, y0, r0, x1, y1, r1);
     }
-    createConicGradient(angle, x2, y2) {
+    createConicGradient(angle, x3, y2) {
       checkArguments(arguments, 3, "createConicGradient");
-      return createGradient("conic", angle, x2, y2);
+      return createGradient("conic", angle, x3, y2);
     }
     createPattern(image, repetition) {
       checkArguments(arguments, 2, "createPattern");
@@ -4430,9 +4430,9 @@
     isPointInStroke(...args) {
       return callWithPath(this.#surface, "isPointInStroke", args, 2);
     }
-    roundRect(x2, y2, w2, h2, radii) {
+    roundRect(x3, y2, w3, h2, radii) {
       checkArguments(arguments, 4, "roundRect");
-      const args = getRoundRect(x2, y2, w2, h2, radii);
+      const args = getRoundRect(x3, y2, w3, h2, radii);
       if (args) canvas.methods.roundRect.call(this.#surface, ...args);
     }
   };
@@ -4567,9 +4567,9 @@
     static {
       getPath = /* @__PURE__ */ __name((path) => path instanceof _Path2D ? path.#path : void 0, "getPath");
     }
-    roundRect(x2, y2, w2, h2, radii) {
+    roundRect(x3, y2, w3, h2, radii) {
       checkArguments(arguments, 4, "roundRect");
-      const args = getRoundRect(x2, y2, w2, h2, radii);
+      const args = getRoundRect(x3, y2, w3, h2, radii);
       if (args) canvas.pathMethods.roundRect.call(this.#path, ...args);
     }
     addPath(path, transform) {
@@ -4667,8 +4667,8 @@
       getPatternPaint = /* @__PURE__ */ __name((pattern) => pattern.#paint, "getPatternPaint");
     }
     setTransform(transform = {}) {
-      const { a: a2, b: b2, c: c2, d: d2, e: e2, f: f2 } = DOMMatrix.fromMatrix(transform);
-      canvas.setPatternTransform.call(this.#paint, a2, b2, c2, d2, e2, f2);
+      const { a: a3, b: b3, c: c2, d: d2, e: e2, f: f2 } = DOMMatrix.fromMatrix(transform);
+      canvas.setPatternTransform.call(this.#paint, a3, b3, c2, d2, e2, f2);
     }
   };
   setToStringTag(
@@ -4756,7 +4756,7 @@
     return size;
   }
   __name(getSize, "getSize");
-  function getRoundRect(x2, y2, w2, h2, radii = 0) {
+  function getRoundRect(x3, y2, w3, h2, radii = 0) {
     const list = isObject(radii) && typeof radii[Symbol.iterator] === "function" ? Array.from(radii) : [radii];
     if (list.length < 1 || list.length > 4) {
       throw new RangeError(
@@ -4767,16 +4767,16 @@
       const { x: rx = 0, y: ry = 0 } = isObject(radius) || radius === void 0 ? radius ?? {} : { x: radius, y: radius };
       return [+rx, +ry];
     });
-    const numbers2 = [+x2, +y2, +w2, +h2, ...corners.flat()];
+    const numbers2 = [+x3, +y2, +w3, +h2, ...corners.flat()];
     if (!numbers2.every(Number.isFinite)) return null;
     if (corners.flat().some((r2) => r2 < 0)) {
       throw new RangeError("Invalid roundRect() radius: it is negative.");
     }
-    const [a2, b2 = a2, c2 = a2, d2 = b2] = corners;
-    let [ul, ur2, lr2, ll] = corners.length === 3 ? [a2, b2, c2, b2] : [a2, b2, c2, d2];
-    if (w2 < 0) [ul, ur2, lr2, ll] = [ur2, ul, ll, lr2];
+    const [a3, b3 = a3, c2 = a3, d2 = b3] = corners;
+    let [ul, ur2, lr2, ll] = corners.length === 3 ? [a3, b3, c2, b3] : [a3, b3, c2, d2];
+    if (w3 < 0) [ul, ur2, lr2, ll] = [ur2, ul, ll, lr2];
     if (h2 < 0) [ul, ur2, lr2, ll] = [ll, lr2, ur2, ul];
-    return [+x2, +y2, +w2, +h2, ...ul, ...ur2, ...lr2, ...ll];
+    return [+x3, +y2, +w3, +h2, ...ul, ...ur2, ...lr2, ...ll];
   }
   __name(getRoundRect, "getRoundRect");
   function getContextAttributes(options) {
@@ -5068,12 +5068,12 @@ ${stack}` : ""));
     const tag = Object.prototype.toString.call(value);
     if (tag === "[object Array]") {
       return depth > maxDepth ? "[Array]" : `[${getItems(
-        Array.from({ length: Math.min(value.length, maxItems) }, (_2, i2) => [
+        Array.from({ length: Math.min(value.length, maxItems) }, (_3, i2) => [
           i2,
           value[i2]
         ]),
         value.length,
-        (_2, item) => inspect(item, depth + 1)
+        (_3, item) => inspect(item, depth + 1)
       )}]`;
     } else if (/^\[object (Async|Generator)?Function\]$/.test(tag)) {
       return `\u0192 ${value.name}()`;
@@ -5135,7 +5135,7 @@ ${stack}` : ""));
       ])
     ];
     const widths = grid[0].map(
-      (_2, i2) => Math.max(...grid.map((row) => [...row[i2]].length))
+      (_3, i2) => Math.max(...grid.map((row) => [...row[i2]].length))
     );
     return grid.map(
       (row) => `\u2502 ${row.map((cell, i2) => cell + " ".repeat(widths[i2] - [...cell].length)).join(" \u2502 ")} \u2502`
@@ -5355,7 +5355,7 @@ ${stack}` : ""));
   }
   __name(getPickerOptions, "getPickerOptions");
   function getTypes(types2) {
-    const entries = Array.isArray(types2) ? Array.from({ length: Math.ceil(types2.length / 2) }, (_2, i2) => [
+    const entries = Array.isArray(types2) ? Array.from({ length: Math.ceil(types2.length / 2) }, (_3, i2) => [
       types2[i2 * 2],
       types2[i2 * 2 + 1] ?? types2[i2 * 2]
     ]) : Object.entries(types2);
@@ -7135,7 +7135,7 @@ ${value}\r
     }
     // By name, in UTF-16 code units, as strings compare: stable.
     sort() {
-      this.#pairs.sort(([a2], [b2]) => a2 < b2 ? -1 : a2 > b2 ? 1 : 0);
+      this.#pairs.sort(([a3], [b3]) => a3 < b3 ? -1 : a3 > b3 ? 1 : 0);
       this.#update();
     }
     *entries() {
@@ -7160,6 +7160,830 @@ ${value}\r
     return natives.url.parseQuery(query.replace(/^\?/, ""));
   }
   __name(parseQuery, "parseQuery");
+
+  // ../vendor/urlpattern-polyfill.mjs
+  var Pe2 = Object.defineProperty;
+  var a2 = /* @__PURE__ */ __name((e2, t2) => Pe2(e2, "name", { value: t2, configurable: true }), "a");
+  var P2 = class {
+    static {
+      __name(this, "P");
+    }
+    type = 3;
+    name = "";
+    prefix = "";
+    value = "";
+    suffix = "";
+    modifier = 3;
+    constructor(t2, r2, n2, c2, l2, f2) {
+      this.type = t2, this.name = r2, this.prefix = n2, this.value = c2, this.suffix = l2, this.modifier = f2;
+    }
+    hasCustomName() {
+      return this.name !== "" && typeof this.name != "number";
+    }
+  };
+  a2(P2, "Part");
+  var Re2 = /[$_\p{ID_Start}]/u;
+  var Ee2 = /[$_\u200C\u200D\p{ID_Continue}]/u;
+  var v2 = ".*";
+  function Oe2(e2, t2) {
+    return (t2 ? /^[\x00-\xFF]*$/ : /^[\x00-\x7F]*$/).test(e2);
+  }
+  __name(Oe2, "Oe");
+  a2(Oe2, "isASCII");
+  function D2(e2, t2 = false) {
+    let r2 = [], n2 = 0;
+    for (; n2 < e2.length; ) {
+      let c2 = e2[n2], l2 = a2(function(f2) {
+        if (!t2) throw new TypeError(f2);
+        r2.push({ type: "INVALID_CHAR", index: n2, value: e2[n2++] });
+      }, "ErrorOrInvalid");
+      if (c2 === "*") {
+        r2.push({ type: "ASTERISK", index: n2, value: e2[n2++] });
+        continue;
+      }
+      if (c2 === "+" || c2 === "?") {
+        r2.push({ type: "OTHER_MODIFIER", index: n2, value: e2[n2++] });
+        continue;
+      }
+      if (c2 === "\\") {
+        r2.push({ type: "ESCAPED_CHAR", index: n2++, value: e2[n2++] });
+        continue;
+      }
+      if (c2 === "{") {
+        r2.push({ type: "OPEN", index: n2, value: e2[n2++] });
+        continue;
+      }
+      if (c2 === "}") {
+        r2.push({ type: "CLOSE", index: n2, value: e2[n2++] });
+        continue;
+      }
+      if (c2 === ":") {
+        let f2 = "", s2 = n2 + 1;
+        for (; s2 < e2.length; ) {
+          let i2 = e2.substr(s2, 1);
+          if (s2 === n2 + 1 && Re2.test(i2) || s2 !== n2 + 1 && Ee2.test(i2)) {
+            f2 += e2[s2++];
+            continue;
+          }
+          break;
+        }
+        if (!f2) {
+          l2(`Missing parameter name at ${n2}`);
+          continue;
+        }
+        r2.push({ type: "NAME", index: n2, value: f2 }), n2 = s2;
+        continue;
+      }
+      if (c2 === "(") {
+        let f2 = 1, s2 = "", i2 = n2 + 1, o2 = false;
+        if (e2[i2] === "?") {
+          l2(`Pattern cannot start with "?" at ${i2}`);
+          continue;
+        }
+        for (; i2 < e2.length; ) {
+          if (!Oe2(e2[i2], false)) {
+            l2(`Invalid character '${e2[i2]}' at ${i2}.`), o2 = true;
+            break;
+          }
+          if (e2[i2] === "\\") {
+            s2 += e2[i2++] + e2[i2++];
+            continue;
+          }
+          if (e2[i2] === ")") {
+            if (f2--, f2 === 0) {
+              i2++;
+              break;
+            }
+          } else if (e2[i2] === "(" && (f2++, e2[i2 + 1] !== "?")) {
+            l2(`Capturing groups are not allowed at ${i2}`), o2 = true;
+            break;
+          }
+          s2 += e2[i2++];
+        }
+        if (o2) continue;
+        if (f2) {
+          l2(`Unbalanced pattern at ${n2}`);
+          continue;
+        }
+        if (!s2) {
+          l2(`Missing pattern at ${n2}`);
+          continue;
+        }
+        r2.push({ type: "REGEX", index: n2, value: s2 }), n2 = i2;
+        continue;
+      }
+      r2.push({ type: "CHAR", index: n2, value: e2[n2++] });
+    }
+    return r2.push({ type: "END", index: n2, value: "" }), r2;
+  }
+  __name(D2, "D");
+  a2(D2, "lexer");
+  function F2(e2, t2 = {}) {
+    let r2 = D2(e2);
+    t2.delimiter ??= "/#?", t2.prefixes ??= "./";
+    let n2 = `[^${x2(t2.delimiter)}]+?`, c2 = [], l2 = 0, f2 = 0, s2 = "", i2 = /* @__PURE__ */ new Set(), o2 = a2((u2) => {
+      if (f2 < r2.length && r2[f2].type === u2) return r2[f2++].value;
+    }, "tryConsume"), h2 = a2(() => o2("OTHER_MODIFIER") ?? o2("ASTERISK"), "tryConsumeModifier"), p2 = a2((u2) => {
+      let d2 = o2(u2);
+      if (d2 !== void 0) return d2;
+      let { type: g2, index: y2 } = r2[f2];
+      throw new TypeError(`Unexpected ${g2} at ${y2}, expected ${u2}`);
+    }, "mustConsume"), A2 = a2(() => {
+      let u2 = "", d2;
+      for (; d2 = o2("CHAR") ?? o2("ESCAPED_CHAR"); ) u2 += d2;
+      return u2;
+    }, "consumeText"), xe2 = a2((u2) => u2, "DefaultEncodePart"), N2 = t2.encodePart || xe2, H2 = "", $2 = a2((u2) => {
+      H2 += u2;
+    }, "appendToPendingFixedValue"), M2 = a2(() => {
+      H2.length && (c2.push(new P2(3, "", "", N2(H2), "", 3)), H2 = "");
+    }, "maybeAddPartFromPendingFixedValue"), X2 = a2((u2, d2, g2, y2, Z2) => {
+      let m2 = 3;
+      switch (Z2) {
+        case "?":
+          m2 = 1;
+          break;
+        case "*":
+          m2 = 0;
+          break;
+        case "+":
+          m2 = 2;
+          break;
+      }
+      if (!d2 && !g2 && m2 === 3) {
+        $2(u2);
+        return;
+      }
+      if (M2(), !d2 && !g2) {
+        if (!u2) return;
+        c2.push(new P2(3, "", "", N2(u2), "", m2));
+        return;
+      }
+      let S2;
+      g2 ? g2 === "*" ? S2 = v2 : S2 = g2 : S2 = n2;
+      let k2 = 2;
+      S2 === n2 ? (k2 = 1, S2 = "") : S2 === v2 && (k2 = 0, S2 = "");
+      let E2;
+      if (d2 ? E2 = d2 : g2 && (E2 = l2++), i2.has(E2)) throw new TypeError(`Duplicate name '${E2}'.`);
+      i2.add(E2), c2.push(new P2(k2, E2, N2(u2), S2, N2(y2), m2));
+    }, "addPart");
+    for (; f2 < r2.length; ) {
+      let u2 = o2("CHAR"), d2 = o2("NAME"), g2 = o2("REGEX");
+      if (!d2 && !g2 && (g2 = o2("ASTERISK")), d2 || g2) {
+        let m2 = u2 ?? "";
+        t2.prefixes.indexOf(m2) === -1 && ($2(m2), m2 = ""), M2();
+        let S2 = h2();
+        X2(m2, d2, g2, "", S2);
+        continue;
+      }
+      let y2 = u2 ?? o2("ESCAPED_CHAR");
+      if (y2) {
+        $2(y2);
+        continue;
+      }
+      if (o2("OPEN")) {
+        let m2 = A2(), S2 = o2("NAME"), k2 = o2("REGEX");
+        !S2 && !k2 && (k2 = o2("ASTERISK"));
+        let E2 = A2();
+        p2("CLOSE");
+        let be2 = h2();
+        X2(m2, S2, k2, E2, be2);
+        continue;
+      }
+      M2(), p2("END");
+    }
+    return c2;
+  }
+  __name(F2, "F");
+  a2(F2, "parse");
+  function x2(e2) {
+    return e2.replace(/([.+*?^${}()[\]|/\\])/g, "\\$1");
+  }
+  __name(x2, "x");
+  a2(x2, "escapeString");
+  function B2(e2) {
+    return e2 && e2.ignoreCase ? "ui" : "u";
+  }
+  __name(B2, "B");
+  a2(B2, "flags");
+  function q2(e2, t2, r2) {
+    return W2(F2(e2, r2), t2, r2);
+  }
+  __name(q2, "q");
+  a2(q2, "stringToRegexp");
+  function T2(e2) {
+    switch (e2) {
+      case 0:
+        return "*";
+      case 1:
+        return "?";
+      case 2:
+        return "+";
+      case 3:
+        return "";
+    }
+  }
+  __name(T2, "T");
+  a2(T2, "modifierToString");
+  function W2(e2, t2, r2 = {}) {
+    r2.delimiter ??= "/#?", r2.prefixes ??= "./", r2.sensitive ??= false, r2.strict ??= false, r2.end ??= true, r2.start ??= true, r2.endsWith = "";
+    let n2 = r2.start ? "^" : "";
+    for (let s2 of e2) {
+      if (s2.type === 3) {
+        s2.modifier === 3 ? n2 += x2(s2.value) : n2 += `(?:${x2(s2.value)})${T2(s2.modifier)}`;
+        continue;
+      }
+      t2 && t2.push(s2.name);
+      let i2 = `[^${x2(r2.delimiter)}]+?`, o2 = s2.value;
+      if (s2.type === 1 ? o2 = i2 : s2.type === 0 && (o2 = v2), !s2.prefix.length && !s2.suffix.length) {
+        s2.modifier === 3 || s2.modifier === 1 ? n2 += `(${o2})${T2(s2.modifier)}` : n2 += `((?:${o2})${T2(s2.modifier)})`;
+        continue;
+      }
+      if (s2.modifier === 3 || s2.modifier === 1) {
+        n2 += `(?:${x2(s2.prefix)}(${o2})${x2(s2.suffix)})`, n2 += T2(s2.modifier);
+        continue;
+      }
+      n2 += `(?:${x2(s2.prefix)}`, n2 += `((?:${o2})(?:`, n2 += x2(s2.suffix), n2 += x2(s2.prefix), n2 += `(?:${o2}))*)${x2(s2.suffix)})`, s2.modifier === 0 && (n2 += "?");
+    }
+    let c2 = `[${x2(r2.endsWith)}]|$`, l2 = `[${x2(r2.delimiter)}]`;
+    if (r2.end) return r2.strict || (n2 += `${l2}?`), r2.endsWith.length ? n2 += `(?=${c2})` : n2 += "$", new RegExp(n2, B2(r2));
+    r2.strict || (n2 += `(?:${l2}(?=${c2}))?`);
+    let f2 = false;
+    if (e2.length) {
+      let s2 = e2[e2.length - 1];
+      s2.type === 3 && s2.modifier === 3 && (f2 = r2.delimiter.indexOf(s2) > -1);
+    }
+    return f2 || (n2 += `(?=${l2}|${c2})`), new RegExp(n2, B2(r2));
+  }
+  __name(W2, "W");
+  a2(W2, "partsToRegexp");
+  var b2 = { delimiter: "", prefixes: "", sensitive: true, strict: true };
+  var J2 = { delimiter: ".", prefixes: "", sensitive: true, strict: true };
+  var Q2 = { delimiter: "/", prefixes: "/", sensitive: true, strict: true };
+  function ee2(e2, t2) {
+    return e2.length ? e2[0] === "/" ? true : !t2 || e2.length < 2 ? false : (e2[0] == "\\" || e2[0] == "{") && e2[1] == "/" : false;
+  }
+  __name(ee2, "ee");
+  a2(ee2, "isAbsolutePathname");
+  function te2(e2, t2) {
+    return e2.startsWith(t2) ? e2.substring(t2.length, e2.length) : e2;
+  }
+  __name(te2, "te");
+  a2(te2, "maybeStripPrefix");
+  function ke2(e2, t2) {
+    return e2.endsWith(t2) ? e2.substr(0, e2.length - t2.length) : e2;
+  }
+  __name(ke2, "ke");
+  a2(ke2, "maybeStripSuffix");
+  function _2(e2) {
+    return !e2 || e2.length < 2 ? false : e2[0] === "[" || (e2[0] === "\\" || e2[0] === "{") && e2[1] === "[";
+  }
+  __name(_2, "_");
+  a2(_2, "treatAsIPv6Hostname");
+  var re2 = ["ftp", "file", "http", "https", "ws", "wss"];
+  function U2(e2) {
+    if (!e2) return true;
+    for (let t2 of re2) if (e2.test(t2)) return true;
+    return false;
+  }
+  __name(U2, "U");
+  a2(U2, "isSpecialScheme");
+  function ne2(e2, t2) {
+    if (e2 = te2(e2, "#"), t2 || e2 === "") return e2;
+    let r2 = new URL("https://example.com");
+    return r2.hash = e2, r2.hash ? r2.hash.substring(1, r2.hash.length) : "";
+  }
+  __name(ne2, "ne");
+  a2(ne2, "canonicalizeHash");
+  function se2(e2, t2) {
+    if (e2 = te2(e2, "?"), t2 || e2 === "") return e2;
+    let r2 = new URL("https://example.com");
+    return r2.search = e2, r2.search ? r2.search.substring(1, r2.search.length) : "";
+  }
+  __name(se2, "se");
+  a2(se2, "canonicalizeSearch");
+  function ie2(e2, t2) {
+    return t2 || e2 === "" ? e2 : _2(e2) ? K2(e2) : j2(e2);
+  }
+  __name(ie2, "ie");
+  a2(ie2, "canonicalizeHostname");
+  function ae2(e2, t2) {
+    if (t2 || e2 === "") return e2;
+    let r2 = new URL("https://example.com");
+    return r2.password = e2, r2.password;
+  }
+  __name(ae2, "ae");
+  a2(ae2, "canonicalizePassword");
+  function oe2(e2, t2) {
+    if (t2 || e2 === "") return e2;
+    let r2 = new URL("https://example.com");
+    return r2.username = e2, r2.username;
+  }
+  __name(oe2, "oe");
+  a2(oe2, "canonicalizeUsername");
+  function ce2(e2, t2, r2) {
+    if (r2 || e2 === "") return e2;
+    if (t2 && !re2.includes(t2)) return new URL(`${t2}:${e2}`).pathname;
+    let n2 = e2[0] == "/";
+    return e2 = new URL(n2 ? e2 : "/-" + e2, "https://example.com").pathname, n2 || (e2 = e2.substring(2, e2.length)), e2;
+  }
+  __name(ce2, "ce");
+  a2(ce2, "canonicalizePathname");
+  function le2(e2, t2, r2) {
+    return z2(t2) === e2 && (e2 = ""), r2 || e2 === "" ? e2 : G2(e2);
+  }
+  __name(le2, "le");
+  a2(le2, "canonicalizePort");
+  function fe2(e2, t2) {
+    return e2 = ke2(e2, ":"), t2 || e2 === "" ? e2 : w2(e2);
+  }
+  __name(fe2, "fe");
+  a2(fe2, "canonicalizeProtocol");
+  function z2(e2) {
+    switch (e2) {
+      case "ws":
+      case "http":
+        return "80";
+      case "wws":
+      case "https":
+        return "443";
+      case "ftp":
+        return "21";
+      default:
+        return "";
+    }
+  }
+  __name(z2, "z");
+  a2(z2, "defaultPortForProtocol");
+  function w2(e2) {
+    if (e2 === "") return e2;
+    if (/^[-+.A-Za-z0-9]*$/.test(e2)) return e2.toLowerCase();
+    throw new TypeError(`Invalid protocol '${e2}'.`);
+  }
+  __name(w2, "w");
+  a2(w2, "protocolEncodeCallback");
+  function he2(e2) {
+    if (e2 === "") return e2;
+    let t2 = new URL("https://example.com");
+    return t2.username = e2, t2.username;
+  }
+  __name(he2, "he");
+  a2(he2, "usernameEncodeCallback");
+  function ue2(e2) {
+    if (e2 === "") return e2;
+    let t2 = new URL("https://example.com");
+    return t2.password = e2, t2.password;
+  }
+  __name(ue2, "ue");
+  a2(ue2, "passwordEncodeCallback");
+  function j2(e2) {
+    if (e2 === "") return e2;
+    if (/[\t\n\r #%/:<>?@[\]^\\|]/g.test(e2)) throw new TypeError(`Invalid hostname '${e2}'`);
+    let t2 = new URL("https://example.com");
+    return t2.hostname = e2, t2.hostname;
+  }
+  __name(j2, "j");
+  a2(j2, "hostnameEncodeCallback");
+  function K2(e2) {
+    if (e2 === "") return e2;
+    if (/[^0-9a-fA-F[\]:]/g.test(e2)) throw new TypeError(`Invalid IPv6 hostname '${e2}'`);
+    return e2.toLowerCase();
+  }
+  __name(K2, "K");
+  a2(K2, "ipv6HostnameEncodeCallback");
+  function G2(e2) {
+    if (e2 === "" || /^[0-9]*$/.test(e2) && parseInt(e2) <= 65535) return e2;
+    throw new TypeError(`Invalid port '${e2}'.`);
+  }
+  __name(G2, "G");
+  a2(G2, "portEncodeCallback");
+  function de2(e2) {
+    if (e2 === "") return e2;
+    let t2 = new URL("https://example.com");
+    return t2.pathname = e2[0] !== "/" ? "/-" + e2 : e2, e2[0] !== "/" ? t2.pathname.substring(2, t2.pathname.length) : t2.pathname;
+  }
+  __name(de2, "de");
+  a2(de2, "standardURLPathnameEncodeCallback");
+  function pe2(e2) {
+    return e2 === "" ? e2 : new URL(`data:${e2}`).pathname;
+  }
+  __name(pe2, "pe");
+  a2(pe2, "pathURLPathnameEncodeCallback");
+  function ge2(e2) {
+    if (e2 === "") return e2;
+    let t2 = new URL("https://example.com");
+    return t2.search = e2, t2.search.substring(1, t2.search.length);
+  }
+  __name(ge2, "ge");
+  a2(ge2, "searchEncodeCallback");
+  function me2(e2) {
+    if (e2 === "") return e2;
+    let t2 = new URL("https://example.com");
+    return t2.hash = e2, t2.hash.substring(1, t2.hash.length);
+  }
+  __name(me2, "me");
+  a2(me2, "hashEncodeCallback");
+  var C2 = class {
+    static {
+      __name(this, "C");
+    }
+    #i;
+    #n = [];
+    #t = {};
+    #e = 0;
+    #s = 1;
+    #l = 0;
+    #o = 0;
+    #d = 0;
+    #p = 0;
+    #g = false;
+    constructor(t2) {
+      this.#i = t2;
+    }
+    get result() {
+      return this.#t;
+    }
+    parse() {
+      for (this.#n = D2(this.#i, true); this.#e < this.#n.length; this.#e += this.#s) {
+        if (this.#s = 1, this.#n[this.#e].type === "END") {
+          if (this.#o === 0) {
+            this.#b(), this.#f() ? this.#r(9, 1) : this.#h() ? this.#r(8, 1) : this.#r(7, 0);
+            continue;
+          } else if (this.#o === 2) {
+            this.#u(5);
+            continue;
+          }
+          this.#r(10, 0);
+          break;
+        }
+        if (this.#d > 0) if (this.#A()) this.#d -= 1;
+        else continue;
+        if (this.#T()) {
+          this.#d += 1;
+          continue;
+        }
+        switch (this.#o) {
+          case 0:
+            this.#P() && this.#u(1);
+            break;
+          case 1:
+            if (this.#P()) {
+              this.#C();
+              let t2 = 7, r2 = 1;
+              this.#E() ? (t2 = 2, r2 = 3) : this.#g && (t2 = 2), this.#r(t2, r2);
+            }
+            break;
+          case 2:
+            this.#S() ? this.#u(3) : (this.#x() || this.#h() || this.#f()) && this.#u(5);
+            break;
+          case 3:
+            this.#O() ? this.#r(4, 1) : this.#S() && this.#r(5, 1);
+            break;
+          case 4:
+            this.#S() && this.#r(5, 1);
+            break;
+          case 5:
+            this.#y() ? this.#p += 1 : this.#w() && (this.#p -= 1), this.#k() && !this.#p ? this.#r(6, 1) : this.#x() ? this.#r(7, 0) : this.#h() ? this.#r(8, 1) : this.#f() && this.#r(9, 1);
+            break;
+          case 6:
+            this.#x() ? this.#r(7, 0) : this.#h() ? this.#r(8, 1) : this.#f() && this.#r(9, 1);
+            break;
+          case 7:
+            this.#h() ? this.#r(8, 1) : this.#f() && this.#r(9, 1);
+            break;
+          case 8:
+            this.#f() && this.#r(9, 1);
+            break;
+          case 9:
+            break;
+          case 10:
+            break;
+        }
+      }
+      this.#t.hostname !== void 0 && this.#t.port === void 0 && (this.#t.port = "");
+    }
+    #r(t2, r2) {
+      switch (this.#o) {
+        case 0:
+          break;
+        case 1:
+          this.#t.protocol = this.#c();
+          break;
+        case 2:
+          break;
+        case 3:
+          this.#t.username = this.#c();
+          break;
+        case 4:
+          this.#t.password = this.#c();
+          break;
+        case 5:
+          this.#t.hostname = this.#c();
+          break;
+        case 6:
+          this.#t.port = this.#c();
+          break;
+        case 7:
+          this.#t.pathname = this.#c();
+          break;
+        case 8:
+          this.#t.search = this.#c();
+          break;
+        case 9:
+          this.#t.hash = this.#c();
+          break;
+        case 10:
+          break;
+      }
+      this.#o !== 0 && t2 !== 10 && ([1, 2, 3, 4].includes(this.#o) && [6, 7, 8, 9].includes(t2) && (this.#t.hostname ??= ""), [1, 2, 3, 4, 5, 6].includes(this.#o) && [8, 9].includes(t2) && (this.#t.pathname ??= this.#g ? "/" : ""), [1, 2, 3, 4, 5, 6, 7].includes(this.#o) && t2 === 9 && (this.#t.search ??= "")), this.#R(t2, r2);
+    }
+    #R(t2, r2) {
+      this.#o = t2, this.#l = this.#e + r2, this.#e += r2, this.#s = 0;
+    }
+    #b() {
+      this.#e = this.#l, this.#s = 0;
+    }
+    #u(t2) {
+      this.#b(), this.#o = t2;
+    }
+    #m(t2) {
+      return t2 < 0 && (t2 = this.#n.length - t2), t2 < this.#n.length ? this.#n[t2] : this.#n[this.#n.length - 1];
+    }
+    #a(t2, r2) {
+      let n2 = this.#m(t2);
+      return n2.value === r2 && (n2.type === "CHAR" || n2.type === "ESCAPED_CHAR" || n2.type === "INVALID_CHAR");
+    }
+    #P() {
+      return this.#a(this.#e, ":");
+    }
+    #E() {
+      return this.#a(this.#e + 1, "/") && this.#a(this.#e + 2, "/");
+    }
+    #S() {
+      return this.#a(this.#e, "@");
+    }
+    #O() {
+      return this.#a(this.#e, ":");
+    }
+    #k() {
+      return this.#a(this.#e, ":");
+    }
+    #x() {
+      return this.#a(this.#e, "/");
+    }
+    #h() {
+      if (this.#a(this.#e, "?")) return true;
+      if (this.#n[this.#e].value !== "?") return false;
+      let t2 = this.#m(this.#e - 1);
+      return t2.type !== "NAME" && t2.type !== "REGEX" && t2.type !== "CLOSE" && t2.type !== "ASTERISK";
+    }
+    #f() {
+      return this.#a(this.#e, "#");
+    }
+    #T() {
+      return this.#n[this.#e].type == "OPEN";
+    }
+    #A() {
+      return this.#n[this.#e].type == "CLOSE";
+    }
+    #y() {
+      return this.#a(this.#e, "[");
+    }
+    #w() {
+      return this.#a(this.#e, "]");
+    }
+    #c() {
+      let t2 = this.#n[this.#e], r2 = this.#m(this.#l).index;
+      return this.#i.substring(r2, t2.index);
+    }
+    #C() {
+      let t2 = {};
+      Object.assign(t2, b2), t2.encodePart = w2;
+      let r2 = q2(this.#c(), void 0, t2);
+      this.#g = U2(r2);
+    }
+  };
+  a2(C2, "Parser");
+  var V2 = ["protocol", "username", "password", "hostname", "port", "pathname", "search", "hash"];
+  var O2 = "*";
+  function Se2(e2, t2) {
+    if (typeof e2 != "string") throw new TypeError("parameter 1 is not of type 'string'.");
+    let r2 = new URL(e2, t2);
+    return { protocol: r2.protocol.substring(0, r2.protocol.length - 1), username: r2.username, password: r2.password, hostname: r2.hostname, port: r2.port, pathname: r2.pathname, search: r2.search !== "" ? r2.search.substring(1, r2.search.length) : void 0, hash: r2.hash !== "" ? r2.hash.substring(1, r2.hash.length) : void 0 };
+  }
+  __name(Se2, "Se");
+  a2(Se2, "extractValues");
+  function R2(e2, t2) {
+    return t2 ? I2(e2) : e2;
+  }
+  __name(R2, "R");
+  a2(R2, "processBaseURLString");
+  function L2(e2, t2, r2) {
+    let n2;
+    if (typeof t2.baseURL == "string") try {
+      n2 = new URL(t2.baseURL), t2.protocol === void 0 && (e2.protocol = R2(n2.protocol.substring(0, n2.protocol.length - 1), r2)), !r2 && t2.protocol === void 0 && t2.hostname === void 0 && t2.port === void 0 && t2.username === void 0 && (e2.username = R2(n2.username, r2)), !r2 && t2.protocol === void 0 && t2.hostname === void 0 && t2.port === void 0 && t2.username === void 0 && t2.password === void 0 && (e2.password = R2(n2.password, r2)), t2.protocol === void 0 && t2.hostname === void 0 && (e2.hostname = R2(n2.hostname, r2)), t2.protocol === void 0 && t2.hostname === void 0 && t2.port === void 0 && (e2.port = R2(n2.port, r2)), t2.protocol === void 0 && t2.hostname === void 0 && t2.port === void 0 && t2.pathname === void 0 && (e2.pathname = R2(n2.pathname, r2)), t2.protocol === void 0 && t2.hostname === void 0 && t2.port === void 0 && t2.pathname === void 0 && t2.search === void 0 && (e2.search = R2(n2.search.substring(1, n2.search.length), r2)), t2.protocol === void 0 && t2.hostname === void 0 && t2.port === void 0 && t2.pathname === void 0 && t2.search === void 0 && t2.hash === void 0 && (e2.hash = R2(n2.hash.substring(1, n2.hash.length), r2));
+    } catch {
+      throw new TypeError(`invalid baseURL '${t2.baseURL}'.`);
+    }
+    if (typeof t2.protocol == "string" && (e2.protocol = fe2(t2.protocol, r2)), typeof t2.username == "string" && (e2.username = oe2(t2.username, r2)), typeof t2.password == "string" && (e2.password = ae2(t2.password, r2)), typeof t2.hostname == "string" && (e2.hostname = ie2(t2.hostname, r2)), typeof t2.port == "string" && (e2.port = le2(t2.port, e2.protocol, r2)), typeof t2.pathname == "string") {
+      if (e2.pathname = t2.pathname, n2 && !ee2(e2.pathname, r2)) {
+        let c2 = n2.pathname.lastIndexOf("/");
+        c2 >= 0 && (e2.pathname = R2(n2.pathname.substring(0, c2 + 1), r2) + e2.pathname);
+      }
+      e2.pathname = ce2(e2.pathname, e2.protocol, r2);
+    }
+    return typeof t2.search == "string" && (e2.search = se2(t2.search, r2)), typeof t2.hash == "string" && (e2.hash = ne2(t2.hash, r2)), e2;
+  }
+  __name(L2, "L");
+  a2(L2, "applyInit");
+  function I2(e2) {
+    return e2.replace(/([+*?:{}()\\])/g, "\\$1");
+  }
+  __name(I2, "I");
+  a2(I2, "escapePatternString");
+  function Te2(e2) {
+    return e2.replace(/([.+*?^${}()[\]|/\\])/g, "\\$1");
+  }
+  __name(Te2, "Te");
+  a2(Te2, "escapeRegexpString");
+  function Ae2(e2, t2) {
+    t2.delimiter ??= "/#?", t2.prefixes ??= "./", t2.sensitive ??= false, t2.strict ??= false, t2.end ??= true, t2.start ??= true, t2.endsWith = "";
+    let r2 = ".*", n2 = `[^${Te2(t2.delimiter)}]+?`, c2 = /[$_\u200C\u200D\p{ID_Continue}]/u, l2 = "";
+    for (let f2 = 0; f2 < e2.length; ++f2) {
+      let s2 = e2[f2];
+      if (s2.type === 3) {
+        if (s2.modifier === 3) {
+          l2 += I2(s2.value);
+          continue;
+        }
+        l2 += `{${I2(s2.value)}}${T2(s2.modifier)}`;
+        continue;
+      }
+      let i2 = s2.hasCustomName(), o2 = !!s2.suffix.length || !!s2.prefix.length && (s2.prefix.length !== 1 || !t2.prefixes.includes(s2.prefix)), h2 = f2 > 0 ? e2[f2 - 1] : null, p2 = f2 < e2.length - 1 ? e2[f2 + 1] : null;
+      if (!o2 && i2 && s2.type === 1 && s2.modifier === 3 && p2 && !p2.prefix.length && !p2.suffix.length) if (p2.type === 3) {
+        let A2 = p2.value.length > 0 ? p2.value[0] : "";
+        o2 = c2.test(A2);
+      } else o2 = !p2.hasCustomName();
+      if (!o2 && !s2.prefix.length && h2 && h2.type === 3) {
+        let A2 = h2.value[h2.value.length - 1];
+        o2 = t2.prefixes.includes(A2);
+      }
+      o2 && (l2 += "{"), l2 += I2(s2.prefix), i2 && (l2 += `:${s2.name}`), s2.type === 2 ? l2 += `(${s2.value})` : s2.type === 1 ? i2 || (l2 += `(${n2})`) : s2.type === 0 && (!i2 && (!h2 || h2.type === 3 || h2.modifier !== 3 || o2 || s2.prefix !== "") ? l2 += "*" : l2 += `(${r2})`), s2.type === 1 && i2 && s2.suffix.length && c2.test(s2.suffix[0]) && (l2 += "\\"), l2 += I2(s2.suffix), o2 && (l2 += "}"), s2.modifier !== 3 && (l2 += T2(s2.modifier));
+    }
+    return l2;
+  }
+  __name(Ae2, "Ae");
+  a2(Ae2, "partsToPattern");
+  var Y2 = class {
+    static {
+      __name(this, "Y");
+    }
+    #i;
+    #n = {};
+    #t = {};
+    #e = {};
+    #s = {};
+    #l = false;
+    constructor(t2 = {}, r2, n2) {
+      try {
+        let c2;
+        if (typeof r2 == "string" ? c2 = r2 : n2 = r2, typeof t2 == "string") {
+          let i2 = new C2(t2);
+          if (i2.parse(), t2 = i2.result, c2 === void 0 && typeof t2.protocol != "string") throw new TypeError("A base URL must be provided for a relative constructor string.");
+          t2.baseURL = c2;
+        } else {
+          if (!t2 || typeof t2 != "object") throw new TypeError("parameter 1 is not of type 'string' and cannot convert to dictionary.");
+          if (c2) throw new TypeError("parameter 1 is not of type 'string'.");
+        }
+        typeof n2 > "u" && (n2 = { ignoreCase: false });
+        let l2 = { ignoreCase: n2.ignoreCase === true }, f2 = { pathname: O2, protocol: O2, username: O2, password: O2, hostname: O2, port: O2, search: O2, hash: O2 };
+        this.#i = L2(f2, t2, true), z2(this.#i.protocol) === this.#i.port && (this.#i.port = "");
+        let s2;
+        for (s2 of V2) {
+          if (!(s2 in this.#i)) continue;
+          let i2 = {}, o2 = this.#i[s2];
+          switch (this.#t[s2] = [], s2) {
+            case "protocol":
+              Object.assign(i2, b2), i2.encodePart = w2;
+              break;
+            case "username":
+              Object.assign(i2, b2), i2.encodePart = he2;
+              break;
+            case "password":
+              Object.assign(i2, b2), i2.encodePart = ue2;
+              break;
+            case "hostname":
+              Object.assign(i2, J2), _2(o2) ? i2.encodePart = K2 : i2.encodePart = j2;
+              break;
+            case "port":
+              Object.assign(i2, b2), i2.encodePart = G2;
+              break;
+            case "pathname":
+              U2(this.#n.protocol) ? (Object.assign(i2, Q2, l2), i2.encodePart = de2) : (Object.assign(i2, b2, l2), i2.encodePart = pe2);
+              break;
+            case "search":
+              Object.assign(i2, b2, l2), i2.encodePart = ge2;
+              break;
+            case "hash":
+              Object.assign(i2, b2, l2), i2.encodePart = me2;
+              break;
+          }
+          try {
+            this.#s[s2] = F2(o2, i2), this.#n[s2] = W2(this.#s[s2], this.#t[s2], i2), this.#e[s2] = Ae2(this.#s[s2], i2), this.#l = this.#l || this.#s[s2].some((h2) => h2.type === 2);
+          } catch {
+            throw new TypeError(`invalid ${s2} pattern '${this.#i[s2]}'.`);
+          }
+        }
+      } catch (c2) {
+        throw new TypeError(`Failed to construct 'URLPattern': ${c2.message}`);
+      }
+    }
+    get [Symbol.toStringTag]() {
+      return "URLPattern";
+    }
+    test(t2 = {}, r2) {
+      let n2 = { pathname: "", protocol: "", username: "", password: "", hostname: "", port: "", search: "", hash: "" };
+      if (typeof t2 != "string" && r2) throw new TypeError("parameter 1 is not of type 'string'.");
+      if (typeof t2 > "u") return false;
+      try {
+        typeof t2 == "object" ? n2 = L2(n2, t2, false) : n2 = L2(n2, Se2(t2, r2), false);
+      } catch {
+        return false;
+      }
+      let c2;
+      for (c2 of V2) if (!this.#n[c2].exec(n2[c2])) return false;
+      return true;
+    }
+    exec(t2 = {}, r2) {
+      let n2 = { pathname: "", protocol: "", username: "", password: "", hostname: "", port: "", search: "", hash: "" };
+      if (typeof t2 != "string" && r2) throw new TypeError("parameter 1 is not of type 'string'.");
+      if (typeof t2 > "u") return;
+      try {
+        typeof t2 == "object" ? n2 = L2(n2, t2, false) : n2 = L2(n2, Se2(t2, r2), false);
+      } catch {
+        return null;
+      }
+      let c2 = {};
+      r2 ? c2.inputs = [t2, r2] : c2.inputs = [t2];
+      let l2;
+      for (l2 of V2) {
+        let f2 = this.#n[l2].exec(n2[l2]);
+        if (!f2) return null;
+        let s2 = {};
+        for (let [i2, o2] of this.#t[l2].entries()) if (typeof o2 == "string" || typeof o2 == "number") {
+          let h2 = f2[i2 + 1];
+          s2[o2] = h2;
+        }
+        c2[l2] = { input: n2[l2] ?? "", groups: s2 };
+      }
+      return c2;
+    }
+    static compareComponent(t2, r2, n2) {
+      let c2 = a2((i2, o2) => {
+        for (let h2 of ["type", "modifier", "prefix", "value", "suffix"]) {
+          if (i2[h2] < o2[h2]) return -1;
+          if (i2[h2] === o2[h2]) continue;
+          return 1;
+        }
+        return 0;
+      }, "comparePart"), l2 = new P2(3, "", "", "", "", 3), f2 = new P2(0, "", "", "", "", 3), s2 = a2((i2, o2) => {
+        let h2 = 0;
+        for (; h2 < Math.min(i2.length, o2.length); ++h2) {
+          let p2 = c2(i2[h2], o2[h2]);
+          if (p2) return p2;
+        }
+        return i2.length === o2.length ? 0 : c2(i2[h2] ?? l2, o2[h2] ?? l2);
+      }, "comparePartList");
+      return !r2.#e[t2] && !n2.#e[t2] ? 0 : r2.#e[t2] && !n2.#e[t2] ? s2(r2.#s[t2], [f2]) : !r2.#e[t2] && n2.#e[t2] ? s2([f2], n2.#s[t2]) : s2(r2.#s[t2], n2.#s[t2]);
+    }
+    get protocol() {
+      return this.#e.protocol;
+    }
+    get username() {
+      return this.#e.username;
+    }
+    get password() {
+      return this.#e.password;
+    }
+    get hostname() {
+      return this.#e.hostname;
+    }
+    get port() {
+      return this.#e.port;
+    }
+    get pathname() {
+      return this.#e.pathname;
+    }
+    get search() {
+      return this.#e.search;
+    }
+    get hash() {
+      return this.#e.hash;
+    }
+    get hasRegExpGroups() {
+      return this.#l;
+    }
+  };
+  a2(Y2, "URLPattern");
 
   // src/websocket.js
   var states3 = { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 };
@@ -7874,6 +8698,9 @@ ${value}\r
   }
   if (!globalThis.URL) {
     inject(globalThis, { URL: URL2, URLSearchParams: URLSearchParams2 });
+  }
+  if (!globalThis.URLPattern) {
+    inject(globalThis, { URLPattern: Y2 });
   }
   if (!globalThis.WebSocket) {
     inject(globalThis, { WebSocket });

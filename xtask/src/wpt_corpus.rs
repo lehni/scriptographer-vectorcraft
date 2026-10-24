@@ -24,6 +24,7 @@ const PATHS: &[&str] = &[
     "css/geometry",
     "streams",
     "compression",
+    "urlpattern",
     "encoding/streams",
     "encoding/resources",
     "common/gc.js",
