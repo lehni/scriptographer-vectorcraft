@@ -24,6 +24,8 @@ mod drawing;
 mod effects;
 mod engine;
 mod engines;
+#[cfg(not(target_arch = "wasm32"))]
+mod event_source;
 mod exception;
 #[cfg(not(target_arch = "wasm32"))]
 mod fetch;
@@ -184,6 +186,11 @@ pub struct Host<H> {
     channels: Vec<broadcast_channel::Channel<H>>,
     #[cfg(not(target_arch = "wasm32"))]
     next_channel: u32,
+    /// The open `EventSource`s, and the number the next one gets.
+    #[cfg(not(target_arch = "wasm32"))]
+    event_sources: Vec<event_source::Connection<H>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    next_event_source: u32,
     /// The realm's error classes, for the exceptions host functions throw.
     exceptions: Option<exception::Classes<H>>,
     /// The realm's global object, for its classes ([`global_class`]).
@@ -263,6 +270,10 @@ impl<H> Default for Host<H> {
             channels: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
             next_channel: 0,
+            #[cfg(not(target_arch = "wasm32"))]
+            event_sources: Vec::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            next_event_source: 0,
             exceptions: None,
             global: None,
             shared: None,
@@ -339,6 +350,8 @@ impl<E: Engine> Runtime<E> {
             ("port", message_port::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
             ("broadcast", broadcast_channel::natives(&mut engine)?),
+            #[cfg(not(target_arch = "wasm32"))]
+            ("eventSource", event_source::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
             ("url", urls::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
@@ -506,6 +519,8 @@ impl<E: Engine> Runtime<E> {
             message_port::poll(call)?;
             #[cfg(not(target_arch = "wasm32"))]
             broadcast_channel::poll(call)?;
+            #[cfg(not(target_arch = "wasm32"))]
+            event_source::poll(call)?;
             for callback in due {
                 call.call(&callback, &Value::Undefined, &[])?;
             }
@@ -532,6 +547,7 @@ impl<E: Engine> Runtime<E> {
             || !host.children.is_empty()
             || host.ports.iter().any(|p| p.is_open())
             || !host.channels.is_empty()
+            || !host.event_sources.is_empty()
         {
             return true;
         }
