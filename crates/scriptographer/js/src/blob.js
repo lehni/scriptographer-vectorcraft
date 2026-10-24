@@ -1,7 +1,8 @@
 import { checkArguments, setToStringTag } from './define.js'
+import { ReadableStream } from './streams.js'
 
-// `Blob` and `File` for scripts outside a browser. Their bytes arrive whole: no
-// streams.
+// `Blob` and `File` for scripts outside a browser. Their bytes arrive whole,
+// and `stream()` gives them as one chunk.
 
 // A blob's bytes and type, out of its own properties:
 const bytesByBlob = new WeakMap()
@@ -37,6 +38,18 @@ export class Blob {
 
   async bytes() {
     return getBytes(this).slice()
+  }
+
+  stream() {
+    const blob = this
+    return new ReadableStream({
+      type: 'bytes',
+      pull(controller) {
+        const bytes = getBytes(blob)
+        if (bytes.length) controller.enqueue(bytes.slice())
+        controller.close()
+      }
+    })
   }
 }
 

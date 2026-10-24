@@ -12,13 +12,19 @@ import { createConsole } from './console.js'
 import { Crypto } from './crypto.js'
 import { setupDialog } from './dialog.js'
 import { DOMException } from './dom-exception.js'
-import { TextDecoder, TextEncoder } from './encoding.js'
+import {
+  TextDecoder,
+  TextDecoderStream,
+  TextEncoder,
+  TextEncoderStream
+} from './encoding.js'
 import * as events from './events.js'
 import { EventSource } from './event-source.js'
 import * as fetch from './fetch.js'
 import * as fileSystem from './file-system.js'
 import * as geometry from './geometry.js'
 import * as globalScope from './global-scope.js'
+import * as streams from './streams.js'
 import { notifyRejections, reportRejections } from './rejections.js'
 import { FontFace, FontFaceSet } from './font-face.js'
 import { LocalFile } from './local-file.js'
@@ -55,6 +61,12 @@ if (globalThis.navigator && !navigator.clipboard) {
 }
 if (!globalThis.TextEncoder) {
   inject(globalThis, { TextEncoder, TextDecoder })
+}
+if (!globalThis.ReadableStream) {
+  inject(globalThis, { ...streams })
+}
+if (!globalThis.TextEncoderStream) {
+  inject(globalThis, { TextEncoderStream, TextDecoderStream })
 }
 if (!globalThis.crypto) {
   inject(globalThis, { Crypto, crypto: new Crypto() })

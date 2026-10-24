@@ -83,7 +83,7 @@
     atob: () => atob,
     btoa: () => btoa,
     performance: () => performance,
-    queueMicrotask: () => queueMicrotask,
+    queueMicrotask: () => queueMicrotask2,
     reportError: () => reportError
   });
 
@@ -103,7 +103,7 @@
       return natives.now();
     }
   };
-  function queueMicrotask(callback) {
+  function queueMicrotask2(callback) {
     if (typeof callback !== "function") {
       throw new TypeError(`Invalid callback: '${callback}', not a function.`);
     }
@@ -115,7 +115,7 @@
       }
     });
   }
-  __name(queueMicrotask, "queueMicrotask");
+  __name(queueMicrotask2, "queueMicrotask");
   function reportError(err) {
     console.error(`Uncaught ${formatError(err)}`);
   }
@@ -153,10 +153,10 @@
       );
     }
     let result = "";
-    for (let i = 0; i < text.length; i += 3) {
-      const [a, b, c] = [0, 1, 2].map((j) => text.charCodeAt(i + j));
-      const bits = a << 16 | (b || 0) << 8 | (c || 0);
-      result += alphabet[bits >> 18 & 63] + alphabet[bits >> 12 & 63] + (i + 1 < text.length ? alphabet[bits >> 6 & 63] : "=") + (i + 2 < text.length ? alphabet[bits & 63] : "=");
+    for (let i2 = 0; i2 < text.length; i2 += 3) {
+      const [a2, b2, c2] = [0, 1, 2].map((j2) => text.charCodeAt(i2 + j2));
+      const bits = a2 << 16 | (b2 || 0) << 8 | (c2 || 0);
+      result += alphabet[bits >> 18 & 63] + alphabet[bits >> 12 & 63] + (i2 + 1 < text.length ? alphabet[bits >> 6 & 63] : "=") + (i2 + 2 < text.length ? alphabet[bits & 63] : "=");
     }
     return result;
   }
@@ -609,6 +609,2390 @@
     getBytes: () => getBytes,
     readBytes: () => readBytes
   });
+
+  // src/streams.js
+  var streams_exports = {};
+  __export(streams_exports, {
+    ByteLengthQueuingStrategy: () => ByteLengthQueuingStrategy,
+    CountQueuingStrategy: () => CountQueuingStrategy,
+    ReadableByteStreamController: () => ReadableByteStreamController,
+    ReadableStream: () => ReadableStream,
+    ReadableStreamBYOBReader: () => ReadableStreamBYOBReader,
+    ReadableStreamBYOBRequest: () => ReadableStreamBYOBRequest,
+    ReadableStreamDefaultController: () => ReadableStreamDefaultController,
+    ReadableStreamDefaultReader: () => ReadableStreamDefaultReader,
+    TransformStream: () => TransformStream,
+    TransformStreamDefaultController: () => TransformStreamDefaultController,
+    WritableStream: () => WritableStream,
+    WritableStreamDefaultController: () => WritableStreamDefaultController,
+    WritableStreamDefaultWriter: () => WritableStreamDefaultWriter
+  });
+
+  // ../vendor/web-streams-polyfill.mjs
+  /**
+   * @license
+   * web-streams-polyfill v4.3.0
+   * Copyright 2026 Mattias Buelens, Diwank Singh Tomer and other contributors.
+   * This code is released under the MIT license.
+   * SPDX-License-Identifier: MIT
+   */
+  function e() {
+  }
+  __name(e, "e");
+  function t(e2) {
+    return "object" == typeof e2 && null !== e2 || "function" == typeof e2;
+  }
+  __name(t, "t");
+  var r = e;
+  function o(e2, t2) {
+    try {
+      Object.defineProperty(e2, "name", { value: t2, configurable: true });
+    } catch (e3) {
+    }
+  }
+  __name(o, "o");
+  var n = Promise;
+  var i = Promise.resolve.bind(n);
+  var a = Promise.prototype.then;
+  var s = Promise.reject.bind(n);
+  var l = i;
+  function u(e2) {
+    return new n(e2);
+  }
+  __name(u, "u");
+  function c(e2) {
+    return u((t2) => t2(e2));
+  }
+  __name(c, "c");
+  function d(e2) {
+    return s(e2);
+  }
+  __name(d, "d");
+  function f(e2, t2, r2) {
+    return a.call(e2, t2, r2);
+  }
+  __name(f, "f");
+  function h(e2, t2, o2) {
+    f(f(e2, t2, o2), void 0, r);
+  }
+  __name(h, "h");
+  function b(e2, t2) {
+    h(e2, t2);
+  }
+  __name(b, "b");
+  function _(e2, t2) {
+    h(e2, void 0, t2);
+  }
+  __name(_, "_");
+  function m(e2, t2, r2) {
+    return f(e2, t2, r2);
+  }
+  __name(m, "m");
+  function p(e2) {
+    f(e2, void 0, r);
+  }
+  __name(p, "p");
+  var y = /* @__PURE__ */ __name((e2) => {
+    if ("function" == typeof queueMicrotask) y = queueMicrotask;
+    else {
+      const e3 = c(void 0);
+      y = /* @__PURE__ */ __name((t2) => f(e3, t2), "y");
+    }
+    return y(e2);
+  }, "y");
+  function S(e2, t2, r2) {
+    if ("function" != typeof e2) throw new TypeError("Argument is not a function");
+    return Function.prototype.apply.call(e2, t2, r2);
+  }
+  __name(S, "S");
+  function g(e2, t2, r2) {
+    try {
+      return c(S(e2, t2, r2));
+    } catch (e3) {
+      return d(e3);
+    }
+  }
+  __name(g, "g");
+  var v = class {
+    static {
+      __name(this, "v");
+    }
+    constructor() {
+      this._cursor = 0, this._size = 0, this._front = { _elements: [], _next: void 0 }, this._back = this._front, this._cursor = 0, this._size = 0;
+    }
+    get length() {
+      return this._size;
+    }
+    push(e2) {
+      const t2 = this._back;
+      let r2 = t2;
+      16383 === t2._elements.length && (r2 = { _elements: [], _next: void 0 }), t2._elements.push(e2), r2 !== t2 && (this._back = r2, t2._next = r2), ++this._size;
+    }
+    shift() {
+      const e2 = this._front;
+      let t2 = e2;
+      const r2 = this._cursor;
+      let o2 = r2 + 1;
+      const n2 = e2._elements, i2 = n2[r2];
+      return 16384 === o2 && (t2 = e2._next, o2 = 0), --this._size, this._cursor = o2, e2 !== t2 && (this._front = t2), n2[r2] = void 0, i2;
+    }
+    forEach(e2) {
+      let t2 = this._cursor, r2 = this._front, o2 = r2._elements;
+      for (; !(t2 === o2.length && void 0 === r2._next || t2 === o2.length && (r2 = r2._next, o2 = r2._elements, t2 = 0, 0 === o2.length)); ) e2(o2[t2]), ++t2;
+    }
+    peek() {
+      const e2 = this._front, t2 = this._cursor;
+      return e2._elements[t2];
+    }
+  };
+  var w = /* @__PURE__ */ Symbol("[[AbortSteps]]");
+  var R = /* @__PURE__ */ Symbol("[[ErrorSteps]]");
+  var T = /* @__PURE__ */ Symbol("[[CancelSteps]]");
+  var P = /* @__PURE__ */ Symbol("[[PullSteps]]");
+  var C = /* @__PURE__ */ Symbol("[[CanPullSyncSteps]]");
+  var q = /* @__PURE__ */ Symbol("[[ReleaseSteps]]");
+  function E(e2, t2) {
+    e2._ownerReadableStream = t2, t2._reader = e2, "readable" === t2._state ? j(e2) : "closed" === t2._state ? (function(e3) {
+      j(e3), z(e3);
+    })(e2) : k(e2, t2._storedError);
+  }
+  __name(E, "E");
+  function W(e2, t2) {
+    return Mr(e2._ownerReadableStream, t2);
+  }
+  __name(W, "W");
+  function O(e2) {
+    const t2 = e2._ownerReadableStream;
+    "readable" === t2._state ? A(e2, new TypeError("Reader was released and can no longer be used to monitor the stream's closedness")) : (function(e3, t3) {
+      k(e3, t3);
+    })(e2, new TypeError("Reader was released and can no longer be used to monitor the stream's closedness")), t2._readableStreamController[q](), t2._reader = void 0, e2._ownerReadableStream = void 0;
+  }
+  __name(O, "O");
+  function B(e2) {
+    return new TypeError("Cannot " + e2 + " a stream using a released reader");
+  }
+  __name(B, "B");
+  function j(e2) {
+    e2._closedPromise = u((t2, r2) => {
+      e2._closedPromise_resolve = t2, e2._closedPromise_reject = r2;
+    });
+  }
+  __name(j, "j");
+  function k(e2, t2) {
+    j(e2), A(e2, t2);
+  }
+  __name(k, "k");
+  function A(e2, t2) {
+    void 0 !== e2._closedPromise_reject && (p(e2._closedPromise), e2._closedPromise_reject(t2), e2._closedPromise_resolve = void 0, e2._closedPromise_reject = void 0);
+  }
+  __name(A, "A");
+  function z(e2) {
+    void 0 !== e2._closedPromise_resolve && (e2._closedPromise_resolve(void 0), e2._closedPromise_resolve = void 0, e2._closedPromise_reject = void 0);
+  }
+  __name(z, "z");
+  var D = Number.isFinite || function(e2) {
+    return "number" == typeof e2 && isFinite(e2);
+  };
+  var F = Math.trunc || function(e2) {
+    return e2 < 0 ? Math.ceil(e2) : Math.floor(e2);
+  };
+  function L(e2, t2) {
+    if (void 0 !== e2 && ("object" != typeof (r2 = e2) && "function" != typeof r2)) throw new TypeError(`${t2} is not an object.`);
+    var r2;
+  }
+  __name(L, "L");
+  function I(e2, t2) {
+    if ("function" != typeof e2) throw new TypeError(`${t2} is not a function.`);
+  }
+  __name(I, "I");
+  function $(e2, t2) {
+    if (!/* @__PURE__ */ (function(e3) {
+      return "object" == typeof e3 && null !== e3 || "function" == typeof e3;
+    })(e2)) throw new TypeError(`${t2} is not an object.`);
+  }
+  __name($, "$");
+  function M(e2, t2, r2) {
+    if (void 0 === e2) throw new TypeError(`Parameter ${t2} is required in '${r2}'.`);
+  }
+  __name(M, "M");
+  function Y(e2, t2, r2) {
+    if (void 0 === e2) throw new TypeError(`${t2} is required in '${r2}'.`);
+  }
+  __name(Y, "Y");
+  function x(e2) {
+    return Number(e2);
+  }
+  __name(x, "x");
+  function Q(e2) {
+    return 0 === e2 ? 0 : e2;
+  }
+  __name(Q, "Q");
+  function N(e2, t2) {
+    const r2 = Number.MAX_SAFE_INTEGER;
+    let o2 = Number(e2);
+    if (o2 = Q(o2), !D(o2)) throw new TypeError(`${t2} is not a finite number`);
+    if (o2 = (function(e3) {
+      return Q(F(e3));
+    })(o2), o2 < 0 || o2 > r2) throw new TypeError(`${t2} is outside the accepted range of 0 to ${r2}, inclusive`);
+    return D(o2) && 0 !== o2 ? o2 : 0;
+  }
+  __name(N, "N");
+  function H(e2, t2) {
+    if (!Ir(e2)) throw new TypeError(`${t2} is not a ReadableStream.`);
+  }
+  __name(H, "H");
+  function V(e2) {
+    return new ReadableStreamDefaultReader(e2);
+  }
+  __name(V, "V");
+  function U(e2, t2) {
+    e2._reader._readRequests.push(t2);
+  }
+  __name(U, "U");
+  function G(e2, t2, r2) {
+    const o2 = e2._reader._readRequests.shift();
+    r2 ? o2._closeSteps() : o2._chunkSteps(t2);
+  }
+  __name(G, "G");
+  function X(e2) {
+    return e2._reader._readRequests.length;
+  }
+  __name(X, "X");
+  function J(e2) {
+    const t2 = e2._reader;
+    return void 0 !== t2 && !!ee(t2);
+  }
+  __name(J, "J");
+  var ReadableStreamDefaultReader = class {
+    static {
+      __name(this, "ReadableStreamDefaultReader");
+    }
+    constructor(e2) {
+      if (M(e2, 1, "ReadableStreamDefaultReader"), H(e2, "First parameter"), $r(e2)) throw new TypeError("This stream has already been locked for exclusive reading by another reader");
+      E(this, e2), this._readRequests = new v();
+    }
+    get closed() {
+      return ee(this) ? this._closedPromise : d(ne("closed"));
+    }
+    cancel(e2 = void 0) {
+      return ee(this) ? void 0 === this._ownerReadableStream ? d(B("cancel")) : W(this, e2) : d(ne("cancel"));
+    }
+    read() {
+      if (!ee(this)) return d(ne("read"));
+      if (void 0 === this._ownerReadableStream) return d(B("read from"));
+      const e2 = re(this) ? new Z() : new K();
+      return te(this, e2), e2._promise;
+    }
+    releaseLock() {
+      if (!ee(this)) throw ne("releaseLock");
+      void 0 !== this._ownerReadableStream && (function(e2) {
+        O(e2);
+        const t2 = new TypeError("Reader was released");
+        oe(e2, t2);
+      })(this);
+    }
+  };
+  Object.defineProperties(ReadableStreamDefaultReader.prototype, { cancel: { enumerable: true }, read: { enumerable: true }, releaseLock: { enumerable: true }, closed: { enumerable: true } }), o(ReadableStreamDefaultReader.prototype.cancel, "cancel"), o(ReadableStreamDefaultReader.prototype.read, "read"), o(ReadableStreamDefaultReader.prototype.releaseLock, "releaseLock"), "symbol" == typeof Symbol.toStringTag && Object.defineProperty(ReadableStreamDefaultReader.prototype, Symbol.toStringTag, { value: "ReadableStreamDefaultReader", configurable: true });
+  var K = class {
+    static {
+      __name(this, "K");
+    }
+    constructor() {
+      this._promise = u((e2, t2) => {
+        this._resolvePromise = e2, this._rejectPromise = t2;
+      });
+    }
+    _chunkSteps(e2) {
+      this._resolvePromise({ value: e2, done: false });
+    }
+    _closeSteps() {
+      this._resolvePromise({ value: void 0, done: true });
+    }
+    _errorSteps(e2) {
+      this._rejectPromise(e2);
+    }
+  };
+  var Z = class {
+    static {
+      __name(this, "Z");
+    }
+    constructor() {
+      this._promise = void 0;
+    }
+    _chunkSteps(e2) {
+      this._promise = l({ value: e2, done: false });
+    }
+    _closeSteps() {
+      this._promise = l({ value: void 0, done: true });
+    }
+    _errorSteps(e2) {
+      this._promise = d(e2);
+    }
+  };
+  function ee(e2) {
+    return !!t(e2) && (!!Object.prototype.hasOwnProperty.call(e2, "_readRequests") && e2 instanceof ReadableStreamDefaultReader);
+  }
+  __name(ee, "ee");
+  function te(e2, t2) {
+    const r2 = e2._ownerReadableStream;
+    r2._disturbed = true, "closed" === r2._state ? t2._closeSteps() : "errored" === r2._state ? t2._errorSteps(r2._storedError) : r2._readableStreamController[P](t2);
+  }
+  __name(te, "te");
+  function re(e2) {
+    const t2 = e2._ownerReadableStream;
+    return "closed" === t2._state || ("errored" === t2._state || t2._readableStreamController[C]());
+  }
+  __name(re, "re");
+  function oe(e2, t2) {
+    const r2 = e2._readRequests;
+    e2._readRequests = new v(), r2.forEach((e3) => {
+      e3._errorSteps(t2);
+    });
+  }
+  __name(oe, "oe");
+  function ne(e2) {
+    return new TypeError(`ReadableStreamDefaultReader.prototype.${e2} can only be used on a ReadableStreamDefaultReader`);
+  }
+  __name(ne, "ne");
+  var ie;
+  var ae;
+  var se;
+  function le(e2) {
+    return e2.slice();
+  }
+  __name(le, "le");
+  function ue(e2, t2, r2, o2, n2) {
+    new Uint8Array(e2).set(new Uint8Array(r2, o2, n2), t2);
+  }
+  __name(ue, "ue");
+  var ce = /* @__PURE__ */ __name((e2) => (ce = "function" == typeof e2.transfer ? (e3) => e3.transfer() : "function" == typeof structuredClone ? (e3) => structuredClone(e3, { transfer: [e3] }) : (e3) => e3, ce(e2)), "ce");
+  var de = /* @__PURE__ */ __name((e2) => (de = "boolean" == typeof e2.detached ? (e3) => e3.detached : (e3) => 0 === e3.byteLength, de(e2)), "de");
+  function fe(e2, t2, r2) {
+    if (e2.slice) return e2.slice(t2, r2);
+    const o2 = r2 - t2, n2 = new ArrayBuffer(o2);
+    return ue(n2, 0, e2, t2, o2), n2;
+  }
+  __name(fe, "fe");
+  function he(e2, t2) {
+    const r2 = e2[t2];
+    if (null != r2) {
+      if ("function" != typeof r2) throw new TypeError(`${String(t2)} is not a function`);
+      return r2;
+    }
+  }
+  __name(he, "he");
+  function be(e2) {
+    try {
+      const t2 = e2.done, r2 = e2.value;
+      return f(l(r2), (e3) => ({ done: t2, value: e3 }));
+    } catch (e3) {
+      return d(e3);
+    }
+  }
+  __name(be, "be");
+  var _e = null !== (se = null !== (ie = Symbol.asyncIterator) && void 0 !== ie ? ie : null === (ae = Symbol.for) || void 0 === ae ? void 0 : ae.call(Symbol, "Symbol.asyncIterator")) && void 0 !== se ? se : "@@asyncIterator";
+  function me(e2, r2 = "sync", o2) {
+    if (void 0 === o2) if ("async" === r2) {
+      if (void 0 === (o2 = he(e2, _e))) {
+        return (function(e3) {
+          const r3 = { next() {
+            let t2;
+            try {
+              t2 = pe(e3);
+            } catch (e4) {
+              return d(e4);
+            }
+            return be(t2);
+          }, return(r4) {
+            let o3;
+            try {
+              const t2 = he(e3.iterator, "return");
+              if (void 0 === t2) return c({ done: true, value: r4 });
+              o3 = S(t2, e3.iterator, [r4]);
+            } catch (e4) {
+              return d(e4);
+            }
+            return t(o3) ? be(o3) : d(new TypeError("The iterator.return() method must return an object"));
+          } };
+          return { iterator: r3, nextMethod: r3.next, done: false };
+        })(me(e2, "sync", he(e2, Symbol.iterator)));
+      }
+    } else o2 = he(e2, Symbol.iterator);
+    if (void 0 === o2) throw new TypeError("The object is not iterable");
+    const n2 = S(o2, e2, []);
+    if (!t(n2)) throw new TypeError("The iterator method must return an object");
+    return { iterator: n2, nextMethod: n2.next, done: false };
+  }
+  __name(me, "me");
+  function pe(e2) {
+    const r2 = S(e2.nextMethod, e2.iterator, []);
+    if (!t(r2)) throw new TypeError("The iterator.next() method must return an object");
+    return r2;
+  }
+  __name(pe, "pe");
+  var ye = class {
+    static {
+      __name(this, "ye");
+    }
+    constructor(e2, t2) {
+      this._ongoingPromise = void 0, this._isFinished = false, this._reader = e2, this._preventCancel = t2;
+    }
+    next() {
+      const e2 = /* @__PURE__ */ __name(() => this._nextSteps(), "e");
+      return this._ongoingPromise = this._ongoingPromise ? m(this._ongoingPromise, e2, e2) : e2(), this._ongoingPromise;
+    }
+    return(e2) {
+      const t2 = /* @__PURE__ */ __name(() => this._returnSteps(e2), "t");
+      return this._ongoingPromise = this._ongoingPromise ? m(this._ongoingPromise, t2, t2) : t2(), this._ongoingPromise;
+    }
+    _nextSteps() {
+      if (this._isFinished) return Promise.resolve({ value: void 0, done: true });
+      const e2 = this._reader, t2 = new Se(this);
+      return te(e2, t2), t2._promise;
+    }
+    _returnSteps(e2) {
+      if (this._isFinished) return Promise.resolve({ value: e2, done: true });
+      this._isFinished = true;
+      const t2 = this._reader;
+      if (!this._preventCancel) {
+        const r2 = W(t2, e2);
+        return O(t2), m(r2, () => ({ value: e2, done: true }));
+      }
+      return O(t2), c({ value: e2, done: true });
+    }
+  };
+  var Se = class {
+    static {
+      __name(this, "Se");
+    }
+    constructor(e2) {
+      this._iterator = e2, this._promise = u((e3, t2) => {
+        this._resolvePromise = e3, this._rejectPromise = t2;
+      });
+    }
+    _chunkSteps(e2) {
+      this._iterator._ongoingPromise = void 0, y(() => this._resolvePromise({ value: e2, done: false }));
+    }
+    _closeSteps() {
+      const e2 = this._iterator;
+      e2._ongoingPromise = void 0, e2._isFinished = true, O(e2._reader), this._resolvePromise({ value: void 0, done: true });
+    }
+    _errorSteps(e2) {
+      const t2 = this._iterator;
+      t2._ongoingPromise = void 0, t2._isFinished = true, O(t2._reader), this._rejectPromise(e2);
+    }
+  };
+  var ge = { next() {
+    return ve(this) ? this._asyncIteratorImpl.next() : d(we("next"));
+  }, return(e2) {
+    return ve(this) ? this._asyncIteratorImpl.return(e2) : d(we("return"));
+  }, [_e]() {
+    return this;
+  } };
+  function ve(e2) {
+    if (!t(e2)) return false;
+    if (!Object.prototype.hasOwnProperty.call(e2, "_asyncIteratorImpl")) return false;
+    try {
+      return e2._asyncIteratorImpl instanceof ye;
+    } catch (e3) {
+      return false;
+    }
+  }
+  __name(ve, "ve");
+  function we(e2) {
+    return new TypeError(`ReadableStreamAsyncIterator.${e2} can only be used on a ReadableSteamAsyncIterator`);
+  }
+  __name(we, "we");
+  Object.defineProperty(ge, _e, { enumerable: false });
+  var Re = Number.isNaN || function(e2) {
+    return e2 != e2;
+  };
+  function Te(e2) {
+    const t2 = fe(e2.buffer, e2.byteOffset, e2.byteOffset + e2.byteLength);
+    return new Uint8Array(t2);
+  }
+  __name(Te, "Te");
+  function Pe(e2) {
+    const t2 = e2._queue.shift();
+    return e2._queueTotalSize -= t2.size, e2._queueTotalSize < 0 && (e2._queueTotalSize = 0), t2.value;
+  }
+  __name(Pe, "Pe");
+  function Ce(e2, t2, r2) {
+    if ("number" != typeof (o2 = r2) || Re(o2) || o2 < 0 || r2 === 1 / 0) throw new RangeError("Size must be a finite, non-NaN, non-negative number.");
+    var o2;
+    e2._queue.push({ value: t2, size: r2 }), e2._queueTotalSize += r2;
+  }
+  __name(Ce, "Ce");
+  function qe(e2) {
+    e2._queue = new v(), e2._queueTotalSize = 0;
+  }
+  __name(qe, "qe");
+  function Ee(e2) {
+    return e2 === DataView;
+  }
+  __name(Ee, "Ee");
+  function We(e2) {
+    return Ee(e2) ? 1 : e2.BYTES_PER_ELEMENT;
+  }
+  __name(We, "We");
+  var ReadableStreamBYOBRequest = class {
+    static {
+      __name(this, "ReadableStreamBYOBRequest");
+    }
+    constructor() {
+      throw new TypeError("Illegal constructor");
+    }
+    get view() {
+      if (!Be(this)) throw ot("view");
+      return this._view;
+    }
+    respond(e2) {
+      if (!Be(this)) throw ot("respond");
+      if (M(e2, 1, "respond"), e2 = N(e2, "First parameter"), void 0 === this._associatedReadableByteStreamController) throw new TypeError("This BYOB request has been invalidated");
+      if (de(this._view.buffer)) throw new TypeError("The BYOB request's buffer has been detached and so cannot be used as a response");
+      et(this._associatedReadableByteStreamController, e2);
+    }
+    respondWithNewView(e2) {
+      if (!Be(this)) throw ot("respondWithNewView");
+      if (M(e2, 1, "respondWithNewView"), !ArrayBuffer.isView(e2)) throw new TypeError("You can only respond with array buffer views");
+      if (void 0 === this._associatedReadableByteStreamController) throw new TypeError("This BYOB request has been invalidated");
+      if (de(e2.buffer)) throw new TypeError("The given view's buffer has been detached and so cannot be used as a response");
+      tt(this._associatedReadableByteStreamController, e2);
+    }
+  };
+  Object.defineProperties(ReadableStreamBYOBRequest.prototype, { respond: { enumerable: true }, respondWithNewView: { enumerable: true }, view: { enumerable: true } }), o(ReadableStreamBYOBRequest.prototype.respond, "respond"), o(ReadableStreamBYOBRequest.prototype.respondWithNewView, "respondWithNewView"), "symbol" == typeof Symbol.toStringTag && Object.defineProperty(ReadableStreamBYOBRequest.prototype, Symbol.toStringTag, { value: "ReadableStreamBYOBRequest", configurable: true });
+  var ReadableByteStreamController = class {
+    static {
+      __name(this, "ReadableByteStreamController");
+    }
+    constructor() {
+      throw new TypeError("Illegal constructor");
+    }
+    get byobRequest() {
+      if (!Oe(this)) throw nt("byobRequest");
+      return Ke(this);
+    }
+    get desiredSize() {
+      if (!Oe(this)) throw nt("desiredSize");
+      return Ze(this);
+    }
+    close() {
+      if (!Oe(this)) throw nt("close");
+      if (this._closeRequested) throw new TypeError("The stream has already been closed; do not close it again!");
+      const e2 = this._controlledReadableByteStream._state;
+      if ("readable" !== e2) throw new TypeError(`The stream (in ${e2} state) is not in the readable state and cannot be closed`);
+      Ue(this);
+    }
+    enqueue(e2) {
+      if (!Oe(this)) throw nt("enqueue");
+      if (M(e2, 1, "enqueue"), !ArrayBuffer.isView(e2)) throw new TypeError("chunk must be an array buffer view");
+      if (0 === e2.byteLength) throw new TypeError("chunk must have non-zero byteLength");
+      if (0 === e2.buffer.byteLength) throw new TypeError("chunk's buffer must have non-zero byteLength");
+      if (this._closeRequested) throw new TypeError("stream is closed or draining");
+      const t2 = this._controlledReadableByteStream._state;
+      if ("readable" !== t2) throw new TypeError(`The stream (in ${t2} state) is not in the readable state and cannot be enqueued to`);
+      Ge(this, e2);
+    }
+    error(e2 = void 0) {
+      if (!Oe(this)) throw nt("error");
+      Xe(this, e2);
+    }
+    [T](e2) {
+      ke(this), qe(this);
+      const t2 = this._cancelAlgorithm(e2);
+      return Ve(this), t2;
+    }
+    [P](e2) {
+      const t2 = this._controlledReadableByteStream;
+      if (this._queueTotalSize > 0) return void Je(this, e2);
+      const r2 = this._autoAllocateChunkSize;
+      if (void 0 !== r2) {
+        let t3;
+        try {
+          t3 = new ArrayBuffer(r2);
+        } catch (t4) {
+          return void e2._errorSteps(t4);
+        }
+        const o2 = { buffer: t3, bufferByteLength: r2, byteOffset: 0, byteLength: r2, bytesFilled: 0, minimumFill: 1, elementSize: 1, viewConstructor: Uint8Array, readerType: "default" };
+        this._pendingPullIntos.push(o2);
+      }
+      U(t2, e2), je(this);
+    }
+    [C]() {
+      return this._queueTotalSize > 0;
+    }
+    [q]() {
+      if (this._pendingPullIntos.length > 0) {
+        const e2 = this._pendingPullIntos.peek();
+        e2.readerType = "none", this._pendingPullIntos = new v(), this._pendingPullIntos.push(e2);
+      }
+    }
+  };
+  function Oe(e2) {
+    return !!t(e2) && (!!Object.prototype.hasOwnProperty.call(e2, "_controlledReadableByteStream") && e2 instanceof ReadableByteStreamController);
+  }
+  __name(Oe, "Oe");
+  function Be(e2) {
+    return !!t(e2) && (!!Object.prototype.hasOwnProperty.call(e2, "_associatedReadableByteStreamController") && e2 instanceof ReadableStreamBYOBRequest);
+  }
+  __name(Be, "Be");
+  function je(e2) {
+    const t2 = (function(e3) {
+      const t3 = e3._controlledReadableByteStream;
+      if ("readable" !== t3._state) return false;
+      if (e3._closeRequested) return false;
+      if (!e3._started) return false;
+      if (J(t3) && X(t3) > 0) return true;
+      if (ut(t3) && lt(t3) > 0) return true;
+      const r2 = Ze(e3);
+      if (r2 > 0) return true;
+      return false;
+    })(e2);
+    if (!t2) return;
+    if (e2._pulling) return void (e2._pullAgain = true);
+    e2._pulling = true;
+    h(e2._pullAlgorithm(), () => (e2._pulling = false, e2._pullAgain && (e2._pullAgain = false, je(e2)), null), (t3) => (Xe(e2, t3), null));
+  }
+  __name(je, "je");
+  function ke(e2) {
+    xe(e2), e2._pendingPullIntos = new v();
+  }
+  __name(ke, "ke");
+  function Ae(e2, t2) {
+    let r2 = false;
+    "closed" === e2._state && (r2 = true);
+    const o2 = De(t2);
+    "default" === t2.readerType ? G(e2, o2, r2) : (function(e3, t3, r3) {
+      const o3 = e3._reader, n2 = o3._readIntoRequests.shift();
+      r3 ? n2._closeSteps(t3) : n2._chunkSteps(t3);
+    })(e2, o2, r2);
+  }
+  __name(Ae, "Ae");
+  function ze(e2, t2) {
+    for (let r2 = 0; r2 < t2.length; ++r2) Ae(e2, t2[r2]);
+  }
+  __name(ze, "ze");
+  function De(e2) {
+    const t2 = e2.bytesFilled, r2 = e2.elementSize;
+    return new e2.viewConstructor(e2.buffer, e2.byteOffset, t2 / r2);
+  }
+  __name(De, "De");
+  function Fe(e2, t2, r2, o2) {
+    e2._queue.push({ buffer: t2, byteOffset: r2, byteLength: o2 }), e2._queueTotalSize += o2;
+  }
+  __name(Fe, "Fe");
+  function Le(e2, t2, r2, o2) {
+    let n2;
+    try {
+      n2 = fe(t2, r2, r2 + o2);
+    } catch (t3) {
+      throw Xe(e2, t3), t3;
+    }
+    Fe(e2, n2, 0, o2);
+  }
+  __name(Le, "Le");
+  function Ie(e2, t2) {
+    t2.bytesFilled > 0 && Le(e2, t2.buffer, t2.byteOffset, t2.bytesFilled), He(e2);
+  }
+  __name(Ie, "Ie");
+  function $e(e2, t2) {
+    const r2 = Math.min(e2._queueTotalSize, t2.byteLength - t2.bytesFilled), o2 = t2.bytesFilled + r2;
+    let n2 = r2, i2 = false;
+    const a2 = o2 - o2 % t2.elementSize;
+    a2 >= t2.minimumFill && (n2 = a2 - t2.bytesFilled, i2 = true);
+    const s2 = e2._queue;
+    for (; n2 > 0; ) {
+      const r3 = s2.peek(), o3 = Math.min(n2, r3.byteLength), i3 = t2.byteOffset + t2.bytesFilled;
+      ue(t2.buffer, i3, r3.buffer, r3.byteOffset, o3), r3.byteLength === o3 ? s2.shift() : (r3.byteOffset += o3, r3.byteLength -= o3), e2._queueTotalSize -= o3, Me(e2, o3, t2), n2 -= o3;
+    }
+    return i2;
+  }
+  __name($e, "$e");
+  function Me(e2, t2, r2) {
+    r2.bytesFilled += t2;
+  }
+  __name(Me, "Me");
+  function Ye(e2) {
+    0 === e2._queueTotalSize && e2._closeRequested ? (Ve(e2), Yr(e2._controlledReadableByteStream)) : je(e2);
+  }
+  __name(Ye, "Ye");
+  function xe(e2) {
+    null !== e2._byobRequest && (e2._byobRequest._associatedReadableByteStreamController = void 0, e2._byobRequest._view = null, e2._byobRequest = null);
+  }
+  __name(xe, "xe");
+  function Qe(e2) {
+    const t2 = [];
+    for (; e2._pendingPullIntos.length > 0 && 0 !== e2._queueTotalSize; ) {
+      const r2 = e2._pendingPullIntos.peek();
+      $e(e2, r2) && (He(e2), t2.push(r2));
+    }
+    return t2;
+  }
+  __name(Qe, "Qe");
+  function Ne(e2, t2) {
+    const r2 = e2._pendingPullIntos.peek();
+    xe(e2);
+    "closed" === e2._controlledReadableByteStream._state ? (function(e3, t3) {
+      "none" === t3.readerType && He(e3);
+      const r3 = e3._controlledReadableByteStream;
+      if (ut(r3)) {
+        const t4 = [];
+        for (; t4.length < lt(r3); ) t4.push(He(e3));
+        ze(r3, t4);
+      }
+    })(e2, r2) : (function(e3, t3, r3) {
+      if (Me(0, t3, r3), "none" === r3.readerType) {
+        Ie(e3, r3);
+        const t4 = Qe(e3);
+        return void ze(e3._controlledReadableByteStream, t4);
+      }
+      if (r3.bytesFilled < r3.minimumFill) return;
+      He(e3);
+      const o2 = r3.bytesFilled % r3.elementSize;
+      if (o2 > 0) {
+        const t4 = r3.byteOffset + r3.bytesFilled;
+        Le(e3, r3.buffer, t4 - o2, o2);
+      }
+      r3.bytesFilled -= o2;
+      const n2 = Qe(e3);
+      Ae(e3._controlledReadableByteStream, r3), ze(e3._controlledReadableByteStream, n2);
+    })(e2, t2, r2), je(e2);
+  }
+  __name(Ne, "Ne");
+  function He(e2) {
+    return e2._pendingPullIntos.shift();
+  }
+  __name(He, "He");
+  function Ve(e2) {
+    e2._pullAlgorithm = void 0, e2._cancelAlgorithm = void 0;
+  }
+  __name(Ve, "Ve");
+  function Ue(e2) {
+    const t2 = e2._controlledReadableByteStream;
+    if (!e2._closeRequested && "readable" === t2._state) if (e2._queueTotalSize > 0) e2._closeRequested = true;
+    else {
+      if (e2._pendingPullIntos.length > 0) {
+        const t3 = e2._pendingPullIntos.peek();
+        if (t3.bytesFilled % t3.elementSize !== 0) {
+          const t4 = new TypeError("Insufficient bytes to fill elements in the given buffer");
+          throw Xe(e2, t4), t4;
+        }
+      }
+      Ve(e2), Yr(t2);
+    }
+  }
+  __name(Ue, "Ue");
+  function Ge(e2, t2) {
+    const r2 = e2._controlledReadableByteStream;
+    if (e2._closeRequested || "readable" !== r2._state) return;
+    const { buffer: o2, byteOffset: n2, byteLength: i2 } = t2;
+    if (de(o2)) throw new TypeError("chunk's buffer is detached and so cannot be enqueued");
+    const a2 = ce(o2);
+    if (e2._pendingPullIntos.length > 0) {
+      const t3 = e2._pendingPullIntos.peek();
+      if (de(t3.buffer)) throw new TypeError("The BYOB request's buffer has been detached and so cannot be filled with an enqueued chunk");
+      xe(e2), t3.buffer = ce(t3.buffer), "none" === t3.readerType && Ie(e2, t3);
+    }
+    if (J(r2)) if ((function(e3) {
+      const t3 = e3._controlledReadableByteStream._reader;
+      for (; t3._readRequests.length > 0; ) {
+        if (0 === e3._queueTotalSize) return;
+        Je(e3, t3._readRequests.shift());
+      }
+    })(e2), 0 === X(r2)) Fe(e2, a2, n2, i2);
+    else {
+      e2._pendingPullIntos.length > 0 && He(e2);
+      G(r2, new Uint8Array(a2, n2, i2), false);
+    }
+    else if (ut(r2)) {
+      Fe(e2, a2, n2, i2);
+      ze(r2, Qe(e2));
+    } else Fe(e2, a2, n2, i2);
+    je(e2);
+  }
+  __name(Ge, "Ge");
+  function Xe(e2, t2) {
+    const r2 = e2._controlledReadableByteStream;
+    "readable" === r2._state && (ke(e2), qe(e2), Ve(e2), xr(r2, t2));
+  }
+  __name(Xe, "Xe");
+  function Je(e2, t2) {
+    const r2 = e2._queue.shift();
+    e2._queueTotalSize -= r2.byteLength, Ye(e2);
+    const o2 = new Uint8Array(r2.buffer, r2.byteOffset, r2.byteLength);
+    t2._chunkSteps(o2);
+  }
+  __name(Je, "Je");
+  function Ke(e2) {
+    if (null === e2._byobRequest && e2._pendingPullIntos.length > 0) {
+      const t2 = e2._pendingPullIntos.peek(), r2 = new Uint8Array(t2.buffer, t2.byteOffset + t2.bytesFilled, t2.byteLength - t2.bytesFilled), o2 = Object.create(ReadableStreamBYOBRequest.prototype);
+      !(function(e3, t3, r3) {
+        e3._associatedReadableByteStreamController = t3, e3._view = r3;
+      })(o2, e2, r2), e2._byobRequest = o2;
+    }
+    return e2._byobRequest;
+  }
+  __name(Ke, "Ke");
+  function Ze(e2) {
+    const t2 = e2._controlledReadableByteStream._state;
+    return "errored" === t2 ? null : "closed" === t2 ? 0 : e2._strategyHWM - e2._queueTotalSize;
+  }
+  __name(Ze, "Ze");
+  function et(e2, t2) {
+    const r2 = e2._pendingPullIntos.peek();
+    if ("closed" === e2._controlledReadableByteStream._state) {
+      if (0 !== t2) throw new TypeError("bytesWritten must be 0 when calling respond() on a closed stream");
+    } else {
+      if (0 === t2) throw new TypeError("bytesWritten must be greater than 0 when calling respond() on a readable stream");
+      if (r2.bytesFilled + t2 > r2.byteLength) throw new RangeError("bytesWritten out of range");
+    }
+    r2.buffer = ce(r2.buffer), Ne(e2, t2);
+  }
+  __name(et, "et");
+  function tt(e2, t2) {
+    const r2 = e2._pendingPullIntos.peek();
+    if ("closed" === e2._controlledReadableByteStream._state) {
+      if (0 !== t2.byteLength) throw new TypeError("The view's length must be 0 when calling respondWithNewView() on a closed stream");
+    } else if (0 === t2.byteLength) throw new TypeError("The view's length must be greater than 0 when calling respondWithNewView() on a readable stream");
+    if (r2.byteOffset + r2.bytesFilled !== t2.byteOffset) throw new RangeError("The region specified by view does not match byobRequest");
+    if (r2.bufferByteLength !== t2.buffer.byteLength) throw new RangeError("The buffer of view has different capacity than byobRequest");
+    if (r2.bytesFilled + t2.byteLength > r2.byteLength) throw new RangeError("The region specified by view is larger than byobRequest");
+    const o2 = t2.byteLength;
+    r2.buffer = ce(t2.buffer), Ne(e2, o2);
+  }
+  __name(tt, "tt");
+  function rt(e2, t2, r2, o2, n2, i2, a2) {
+    t2._controlledReadableByteStream = e2, t2._pullAgain = false, t2._pulling = false, t2._byobRequest = null, t2._queue = t2._queueTotalSize = void 0, qe(t2), t2._closeRequested = false, t2._started = false, t2._strategyHWM = i2, t2._pullAlgorithm = o2, t2._cancelAlgorithm = n2, t2._autoAllocateChunkSize = a2, t2._pendingPullIntos = new v(), e2._readableStreamController = t2;
+    h(c(r2()), () => (t2._started = true, je(t2), null), (e3) => (Xe(t2, e3), null));
+  }
+  __name(rt, "rt");
+  function ot(e2) {
+    return new TypeError(`ReadableStreamBYOBRequest.prototype.${e2} can only be used on a ReadableStreamBYOBRequest`);
+  }
+  __name(ot, "ot");
+  function nt(e2) {
+    return new TypeError(`ReadableByteStreamController.prototype.${e2} can only be used on a ReadableByteStreamController`);
+  }
+  __name(nt, "nt");
+  function it(e2, t2) {
+    if ("byob" !== (e2 = `${e2}`)) throw new TypeError(`${t2} '${e2}' is not a valid enumeration value for ReadableStreamReaderMode`);
+    return e2;
+  }
+  __name(it, "it");
+  function at(e2) {
+    return new ReadableStreamBYOBReader(e2);
+  }
+  __name(at, "at");
+  function st(e2, t2) {
+    e2._reader._readIntoRequests.push(t2);
+  }
+  __name(st, "st");
+  function lt(e2) {
+    return e2._reader._readIntoRequests.length;
+  }
+  __name(lt, "lt");
+  function ut(e2) {
+    const t2 = e2._reader;
+    return void 0 !== t2 && !!ft(t2);
+  }
+  __name(ut, "ut");
+  Object.defineProperties(ReadableByteStreamController.prototype, { close: { enumerable: true }, enqueue: { enumerable: true }, error: { enumerable: true }, byobRequest: { enumerable: true }, desiredSize: { enumerable: true } }), o(ReadableByteStreamController.prototype.close, "close"), o(ReadableByteStreamController.prototype.enqueue, "enqueue"), o(ReadableByteStreamController.prototype.error, "error"), "symbol" == typeof Symbol.toStringTag && Object.defineProperty(ReadableByteStreamController.prototype, Symbol.toStringTag, { value: "ReadableByteStreamController", configurable: true });
+  var ReadableStreamBYOBReader = class {
+    static {
+      __name(this, "ReadableStreamBYOBReader");
+    }
+    constructor(e2) {
+      if (M(e2, 1, "ReadableStreamBYOBReader"), H(e2, "First parameter"), $r(e2)) throw new TypeError("This stream has already been locked for exclusive reading by another reader");
+      if (!Oe(e2._readableStreamController)) throw new TypeError("Cannot construct a ReadableStreamBYOBReader for a stream not constructed with a byte source");
+      E(this, e2), this._readIntoRequests = new v();
+    }
+    get closed() {
+      return ft(this) ? this._closedPromise : d(_t("closed"));
+    }
+    cancel(e2 = void 0) {
+      return ft(this) ? void 0 === this._ownerReadableStream ? d(B("cancel")) : W(this, e2) : d(_t("cancel"));
+    }
+    read(e2, t2 = {}) {
+      if (!ft(this)) return d(_t("read"));
+      if (!ArrayBuffer.isView(e2)) return d(new TypeError("view must be an array buffer view"));
+      if (0 === e2.byteLength) return d(new TypeError("view must have non-zero byteLength"));
+      if (0 === e2.buffer.byteLength) return d(new TypeError("view's buffer must have non-zero byteLength"));
+      if (de(e2.buffer)) return d(new TypeError("view's buffer has been detached"));
+      let r2;
+      try {
+        r2 = (function(e3, t3) {
+          var r3;
+          return L(e3, t3), { min: N(null !== (r3 = null == e3 ? void 0 : e3.min) && void 0 !== r3 ? r3 : 1, `${t3} has member 'min' that`) };
+        })(t2, "options");
+      } catch (e3) {
+        return d(e3);
+      }
+      const o2 = r2.min;
+      if (0 === o2) return d(new TypeError("options.min must be greater than 0"));
+      if ((function(e3) {
+        return Ee(e3.constructor);
+      })(e2)) {
+        if (o2 > e2.byteLength) return d(new RangeError("options.min must be less than or equal to view's byteLength"));
+      } else if (o2 > e2.length) return d(new RangeError("options.min must be less than or equal to view's length"));
+      if (void 0 === this._ownerReadableStream) return d(B("read from"));
+      const n2 = (function(e3, t3, r3) {
+        const o3 = e3._ownerReadableStream;
+        return "errored" === o3._state || (function(e4, t4, r4) {
+          const o4 = e4._controlledReadableByteStream, n3 = We(t4.constructor), { byteLength: i2 } = t4, a2 = r4 * n3;
+          return !(e4._pendingPullIntos.length > 0) && ("closed" === o4._state || e4._queueTotalSize >= a2);
+        })(o3._readableStreamController, t3, r3);
+      })(this, e2, o2) ? new dt() : new ct();
+      return ht(this, e2, o2, n2), n2._promise;
+    }
+    releaseLock() {
+      if (!ft(this)) throw _t("releaseLock");
+      void 0 !== this._ownerReadableStream && (function(e2) {
+        O(e2);
+        const t2 = new TypeError("Reader was released");
+        bt(e2, t2);
+      })(this);
+    }
+  };
+  Object.defineProperties(ReadableStreamBYOBReader.prototype, { cancel: { enumerable: true }, read: { enumerable: true }, releaseLock: { enumerable: true }, closed: { enumerable: true } }), o(ReadableStreamBYOBReader.prototype.cancel, "cancel"), o(ReadableStreamBYOBReader.prototype.read, "read"), o(ReadableStreamBYOBReader.prototype.releaseLock, "releaseLock"), "symbol" == typeof Symbol.toStringTag && Object.defineProperty(ReadableStreamBYOBReader.prototype, Symbol.toStringTag, { value: "ReadableStreamBYOBReader", configurable: true });
+  var ct = class {
+    static {
+      __name(this, "ct");
+    }
+    constructor() {
+      this._promise = u((e2, t2) => {
+        this._resolvePromise = e2, this._rejectPromise = t2;
+      });
+    }
+    _chunkSteps(e2) {
+      this._resolvePromise({ value: e2, done: false });
+    }
+    _closeSteps(e2) {
+      this._resolvePromise({ value: e2, done: true });
+    }
+    _errorSteps(e2) {
+      this._rejectPromise(e2);
+    }
+  };
+  var dt = class {
+    static {
+      __name(this, "dt");
+    }
+    constructor() {
+      this._promise = void 0;
+    }
+    _chunkSteps(e2) {
+      this._promise = l({ value: e2, done: false });
+    }
+    _closeSteps(e2) {
+      this._promise = l({ value: e2, done: true });
+    }
+    _errorSteps(e2) {
+      this._promise = d(e2);
+    }
+  };
+  function ft(e2) {
+    return !!t(e2) && (!!Object.prototype.hasOwnProperty.call(e2, "_readIntoRequests") && e2 instanceof ReadableStreamBYOBReader);
+  }
+  __name(ft, "ft");
+  function ht(e2, t2, r2, o2) {
+    const n2 = e2._ownerReadableStream;
+    n2._disturbed = true, "errored" === n2._state ? o2._errorSteps(n2._storedError) : (function(e3, t3, r3, o3) {
+      const n3 = e3._controlledReadableByteStream, i2 = t3.constructor, a2 = We(i2), { byteOffset: s2, byteLength: l2 } = t3, u2 = r3 * a2;
+      let c2;
+      try {
+        c2 = ce(t3.buffer);
+      } catch (e4) {
+        return void o3._errorSteps(e4);
+      }
+      const d2 = { buffer: c2, bufferByteLength: c2.byteLength, byteOffset: s2, byteLength: l2, bytesFilled: 0, minimumFill: u2, elementSize: a2, viewConstructor: i2, readerType: "byob" };
+      if (e3._pendingPullIntos.length > 0) return e3._pendingPullIntos.push(d2), void st(n3, o3);
+      if ("closed" === n3._state) {
+        const e4 = new i2(d2.buffer, d2.byteOffset, 0);
+        return void o3._closeSteps(e4);
+      }
+      if (e3._queueTotalSize > 0) {
+        if ($e(e3, d2)) {
+          const t4 = De(d2);
+          return Ye(e3), void o3._chunkSteps(t4);
+        }
+        if (e3._closeRequested) {
+          const t4 = new TypeError("Insufficient bytes to fill elements in the given buffer");
+          return Xe(e3, t4), void o3._errorSteps(t4);
+        }
+      }
+      e3._pendingPullIntos.push(d2), st(n3, o3), je(e3);
+    })(n2._readableStreamController, t2, r2, o2);
+  }
+  __name(ht, "ht");
+  function bt(e2, t2) {
+    const r2 = e2._readIntoRequests;
+    e2._readIntoRequests = new v(), r2.forEach((e3) => {
+      e3._errorSteps(t2);
+    });
+  }
+  __name(bt, "bt");
+  function _t(e2) {
+    return new TypeError(`ReadableStreamBYOBReader.prototype.${e2} can only be used on a ReadableStreamBYOBReader`);
+  }
+  __name(_t, "_t");
+  function mt(e2, t2) {
+    const { highWaterMark: r2 } = e2;
+    if (void 0 === r2) return t2;
+    if (Re(r2) || r2 < 0) throw new RangeError("Invalid highWaterMark");
+    return r2;
+  }
+  __name(mt, "mt");
+  function pt(e2) {
+    const { size: t2 } = e2;
+    return t2 || (() => 1);
+  }
+  __name(pt, "pt");
+  function yt(e2, t2) {
+    L(e2, t2);
+    const r2 = null == e2 ? void 0 : e2.highWaterMark, o2 = null == e2 ? void 0 : e2.size;
+    return { highWaterMark: void 0 === r2 ? void 0 : x(r2), size: void 0 === o2 ? void 0 : St(o2, `${t2} has member 'size' that`) };
+  }
+  __name(yt, "yt");
+  function St(e2, t2) {
+    return I(e2, t2), (t3) => x(e2(t3));
+  }
+  __name(St, "St");
+  function gt(e2, t2, r2) {
+    return I(e2, r2), (r3) => g(e2, t2, [r3]);
+  }
+  __name(gt, "gt");
+  function vt(e2, t2, r2) {
+    return I(e2, r2), () => g(e2, t2, []);
+  }
+  __name(vt, "vt");
+  function wt(e2, t2, r2) {
+    return I(e2, r2), (r3) => S(e2, t2, [r3]);
+  }
+  __name(wt, "wt");
+  function Rt(e2, t2, r2) {
+    return I(e2, r2), (r3, o2) => g(e2, t2, [r3, o2]);
+  }
+  __name(Rt, "Rt");
+  function Tt(e2, t2) {
+    if (!qt(e2)) throw new TypeError(`${t2} is not a WritableStream.`);
+  }
+  __name(Tt, "Tt");
+  var WritableStream = class {
+    static {
+      __name(this, "WritableStream");
+    }
+    constructor(e2 = {}, t2 = {}) {
+      void 0 === e2 ? e2 = null : $(e2, "First parameter");
+      const r2 = yt(t2, "Second parameter"), o2 = (function(e3, t3) {
+        L(e3, t3);
+        const r3 = null == e3 ? void 0 : e3.abort, o3 = null == e3 ? void 0 : e3.close, n3 = null == e3 ? void 0 : e3.start, i2 = null == e3 ? void 0 : e3.type, a2 = null == e3 ? void 0 : e3.write;
+        return { abort: void 0 === r3 ? void 0 : gt(r3, e3, `${t3} has member 'abort' that`), close: void 0 === o3 ? void 0 : vt(o3, e3, `${t3} has member 'close' that`), start: void 0 === n3 ? void 0 : wt(n3, e3, `${t3} has member 'start' that`), write: void 0 === a2 ? void 0 : Rt(a2, e3, `${t3} has member 'write' that`), type: i2 };
+      })(e2, "First parameter");
+      Ct(this);
+      if (void 0 !== o2.type) throw new RangeError("Invalid type is specified");
+      const n2 = pt(r2);
+      !(function(e3, t3, r3, o3) {
+        const n3 = Object.create(WritableStreamDefaultController.prototype);
+        let i2, a2, s2, l2;
+        i2 = void 0 !== t3.start ? () => t3.start(n3) : () => {
+        };
+        a2 = void 0 !== t3.write ? (e4) => t3.write(e4, n3) : () => c(void 0);
+        s2 = void 0 !== t3.close ? () => t3.close() : () => c(void 0);
+        l2 = void 0 !== t3.abort ? (e4) => t3.abort(e4) : () => c(void 0);
+        Nt(e3, n3, i2, a2, s2, l2, r3, o3);
+      })(this, o2, mt(r2, 1), n2);
+    }
+    get locked() {
+      if (!qt(this)) throw Kt("locked");
+      return Et(this);
+    }
+    abort(e2 = void 0) {
+      return qt(this) ? Et(this) ? d(new TypeError("Cannot abort a stream that already has a writer")) : Wt(this, e2) : d(Kt("abort"));
+    }
+    close() {
+      return qt(this) ? Et(this) ? d(new TypeError("Cannot close a stream that already has a writer")) : At(this) ? d(new TypeError("Cannot close an already-closing stream")) : Ot(this) : d(Kt("close"));
+    }
+    getWriter() {
+      if (!qt(this)) throw Kt("getWriter");
+      return Pt(this);
+    }
+  };
+  function Pt(e2) {
+    return new WritableStreamDefaultWriter(e2);
+  }
+  __name(Pt, "Pt");
+  function Ct(e2) {
+    e2._state = "writable", e2._storedError = void 0, e2._writer = void 0, e2._writableStreamController = void 0, e2._writeRequests = new v(), e2._inFlightWriteRequest = void 0, e2._closeRequest = void 0, e2._inFlightCloseRequest = void 0, e2._pendingAbortRequest = void 0, e2._backpressure = false;
+  }
+  __name(Ct, "Ct");
+  function qt(e2) {
+    return !!t(e2) && (!!Object.prototype.hasOwnProperty.call(e2, "_writableStreamController") && e2 instanceof WritableStream);
+  }
+  __name(qt, "qt");
+  function Et(e2) {
+    return void 0 !== e2._writer;
+  }
+  __name(Et, "Et");
+  function Wt(e2, t2) {
+    var r2;
+    if ("closed" === e2._state || "errored" === e2._state) return c(void 0);
+    e2._writableStreamController._abortReason = t2, null === (r2 = e2._writableStreamController._abortController) || void 0 === r2 || r2.abort(t2);
+    const o2 = e2._state;
+    if ("closed" === o2 || "errored" === o2) return c(void 0);
+    if (void 0 !== e2._pendingAbortRequest) return e2._pendingAbortRequest._promise;
+    let n2 = false;
+    "erroring" === o2 && (n2 = true, t2 = void 0);
+    const i2 = u((r3, o3) => {
+      e2._pendingAbortRequest = { _promise: void 0, _resolve: r3, _reject: o3, _reason: t2, _wasAlreadyErroring: n2 };
+    });
+    return e2._pendingAbortRequest._promise = i2, n2 || jt(e2, t2), i2;
+  }
+  __name(Wt, "Wt");
+  function Ot(e2) {
+    const t2 = e2._state;
+    if ("closed" === t2 || "errored" === t2) return d(new TypeError(`The stream (in ${t2} state) is not in the writable state and cannot be closed`));
+    const r2 = u((t3, r3) => {
+      const o3 = { _resolve: t3, _reject: r3 };
+      e2._closeRequest = o3;
+    }), o2 = e2._writer;
+    var n2;
+    return void 0 !== o2 && e2._backpressure && "writable" === t2 && cr(o2), Ce(n2 = e2._writableStreamController, xt, 0), Ut(n2), r2;
+  }
+  __name(Ot, "Ot");
+  function Bt(e2, t2) {
+    "writable" !== e2._state ? kt(e2) : jt(e2, t2);
+  }
+  __name(Bt, "Bt");
+  function jt(e2, t2) {
+    const r2 = e2._writableStreamController;
+    e2._state = "erroring", e2._storedError = t2;
+    const o2 = e2._writer;
+    void 0 !== o2 && $t(o2, t2), !(function(e3) {
+      if (void 0 === e3._inFlightWriteRequest && void 0 === e3._inFlightCloseRequest) return false;
+      return true;
+    })(e2) && r2._started && kt(e2);
+  }
+  __name(jt, "jt");
+  function kt(e2) {
+    e2._state = "errored", e2._writableStreamController[R]();
+    const t2 = e2._storedError;
+    if (e2._writeRequests.forEach((e3) => {
+      e3._reject(t2);
+    }), e2._writeRequests = new v(), void 0 === e2._pendingAbortRequest) return void zt(e2);
+    const r2 = e2._pendingAbortRequest;
+    if (e2._pendingAbortRequest = void 0, r2._wasAlreadyErroring) return r2._reject(t2), void zt(e2);
+    h(e2._writableStreamController[w](r2._reason), () => (r2._resolve(), zt(e2), null), (t3) => (r2._reject(t3), zt(e2), null));
+  }
+  __name(kt, "kt");
+  function At(e2) {
+    return void 0 !== e2._closeRequest || void 0 !== e2._inFlightCloseRequest;
+  }
+  __name(At, "At");
+  function zt(e2) {
+    void 0 !== e2._closeRequest && (e2._closeRequest._reject(e2._storedError), e2._closeRequest = void 0);
+    const t2 = e2._writer;
+    void 0 !== t2 && nr(t2, e2._storedError);
+  }
+  __name(zt, "zt");
+  function Dt(e2, t2) {
+    const r2 = e2._writer;
+    void 0 !== r2 && t2 !== e2._backpressure && (t2 ? (function(e3) {
+      ar(e3);
+    })(r2) : cr(r2)), e2._backpressure = t2;
+  }
+  __name(Dt, "Dt");
+  Object.defineProperties(WritableStream.prototype, { abort: { enumerable: true }, close: { enumerable: true }, getWriter: { enumerable: true }, locked: { enumerable: true } }), o(WritableStream.prototype.abort, "abort"), o(WritableStream.prototype.close, "close"), o(WritableStream.prototype.getWriter, "getWriter"), "symbol" == typeof Symbol.toStringTag && Object.defineProperty(WritableStream.prototype, Symbol.toStringTag, { value: "WritableStream", configurable: true });
+  var WritableStreamDefaultWriter = class {
+    static {
+      __name(this, "WritableStreamDefaultWriter");
+    }
+    constructor(e2) {
+      if (M(e2, 1, "WritableStreamDefaultWriter"), Tt(e2, "First parameter"), Et(e2)) throw new TypeError("This stream has already been locked for exclusive writing by another writer");
+      this._ownerWritableStream = e2, e2._writer = this;
+      const t2 = e2._state;
+      if ("writable" === t2) !At(e2) && e2._backpressure ? ar(this) : lr(this), rr(this);
+      else if ("erroring" === t2) sr(this, e2._storedError), rr(this);
+      else if ("closed" === t2) lr(this), rr(r2 = this), ir(r2);
+      else {
+        const t3 = e2._storedError;
+        sr(this, t3), or(this, t3);
+      }
+      var r2;
+    }
+    get closed() {
+      return Ft(this) ? this._closedPromise : d(er("closed"));
+    }
+    get desiredSize() {
+      if (!Ft(this)) throw er("desiredSize");
+      if (void 0 === this._ownerWritableStream) throw tr("desiredSize");
+      return (function(e2) {
+        const t2 = e2._ownerWritableStream, r2 = t2._state;
+        if ("errored" === r2 || "erroring" === r2) return null;
+        if ("closed" === r2) return 0;
+        return Vt(t2._writableStreamController);
+      })(this);
+    }
+    get ready() {
+      return Ft(this) ? this._readyPromise : d(er("ready"));
+    }
+    abort(e2 = void 0) {
+      return Ft(this) ? void 0 === this._ownerWritableStream ? d(tr("abort")) : (function(e3, t2) {
+        return Wt(e3._ownerWritableStream, t2);
+      })(this, e2) : d(er("abort"));
+    }
+    close() {
+      if (!Ft(this)) return d(er("close"));
+      const e2 = this._ownerWritableStream;
+      return void 0 === e2 ? d(tr("close")) : At(e2) ? d(new TypeError("Cannot close an already-closing stream")) : Lt(this);
+    }
+    releaseLock() {
+      if (!Ft(this)) throw er("releaseLock");
+      void 0 !== this._ownerWritableStream && Mt(this);
+    }
+    write(e2 = void 0) {
+      return Ft(this) ? void 0 === this._ownerWritableStream ? d(tr("write to")) : Yt(this, e2) : d(er("write"));
+    }
+  };
+  function Ft(e2) {
+    return !!t(e2) && (!!Object.prototype.hasOwnProperty.call(e2, "_ownerWritableStream") && e2 instanceof WritableStreamDefaultWriter);
+  }
+  __name(Ft, "Ft");
+  function Lt(e2) {
+    return Ot(e2._ownerWritableStream);
+  }
+  __name(Lt, "Lt");
+  function It(e2, t2) {
+    "pending" === e2._closedPromiseState ? nr(e2, t2) : (function(e3, t3) {
+      or(e3, t3);
+    })(e2, t2);
+  }
+  __name(It, "It");
+  function $t(e2, t2) {
+    "pending" === e2._readyPromiseState ? ur(e2, t2) : (function(e3, t3) {
+      sr(e3, t3);
+    })(e2, t2);
+  }
+  __name($t, "$t");
+  function Mt(e2) {
+    const t2 = e2._ownerWritableStream, r2 = new TypeError("Writer was released and can no longer be used to monitor the stream's closedness");
+    $t(e2, r2), It(e2, r2), t2._writer = void 0, e2._ownerWritableStream = void 0;
+  }
+  __name(Mt, "Mt");
+  function Yt(e2, t2) {
+    const r2 = e2._ownerWritableStream, o2 = r2._writableStreamController, n2 = (function(e3, t3) {
+      if (void 0 === e3._strategySizeAlgorithm) return 1;
+      try {
+        return e3._strategySizeAlgorithm(t3);
+      } catch (t4) {
+        return Gt(e3, t4), 1;
+      }
+    })(o2, t2);
+    if (r2 !== e2._ownerWritableStream) return d(tr("write to"));
+    const i2 = r2._state;
+    if ("errored" === i2) return d(r2._storedError);
+    if (At(r2) || "closed" === i2) return d(new TypeError("The stream is closing or closed and cannot be written to"));
+    if ("erroring" === i2) return d(r2._storedError);
+    const a2 = (function(e3) {
+      return u((t3, r3) => {
+        const o3 = { _resolve: t3, _reject: r3 };
+        e3._writeRequests.push(o3);
+      });
+    })(r2);
+    return (function(e3, t3, r3) {
+      try {
+        Ce(e3, t3, r3);
+      } catch (t4) {
+        return void Gt(e3, t4);
+      }
+      const o3 = e3._controlledWritableStream;
+      if (!At(o3) && "writable" === o3._state) {
+        Dt(o3, Xt(e3));
+      }
+      Ut(e3);
+    })(o2, t2, n2), a2;
+  }
+  __name(Yt, "Yt");
+  Object.defineProperties(WritableStreamDefaultWriter.prototype, { abort: { enumerable: true }, close: { enumerable: true }, releaseLock: { enumerable: true }, write: { enumerable: true }, closed: { enumerable: true }, desiredSize: { enumerable: true }, ready: { enumerable: true } }), o(WritableStreamDefaultWriter.prototype.abort, "abort"), o(WritableStreamDefaultWriter.prototype.close, "close"), o(WritableStreamDefaultWriter.prototype.releaseLock, "releaseLock"), o(WritableStreamDefaultWriter.prototype.write, "write"), "symbol" == typeof Symbol.toStringTag && Object.defineProperty(WritableStreamDefaultWriter.prototype, Symbol.toStringTag, { value: "WritableStreamDefaultWriter", configurable: true });
+  var xt = {};
+  var WritableStreamDefaultController = class {
+    static {
+      __name(this, "WritableStreamDefaultController");
+    }
+    constructor() {
+      throw new TypeError("Illegal constructor");
+    }
+    get abortReason() {
+      if (!Qt(this)) throw Zt("abortReason");
+      return this._abortReason;
+    }
+    get signal() {
+      if (!Qt(this)) throw Zt("signal");
+      if (void 0 === this._abortController) throw new TypeError("WritableStreamDefaultController.prototype.signal is not supported");
+      return this._abortController.signal;
+    }
+    error(e2 = void 0) {
+      if (!Qt(this)) throw Zt("error");
+      "writable" === this._controlledWritableStream._state && Jt(this, e2);
+    }
+    [w](e2) {
+      const t2 = this._abortAlgorithm(e2);
+      return Ht(this), t2;
+    }
+    [R]() {
+      qe(this);
+    }
+  };
+  function Qt(e2) {
+    return !!t(e2) && (!!Object.prototype.hasOwnProperty.call(e2, "_controlledWritableStream") && e2 instanceof WritableStreamDefaultController);
+  }
+  __name(Qt, "Qt");
+  function Nt(e2, t2, r2, o2, n2, i2, a2, s2) {
+    t2._controlledWritableStream = e2, e2._writableStreamController = t2, t2._queue = void 0, t2._queueTotalSize = void 0, qe(t2), t2._abortReason = void 0, t2._abortController = (function() {
+      if ("function" == typeof AbortController) return new AbortController();
+    })(), t2._started = false, t2._strategySizeAlgorithm = s2, t2._strategyHWM = a2, t2._writeAlgorithm = o2, t2._closeAlgorithm = n2, t2._abortAlgorithm = i2;
+    const l2 = Xt(t2);
+    Dt(e2, l2);
+    h(c(r2()), () => (t2._started = true, Ut(t2), null), (r3) => (t2._started = true, Bt(e2, r3), null));
+  }
+  __name(Nt, "Nt");
+  function Ht(e2) {
+    e2._writeAlgorithm = void 0, e2._closeAlgorithm = void 0, e2._abortAlgorithm = void 0, e2._strategySizeAlgorithm = void 0;
+  }
+  __name(Ht, "Ht");
+  function Vt(e2) {
+    return e2._strategyHWM - e2._queueTotalSize;
+  }
+  __name(Vt, "Vt");
+  function Ut(e2) {
+    const t2 = e2._controlledWritableStream;
+    if (!e2._started) return;
+    if (void 0 !== t2._inFlightWriteRequest) return;
+    if ("erroring" === t2._state) return void kt(t2);
+    if (0 === e2._queue.length) return;
+    const r2 = e2._queue.peek().value;
+    r2 === xt ? (function(e3) {
+      const t3 = e3._controlledWritableStream;
+      (function(e4) {
+        e4._inFlightCloseRequest = e4._closeRequest, e4._closeRequest = void 0;
+      })(t3), Pe(e3);
+      const r3 = e3._closeAlgorithm();
+      Ht(e3), h(r3, () => ((function(e4) {
+        e4._inFlightCloseRequest._resolve(void 0), e4._inFlightCloseRequest = void 0, "erroring" === e4._state && (e4._storedError = void 0, void 0 !== e4._pendingAbortRequest && (e4._pendingAbortRequest._resolve(), e4._pendingAbortRequest = void 0)), e4._state = "closed";
+        const t4 = e4._writer;
+        void 0 !== t4 && ir(t4);
+      })(t3), null), (e4) => ((function(e5, t4) {
+        e5._inFlightCloseRequest._reject(t4), e5._inFlightCloseRequest = void 0, void 0 !== e5._pendingAbortRequest && (e5._pendingAbortRequest._reject(t4), e5._pendingAbortRequest = void 0), Bt(e5, t4);
+      })(t3, e4), null));
+    })(e2) : (function(e3, t3) {
+      const r3 = e3._controlledWritableStream;
+      !(function(e4) {
+        e4._inFlightWriteRequest = e4._writeRequests.shift();
+      })(r3);
+      const o2 = e3._writeAlgorithm(t3);
+      h(o2, () => {
+        !(function(e4) {
+          e4._inFlightWriteRequest._resolve(void 0), e4._inFlightWriteRequest = void 0;
+        })(r3);
+        const t4 = r3._state;
+        if (Pe(e3), !At(r3) && "writable" === t4) {
+          const t5 = Xt(e3);
+          Dt(r3, t5);
+        }
+        return Ut(e3), null;
+      }, (t4) => ("writable" === r3._state && Ht(e3), (function(e4, t5) {
+        e4._inFlightWriteRequest._reject(t5), e4._inFlightWriteRequest = void 0, Bt(e4, t5);
+      })(r3, t4), null));
+    })(e2, r2);
+  }
+  __name(Ut, "Ut");
+  function Gt(e2, t2) {
+    "writable" === e2._controlledWritableStream._state && Jt(e2, t2);
+  }
+  __name(Gt, "Gt");
+  function Xt(e2) {
+    return Vt(e2) <= 0;
+  }
+  __name(Xt, "Xt");
+  function Jt(e2, t2) {
+    const r2 = e2._controlledWritableStream;
+    Ht(e2), jt(r2, t2);
+  }
+  __name(Jt, "Jt");
+  function Kt(e2) {
+    return new TypeError(`WritableStream.prototype.${e2} can only be used on a WritableStream`);
+  }
+  __name(Kt, "Kt");
+  function Zt(e2) {
+    return new TypeError(`WritableStreamDefaultController.prototype.${e2} can only be used on a WritableStreamDefaultController`);
+  }
+  __name(Zt, "Zt");
+  function er(e2) {
+    return new TypeError(`WritableStreamDefaultWriter.prototype.${e2} can only be used on a WritableStreamDefaultWriter`);
+  }
+  __name(er, "er");
+  function tr(e2) {
+    return new TypeError("Cannot " + e2 + " a stream using a released writer");
+  }
+  __name(tr, "tr");
+  function rr(e2) {
+    e2._closedPromise = u((t2, r2) => {
+      e2._closedPromise_resolve = t2, e2._closedPromise_reject = r2, e2._closedPromiseState = "pending";
+    });
+  }
+  __name(rr, "rr");
+  function or(e2, t2) {
+    rr(e2), nr(e2, t2);
+  }
+  __name(or, "or");
+  function nr(e2, t2) {
+    void 0 !== e2._closedPromise_reject && (p(e2._closedPromise), e2._closedPromise_reject(t2), e2._closedPromise_resolve = void 0, e2._closedPromise_reject = void 0, e2._closedPromiseState = "rejected");
+  }
+  __name(nr, "nr");
+  function ir(e2) {
+    void 0 !== e2._closedPromise_resolve && (e2._closedPromise_resolve(void 0), e2._closedPromise_resolve = void 0, e2._closedPromise_reject = void 0, e2._closedPromiseState = "resolved");
+  }
+  __name(ir, "ir");
+  function ar(e2) {
+    e2._readyPromise = u((t2, r2) => {
+      e2._readyPromise_resolve = t2, e2._readyPromise_reject = r2;
+    }), e2._readyPromiseState = "pending";
+  }
+  __name(ar, "ar");
+  function sr(e2, t2) {
+    ar(e2), ur(e2, t2);
+  }
+  __name(sr, "sr");
+  function lr(e2) {
+    ar(e2), cr(e2);
+  }
+  __name(lr, "lr");
+  function ur(e2, t2) {
+    void 0 !== e2._readyPromise_reject && (p(e2._readyPromise), e2._readyPromise_reject(t2), e2._readyPromise_resolve = void 0, e2._readyPromise_reject = void 0, e2._readyPromiseState = "rejected");
+  }
+  __name(ur, "ur");
+  function cr(e2) {
+    void 0 !== e2._readyPromise_resolve && (e2._readyPromise_resolve(void 0), e2._readyPromise_resolve = void 0, e2._readyPromise_reject = void 0, e2._readyPromiseState = "fulfilled");
+  }
+  __name(cr, "cr");
+  Object.defineProperties(WritableStreamDefaultController.prototype, { abortReason: { enumerable: true }, signal: { enumerable: true }, error: { enumerable: true } }), "symbol" == typeof Symbol.toStringTag && Object.defineProperty(WritableStreamDefaultController.prototype, Symbol.toStringTag, { value: "WritableStreamDefaultController", configurable: true });
+  var dr = "undefined" != typeof globalThis ? globalThis : "undefined" != typeof self ? self : "undefined" != typeof global ? global : void 0;
+  var fr = (function() {
+    const e2 = null == dr ? void 0 : dr.DOMException;
+    return (function(e3) {
+      if ("function" != typeof e3 && "object" != typeof e3) return false;
+      if ("DOMException" !== e3.name) return false;
+      try {
+        return new e3(), true;
+      } catch (e4) {
+        return false;
+      }
+    })(e2) ? e2 : void 0;
+  })() || (function() {
+    const e2 = /* @__PURE__ */ __name(function(e3, t2) {
+      this.message = e3 || "", this.name = t2 || "Error", Error.captureStackTrace && Error.captureStackTrace(this, this.constructor);
+    }, "e");
+    return o(e2, "DOMException"), e2.prototype = Object.create(Error.prototype), Object.defineProperty(e2.prototype, "constructor", { value: e2, writable: true, configurable: true }), e2;
+  })();
+  function hr(e2, t2, r2, o2, n2, i2) {
+    const a2 = V(e2), s2 = Pt(t2);
+    e2._disturbed = true;
+    const l2 = new br(s2), _2 = new mr(l2);
+    return u((m2, y2) => {
+      let S2;
+      if (void 0 !== i2) {
+        if (S2 = /* @__PURE__ */ __name(() => {
+          const r3 = void 0 !== i2.reason ? i2.reason : new fr("Aborted", "AbortError"), a3 = [];
+          o2 || a3.push(() => "writable" === t2._state ? Wt(t2, r3) : c(void 0)), n2 || a3.push(() => "readable" === e2._state ? Mr(e2, r3) : c(void 0)), T2(() => Promise.all(a3.map((e3) => e3())), true, r3);
+        }, "S"), i2.aborted) return void S2();
+        i2.addEventListener("abort", S2);
+      }
+      function g2() {
+        for (; !l2._shuttingDown && !t2._backpressure && "writable" === t2._state && !At(t2) && "readable" === e2._state && re(a2); ) te(a2, _2);
+        if (l2._shuttingDown) return c(true);
+        if (t2._backpressure) return f(s2._readyPromise, g2);
+        const r3 = new _r(l2);
+        return te(a2, r3), r3._promise;
+      }
+      __name(g2, "g");
+      var v2, w2, R2;
+      if (pr(e2, a2._closedPromise, (e3) => (o2 ? P2(true, e3) : T2(() => Wt(t2, e3), true, e3), null)), pr(t2, s2._closedPromise, (t3) => (n2 ? P2(true, t3) : T2(() => Mr(e2, t3), true, t3), null)), v2 = e2, w2 = a2._closedPromise, R2 = /* @__PURE__ */ __name(() => (r2 ? P2() : T2(() => (function(e3) {
+        const t3 = e3._ownerWritableStream, r3 = t3._state;
+        return At(t3) || "closed" === r3 ? c(void 0) : "errored" === r3 ? d(t3._storedError) : Lt(e3);
+      })(s2)), null), "R"), "closed" === v2._state ? R2() : b(w2, R2), At(t2) || "closed" === t2._state) {
+        const t3 = new TypeError("the destination writable stream closed before all data could be piped to it");
+        n2 ? P2(true, t3) : T2(() => Mr(e2, t3), true, t3);
+      }
+      function T2(e3, r3, o3) {
+        function n3() {
+          return h(e3(), () => C2(r3, o3), (e4) => C2(true, e4)), null;
+        }
+        __name(n3, "n");
+        l2._shuttingDown || (l2._shuttingDown = true, "writable" !== t2._state || At(t2) ? n3() : b(l2._waitForWritesToFinish(), n3));
+      }
+      __name(T2, "T");
+      function P2(e3, r3) {
+        l2._shuttingDown || (l2._shuttingDown = true, "writable" !== t2._state || At(t2) ? C2(e3, r3) : b(l2._waitForWritesToFinish(), () => C2(e3, r3)));
+      }
+      __name(P2, "P");
+      function C2(e3, t3) {
+        return Mt(s2), O(a2), void 0 !== i2 && i2.removeEventListener("abort", S2), e3 ? y2(t3) : m2(void 0), null;
+      }
+      __name(C2, "C");
+      p(u((e3, t3) => {
+        !(/* @__PURE__ */ __name(function r3(o3) {
+          o3 ? e3() : f(g2(), r3, t3);
+        }, "r"))(false);
+      }));
+    });
+  }
+  __name(hr, "hr");
+  var br = class {
+    static {
+      __name(this, "br");
+    }
+    constructor(e2) {
+      this._writer = e2, this._shuttingDown = false, this._currentWrite = c(void 0);
+    }
+    _waitForWritesToFinish() {
+      const e2 = this._currentWrite;
+      return f(this._currentWrite, () => e2 !== this._currentWrite ? this._waitForWritesToFinish() : void 0);
+    }
+  };
+  var _r = class {
+    static {
+      __name(this, "_r");
+    }
+    constructor(e2) {
+      this._state = e2, this._promise = u((e3, t2) => {
+        this._resolvePromise = e3, this._rejectPromise = t2;
+      });
+    }
+    _chunkSteps(t2) {
+      this._state._currentWrite = f(Yt(this._state._writer, t2), void 0, e), this._resolvePromise(false);
+    }
+    _closeSteps() {
+      this._resolvePromise(true);
+    }
+    _errorSteps(e2) {
+      this._rejectPromise(e2);
+    }
+  };
+  var mr = class {
+    static {
+      __name(this, "mr");
+    }
+    constructor(e2) {
+      this._state = e2;
+    }
+    _chunkSteps(t2) {
+      this._state._currentWrite = f(Yt(this._state._writer, t2), void 0, e);
+    }
+    _closeSteps() {
+    }
+    _errorSteps(e2) {
+    }
+  };
+  function pr(e2, t2, r2) {
+    "errored" === e2._state ? r2(e2._storedError) : _(t2, r2);
+  }
+  __name(pr, "pr");
+  var ReadableStreamDefaultController = class {
+    static {
+      __name(this, "ReadableStreamDefaultController");
+    }
+    constructor() {
+      throw new TypeError("Illegal constructor");
+    }
+    get desiredSize() {
+      if (!yr(this)) throw Er("desiredSize");
+      return Pr(this);
+    }
+    close() {
+      if (!yr(this)) throw Er("close");
+      if (!Cr(this)) throw new TypeError("The stream is not in a state that permits close");
+      wr(this);
+    }
+    enqueue(e2 = void 0) {
+      if (!yr(this)) throw Er("enqueue");
+      if (!Cr(this)) throw new TypeError("The stream is not in a state that permits enqueue");
+      return Rr(this, e2);
+    }
+    error(e2 = void 0) {
+      if (!yr(this)) throw Er("error");
+      Tr(this, e2);
+    }
+    [T](e2) {
+      qe(this);
+      const t2 = this._cancelAlgorithm(e2);
+      return vr(this), t2;
+    }
+    [P](e2) {
+      const t2 = this._controlledReadableStream;
+      if (this._queue.length > 0) {
+        const r2 = Pe(this);
+        this._closeRequested && 0 === this._queue.length ? (vr(this), Yr(t2)) : Sr(this), e2._chunkSteps(r2);
+      } else U(t2, e2), Sr(this);
+    }
+    [C]() {
+      return this._queue.length > 0;
+    }
+    [q]() {
+    }
+  };
+  function yr(e2) {
+    return !!t(e2) && (!!Object.prototype.hasOwnProperty.call(e2, "_controlledReadableStream") && e2 instanceof ReadableStreamDefaultController);
+  }
+  __name(yr, "yr");
+  function Sr(e2) {
+    if (!gr(e2)) return;
+    if (e2._pulling) return void (e2._pullAgain = true);
+    e2._pulling = true;
+    h(e2._pullAlgorithm(), () => (e2._pulling = false, e2._pullAgain && (e2._pullAgain = false, Sr(e2)), null), (t2) => (Tr(e2, t2), null));
+  }
+  __name(Sr, "Sr");
+  function gr(e2) {
+    const t2 = e2._controlledReadableStream;
+    if (!Cr(e2)) return false;
+    if (!e2._started) return false;
+    if ($r(t2) && X(t2) > 0) return true;
+    return Pr(e2) > 0;
+  }
+  __name(gr, "gr");
+  function vr(e2) {
+    e2._pullAlgorithm = void 0, e2._cancelAlgorithm = void 0, e2._strategySizeAlgorithm = void 0;
+  }
+  __name(vr, "vr");
+  function wr(e2) {
+    if (!Cr(e2)) return;
+    const t2 = e2._controlledReadableStream;
+    e2._closeRequested = true, 0 === e2._queue.length && (vr(e2), Yr(t2));
+  }
+  __name(wr, "wr");
+  function Rr(e2, t2) {
+    if (!Cr(e2)) return;
+    const r2 = e2._controlledReadableStream;
+    if ($r(r2) && X(r2) > 0) G(r2, t2, false);
+    else {
+      let r3;
+      try {
+        r3 = e2._strategySizeAlgorithm(t2);
+      } catch (t3) {
+        throw Tr(e2, t3), t3;
+      }
+      try {
+        Ce(e2, t2, r3);
+      } catch (t3) {
+        throw Tr(e2, t3), t3;
+      }
+    }
+    Sr(e2);
+  }
+  __name(Rr, "Rr");
+  function Tr(e2, t2) {
+    const r2 = e2._controlledReadableStream;
+    "readable" === r2._state && (qe(e2), vr(e2), xr(r2, t2));
+  }
+  __name(Tr, "Tr");
+  function Pr(e2) {
+    const t2 = e2._controlledReadableStream._state;
+    return "errored" === t2 ? null : "closed" === t2 ? 0 : e2._strategyHWM - e2._queueTotalSize;
+  }
+  __name(Pr, "Pr");
+  function Cr(e2) {
+    const t2 = e2._controlledReadableStream._state;
+    return !e2._closeRequested && "readable" === t2;
+  }
+  __name(Cr, "Cr");
+  function qr(e2, t2, r2, o2, n2, i2, a2) {
+    t2._controlledReadableStream = e2, t2._queue = void 0, t2._queueTotalSize = void 0, qe(t2), t2._started = false, t2._closeRequested = false, t2._pullAgain = false, t2._pulling = false, t2._strategySizeAlgorithm = a2, t2._strategyHWM = i2, t2._pullAlgorithm = o2, t2._cancelAlgorithm = n2, e2._readableStreamController = t2;
+    h(c(r2()), () => (t2._started = true, Sr(t2), null), (e3) => (Tr(t2, e3), null));
+  }
+  __name(qr, "qr");
+  function Er(e2) {
+    return new TypeError(`ReadableStreamDefaultController.prototype.${e2} can only be used on a ReadableStreamDefaultController`);
+  }
+  __name(Er, "Er");
+  function Wr(e2, t2) {
+    return Oe(e2._readableStreamController) ? (function(e3) {
+      let t3, r2, o2, n2, i2, a2 = V(e3), s2 = false, l2 = false, d2 = false, f2 = false, h2 = false;
+      const b2 = u((e4) => {
+        i2 = e4;
+      });
+      function m2(e4) {
+        _(e4._closedPromise, (t4) => (e4 !== a2 || (Xe(o2._readableStreamController, t4), Xe(n2._readableStreamController, t4), f2 && h2 || i2(void 0)), null));
+      }
+      __name(m2, "m");
+      function p2() {
+        ft(a2) && (O(a2), a2 = V(e3), m2(a2));
+        te(a2, { _chunkSteps: /* @__PURE__ */ __name((t4) => {
+          y(() => {
+            l2 = false, d2 = false;
+            const r3 = t4;
+            let a3 = t4;
+            if (!f2 && !h2) try {
+              a3 = Te(t4);
+            } catch (t5) {
+              return Xe(o2._readableStreamController, t5), Xe(n2._readableStreamController, t5), void i2(Mr(e3, t5));
+            }
+            f2 || Ge(o2._readableStreamController, r3), h2 || Ge(n2._readableStreamController, a3), s2 = false, l2 ? g2() : d2 && v2();
+          });
+        }, "_chunkSteps"), _closeSteps: /* @__PURE__ */ __name(() => {
+          s2 = false, f2 || Ue(o2._readableStreamController), h2 || Ue(n2._readableStreamController), o2._readableStreamController._pendingPullIntos.length > 0 && et(o2._readableStreamController, 0), n2._readableStreamController._pendingPullIntos.length > 0 && et(n2._readableStreamController, 0), f2 && h2 || i2(void 0);
+        }, "_closeSteps"), _errorSteps: /* @__PURE__ */ __name(() => {
+          s2 = false;
+        }, "_errorSteps") });
+      }
+      __name(p2, "p");
+      function S2(t4, r3) {
+        ee(a2) && (O(a2), a2 = at(e3), m2(a2));
+        const u2 = r3 ? n2 : o2, c2 = r3 ? o2 : n2;
+        ht(a2, t4, 1, { _chunkSteps: /* @__PURE__ */ __name((t5) => {
+          y(() => {
+            l2 = false, d2 = false;
+            const o3 = r3 ? h2 : f2;
+            if (r3 ? f2 : h2) o3 || tt(u2._readableStreamController, t5);
+            else {
+              let r4;
+              try {
+                r4 = Te(t5);
+              } catch (t6) {
+                return Xe(u2._readableStreamController, t6), Xe(c2._readableStreamController, t6), void i2(Mr(e3, t6));
+              }
+              o3 || tt(u2._readableStreamController, t5), Ge(c2._readableStreamController, r4);
+            }
+            s2 = false, l2 ? g2() : d2 && v2();
+          });
+        }, "_chunkSteps"), _closeSteps: /* @__PURE__ */ __name((e4) => {
+          s2 = false;
+          const t5 = r3 ? h2 : f2, o3 = r3 ? f2 : h2;
+          t5 || Ue(u2._readableStreamController), o3 || Ue(c2._readableStreamController), void 0 !== e4 && (t5 || tt(u2._readableStreamController, e4), !o3 && c2._readableStreamController._pendingPullIntos.length > 0 && et(c2._readableStreamController, 0)), t5 && o3 || i2(void 0);
+        }, "_closeSteps"), _errorSteps: /* @__PURE__ */ __name(() => {
+          s2 = false;
+        }, "_errorSteps") });
+      }
+      __name(S2, "S");
+      function g2() {
+        if (s2) return l2 = true, c(void 0);
+        s2 = true;
+        const e4 = Ke(o2._readableStreamController);
+        return null === e4 ? p2() : S2(e4._view, false), c(void 0);
+      }
+      __name(g2, "g");
+      function v2() {
+        if (s2) return d2 = true, c(void 0);
+        s2 = true;
+        const e4 = Ke(n2._readableStreamController);
+        return null === e4 ? p2() : S2(e4._view, true), c(void 0);
+      }
+      __name(v2, "v");
+      function w2(o3) {
+        if (f2 = true, t3 = o3, h2) {
+          const o4 = le([t3, r2]), n3 = Mr(e3, o4);
+          i2(n3);
+        }
+        return b2;
+      }
+      __name(w2, "w");
+      function R2(o3) {
+        if (h2 = true, r2 = o3, f2) {
+          const o4 = le([t3, r2]), n3 = Mr(e3, o4);
+          i2(n3);
+        }
+        return b2;
+      }
+      __name(R2, "R");
+      function T2() {
+      }
+      __name(T2, "T");
+      return o2 = Fr(T2, g2, w2), n2 = Fr(T2, v2, R2), m2(a2), [o2, n2];
+    })(e2) : (function(e3) {
+      const t3 = V(e3);
+      let r2, o2, n2, i2, a2, s2 = false, l2 = false, d2 = false, f2 = false;
+      const h2 = u((e4) => {
+        a2 = e4;
+      });
+      function b2() {
+        if (s2) return l2 = true, c(void 0);
+        s2 = true;
+        return te(t3, { _chunkSteps: /* @__PURE__ */ __name((e4) => {
+          y(() => {
+            l2 = false;
+            const t4 = e4, r3 = e4;
+            d2 || Rr(n2._readableStreamController, t4), f2 || Rr(i2._readableStreamController, r3), s2 = false, l2 && b2();
+          });
+        }, "_chunkSteps"), _closeSteps: /* @__PURE__ */ __name(() => {
+          s2 = false, d2 || wr(n2._readableStreamController), f2 || wr(i2._readableStreamController), d2 && f2 || a2(void 0);
+        }, "_closeSteps"), _errorSteps: /* @__PURE__ */ __name(() => {
+          s2 = false;
+        }, "_errorSteps") }), c(void 0);
+      }
+      __name(b2, "b");
+      function m2(t4) {
+        if (d2 = true, r2 = t4, f2) {
+          const t5 = le([r2, o2]), n3 = Mr(e3, t5);
+          a2(n3);
+        }
+        return h2;
+      }
+      __name(m2, "m");
+      function p2(t4) {
+        if (f2 = true, o2 = t4, d2) {
+          const t5 = le([r2, o2]), n3 = Mr(e3, t5);
+          a2(n3);
+        }
+        return h2;
+      }
+      __name(p2, "p");
+      function S2() {
+      }
+      __name(S2, "S");
+      return n2 = Dr(S2, b2, m2), i2 = Dr(S2, b2, p2), _(t3._closedPromise, (e4) => (Tr(n2._readableStreamController, e4), Tr(i2._readableStreamController, e4), d2 && f2 || a2(void 0), null)), [n2, i2];
+    })(e2);
+  }
+  __name(Wr, "Wr");
+  function Or(r2) {
+    return t(o2 = r2) && void 0 !== o2.getReader ? (function(r3) {
+      let o3;
+      function n2() {
+        let e2;
+        try {
+          e2 = r3.read();
+        } catch (e3) {
+          return d(e3);
+        }
+        return m(e2, (e3) => {
+          if (!t(e3)) throw new TypeError("The promise returned by the reader.read() method must fulfill with an object");
+          if (e3.done) wr(o3._readableStreamController);
+          else {
+            const t2 = e3.value;
+            Rr(o3._readableStreamController, t2);
+          }
+        });
+      }
+      __name(n2, "n");
+      function i2(e2) {
+        try {
+          return c(r3.cancel(e2));
+        } catch (e3) {
+          return d(e3);
+        }
+      }
+      __name(i2, "i");
+      return o3 = Dr(e, n2, i2, 0), o3;
+    })(r2.getReader()) : (function(r3) {
+      let o3;
+      const n2 = me(r3, "async");
+      function i2() {
+        let e2;
+        try {
+          e2 = pe(n2);
+        } catch (e3) {
+          return d(e3);
+        }
+        return m(c(e2), (e3) => {
+          if (!t(e3)) throw new TypeError("The promise returned by the iterator.next() method must fulfill with an object");
+          if (e3.done) wr(o3._readableStreamController);
+          else {
+            const t2 = e3.value;
+            Rr(o3._readableStreamController, t2);
+          }
+        });
+      }
+      __name(i2, "i");
+      function a2(e2) {
+        const r4 = n2.iterator;
+        let o4;
+        try {
+          o4 = he(r4, "return");
+        } catch (e3) {
+          return d(e3);
+        }
+        if (void 0 === o4) return c(void 0);
+        return m(g(o4, r4, [e2]), (e3) => {
+          if (!t(e3)) throw new TypeError("The promise returned by the iterator.return() method must fulfill with an object");
+        });
+      }
+      __name(a2, "a");
+      return o3 = Dr(e, i2, a2, 0), o3;
+    })(r2);
+    var o2;
+  }
+  __name(Or, "Or");
+  function Br(e2, t2, r2) {
+    return I(e2, r2), (r3) => g(e2, t2, [r3]);
+  }
+  __name(Br, "Br");
+  function jr(e2, t2, r2) {
+    return I(e2, r2), (r3) => g(e2, t2, [r3]);
+  }
+  __name(jr, "jr");
+  function kr(e2, t2, r2) {
+    return I(e2, r2), (r3) => S(e2, t2, [r3]);
+  }
+  __name(kr, "kr");
+  function Ar(e2, t2) {
+    if ("bytes" !== (e2 = `${e2}`)) throw new TypeError(`${t2} '${e2}' is not a valid enumeration value for ReadableStreamType`);
+    return e2;
+  }
+  __name(Ar, "Ar");
+  function zr(e2, t2) {
+    L(e2, t2);
+    const r2 = null == e2 ? void 0 : e2.preventAbort, o2 = null == e2 ? void 0 : e2.preventCancel, n2 = null == e2 ? void 0 : e2.preventClose, i2 = null == e2 ? void 0 : e2.signal;
+    return void 0 !== i2 && (function(e3, t3) {
+      if (!(function(e4) {
+        if ("object" != typeof e4 || null === e4) return false;
+        try {
+          return "boolean" == typeof e4.aborted;
+        } catch (e5) {
+          return false;
+        }
+      })(e3)) throw new TypeError(`${t3} is not an AbortSignal.`);
+    })(i2, `${t2} has member 'signal' that`), { preventAbort: Boolean(r2), preventCancel: Boolean(o2), preventClose: Boolean(n2), signal: i2 };
+  }
+  __name(zr, "zr");
+  Object.defineProperties(ReadableStreamDefaultController.prototype, { close: { enumerable: true }, enqueue: { enumerable: true }, error: { enumerable: true }, desiredSize: { enumerable: true } }), o(ReadableStreamDefaultController.prototype.close, "close"), o(ReadableStreamDefaultController.prototype.enqueue, "enqueue"), o(ReadableStreamDefaultController.prototype.error, "error"), "symbol" == typeof Symbol.toStringTag && Object.defineProperty(ReadableStreamDefaultController.prototype, Symbol.toStringTag, { value: "ReadableStreamDefaultController", configurable: true });
+  var ReadableStream = class {
+    static {
+      __name(this, "ReadableStream");
+    }
+    constructor(e2 = {}, t2 = {}) {
+      void 0 === e2 ? e2 = null : $(e2, "First parameter");
+      const r2 = yt(t2, "Second parameter"), o2 = (function(e3, t3) {
+        L(e3, t3);
+        const r3 = e3, o3 = null == r3 ? void 0 : r3.autoAllocateChunkSize, n2 = null == r3 ? void 0 : r3.cancel, i2 = null == r3 ? void 0 : r3.pull, a2 = null == r3 ? void 0 : r3.start, s2 = null == r3 ? void 0 : r3.type;
+        return { autoAllocateChunkSize: void 0 === o3 ? void 0 : N(o3, `${t3} has member 'autoAllocateChunkSize' that`), cancel: void 0 === n2 ? void 0 : Br(n2, r3, `${t3} has member 'cancel' that`), pull: void 0 === i2 ? void 0 : jr(i2, r3, `${t3} has member 'pull' that`), start: void 0 === a2 ? void 0 : kr(a2, r3, `${t3} has member 'start' that`), type: void 0 === s2 ? void 0 : Ar(s2, `${t3} has member 'type' that`) };
+      })(e2, "First parameter");
+      if (Lr(this), "bytes" === o2.type) {
+        if (void 0 !== r2.size) throw new RangeError("The strategy for a byte stream cannot have a size function");
+        !(function(e3, t3, r3) {
+          const o3 = Object.create(ReadableByteStreamController.prototype);
+          let n2, i2, a2;
+          n2 = void 0 !== t3.start ? () => t3.start(o3) : () => {
+          }, i2 = void 0 !== t3.pull ? () => t3.pull(o3) : () => c(void 0), a2 = void 0 !== t3.cancel ? (e4) => t3.cancel(e4) : () => c(void 0);
+          const s2 = t3.autoAllocateChunkSize;
+          if (0 === s2) throw new TypeError("autoAllocateChunkSize must be greater than 0");
+          rt(e3, o3, n2, i2, a2, r3, s2);
+        })(this, o2, mt(r2, 0));
+      } else {
+        const e3 = pt(r2);
+        !(function(e4, t3, r3, o3) {
+          const n2 = Object.create(ReadableStreamDefaultController.prototype);
+          let i2, a2, s2;
+          i2 = void 0 !== t3.start ? () => t3.start(n2) : () => {
+          }, a2 = void 0 !== t3.pull ? () => t3.pull(n2) : () => c(void 0), s2 = void 0 !== t3.cancel ? (e5) => t3.cancel(e5) : () => c(void 0), qr(e4, n2, i2, a2, s2, r3, o3);
+        })(this, o2, mt(r2, 1), e3);
+      }
+    }
+    get locked() {
+      if (!Ir(this)) throw Qr("locked");
+      return $r(this);
+    }
+    cancel(e2 = void 0) {
+      return Ir(this) ? $r(this) ? d(new TypeError("Cannot cancel a stream that already has a reader")) : Mr(this, e2) : d(Qr("cancel"));
+    }
+    getReader(e2 = void 0) {
+      if (!Ir(this)) throw Qr("getReader");
+      return void 0 === (function(e3, t2) {
+        L(e3, t2);
+        const r2 = null == e3 ? void 0 : e3.mode;
+        return { mode: void 0 === r2 ? void 0 : it(r2, `${t2} has member 'mode' that`) };
+      })(e2, "First parameter").mode ? V(this) : at(this);
+    }
+    pipeThrough(e2, t2 = {}) {
+      if (!Ir(this)) throw Qr("pipeThrough");
+      M(e2, 1, "pipeThrough");
+      const r2 = (function(e3, t3) {
+        L(e3, t3);
+        const r3 = null == e3 ? void 0 : e3.readable;
+        Y(r3, "readable", "ReadableWritablePair"), H(r3, `${t3} has member 'readable' that`);
+        const o3 = null == e3 ? void 0 : e3.writable;
+        return Y(o3, "writable", "ReadableWritablePair"), Tt(o3, `${t3} has member 'writable' that`), { readable: r3, writable: o3 };
+      })(e2, "First parameter"), o2 = zr(t2, "Second parameter");
+      if ($r(this)) throw new TypeError("ReadableStream.prototype.pipeThrough cannot be used on a locked ReadableStream");
+      if (Et(r2.writable)) throw new TypeError("ReadableStream.prototype.pipeThrough cannot be used on a locked WritableStream");
+      return p(hr(this, r2.writable, o2.preventClose, o2.preventAbort, o2.preventCancel, o2.signal)), r2.readable;
+    }
+    pipeTo(e2, t2 = {}) {
+      if (!Ir(this)) return d(Qr("pipeTo"));
+      if (void 0 === e2) return d("Parameter 1 is required in 'pipeTo'.");
+      if (!qt(e2)) return d(new TypeError("ReadableStream.prototype.pipeTo's first argument must be a WritableStream"));
+      let r2;
+      try {
+        r2 = zr(t2, "Second parameter");
+      } catch (e3) {
+        return d(e3);
+      }
+      return $r(this) ? d(new TypeError("ReadableStream.prototype.pipeTo cannot be used on a locked ReadableStream")) : Et(e2) ? d(new TypeError("ReadableStream.prototype.pipeTo cannot be used on a locked WritableStream")) : hr(this, e2, r2.preventClose, r2.preventAbort, r2.preventCancel, r2.signal);
+    }
+    tee() {
+      if (!Ir(this)) throw Qr("tee");
+      return le(Wr(this));
+    }
+    values(e2 = void 0) {
+      if (!Ir(this)) throw Qr("values");
+      return (function(e3, t2) {
+        const r2 = V(e3), o2 = new ye(r2, t2), n2 = Object.create(ge);
+        return n2._asyncIteratorImpl = o2, n2;
+      })(this, (function(e3, t2) {
+        L(e3, t2);
+        const r2 = null == e3 ? void 0 : e3.preventCancel;
+        return { preventCancel: Boolean(r2) };
+      })(e2, "First parameter").preventCancel);
+    }
+    [_e](e2) {
+      return this.values(e2);
+    }
+    static from(e2) {
+      return Or(e2);
+    }
+  };
+  function Dr(e2, t2, r2, o2 = 1, n2 = () => 1) {
+    const i2 = Object.create(ReadableStream.prototype);
+    Lr(i2);
+    return qr(i2, Object.create(ReadableStreamDefaultController.prototype), e2, t2, r2, o2, n2), i2;
+  }
+  __name(Dr, "Dr");
+  function Fr(e2, t2, r2) {
+    const o2 = Object.create(ReadableStream.prototype);
+    Lr(o2);
+    return rt(o2, Object.create(ReadableByteStreamController.prototype), e2, t2, r2, 0, void 0), o2;
+  }
+  __name(Fr, "Fr");
+  function Lr(e2) {
+    e2._state = "readable", e2._reader = void 0, e2._storedError = void 0, e2._disturbed = false;
+  }
+  __name(Lr, "Lr");
+  function Ir(e2) {
+    return !!t(e2) && (!!Object.prototype.hasOwnProperty.call(e2, "_readableStreamController") && e2 instanceof ReadableStream);
+  }
+  __name(Ir, "Ir");
+  function $r(e2) {
+    return void 0 !== e2._reader;
+  }
+  __name($r, "$r");
+  function Mr(t2, r2) {
+    if (t2._disturbed = true, "closed" === t2._state) return c(void 0);
+    if ("errored" === t2._state) return d(t2._storedError);
+    Yr(t2);
+    const o2 = t2._reader;
+    if (void 0 !== o2 && ft(o2)) {
+      const e2 = o2._readIntoRequests;
+      o2._readIntoRequests = new v(), e2.forEach((e3) => {
+        e3._closeSteps(void 0);
+      });
+    }
+    return m(t2._readableStreamController[T](r2), e);
+  }
+  __name(Mr, "Mr");
+  function Yr(e2) {
+    e2._state = "closed";
+    const t2 = e2._reader;
+    if (void 0 !== t2 && (z(t2), ee(t2))) {
+      const e3 = t2._readRequests;
+      t2._readRequests = new v(), e3.forEach((e4) => {
+        e4._closeSteps();
+      });
+    }
+  }
+  __name(Yr, "Yr");
+  function xr(e2, t2) {
+    e2._state = "errored", e2._storedError = t2;
+    const r2 = e2._reader;
+    void 0 !== r2 && (A(r2, t2), ee(r2) ? oe(r2, t2) : bt(r2, t2));
+  }
+  __name(xr, "xr");
+  function Qr(e2) {
+    return new TypeError(`ReadableStream.prototype.${e2} can only be used on a ReadableStream`);
+  }
+  __name(Qr, "Qr");
+  function Nr(e2, t2) {
+    L(e2, t2);
+    const r2 = null == e2 ? void 0 : e2.highWaterMark;
+    return Y(r2, "highWaterMark", "QueuingStrategyInit"), { highWaterMark: x(r2) };
+  }
+  __name(Nr, "Nr");
+  Object.defineProperties(ReadableStream, { from: { enumerable: true } }), Object.defineProperties(ReadableStream.prototype, { cancel: { enumerable: true }, getReader: { enumerable: true }, pipeThrough: { enumerable: true }, pipeTo: { enumerable: true }, tee: { enumerable: true }, values: { enumerable: true }, locked: { enumerable: true } }), o(ReadableStream.from, "from"), o(ReadableStream.prototype.cancel, "cancel"), o(ReadableStream.prototype.getReader, "getReader"), o(ReadableStream.prototype.pipeThrough, "pipeThrough"), o(ReadableStream.prototype.pipeTo, "pipeTo"), o(ReadableStream.prototype.tee, "tee"), o(ReadableStream.prototype.values, "values"), "symbol" == typeof Symbol.toStringTag && Object.defineProperty(ReadableStream.prototype, Symbol.toStringTag, { value: "ReadableStream", configurable: true }), Object.defineProperty(ReadableStream.prototype, _e, { value: ReadableStream.prototype.values, writable: true, configurable: true });
+  var Hr = /* @__PURE__ */ __name((e2) => e2.byteLength, "Hr");
+  o(Hr, "size");
+  var ByteLengthQueuingStrategy = class {
+    static {
+      __name(this, "ByteLengthQueuingStrategy");
+    }
+    constructor(e2) {
+      M(e2, 1, "ByteLengthQueuingStrategy"), e2 = Nr(e2, "First parameter"), this._byteLengthQueuingStrategyHighWaterMark = e2.highWaterMark;
+    }
+    get highWaterMark() {
+      if (!Ur(this)) throw Vr("highWaterMark");
+      return this._byteLengthQueuingStrategyHighWaterMark;
+    }
+    get size() {
+      if (!Ur(this)) throw Vr("size");
+      return Hr;
+    }
+  };
+  function Vr(e2) {
+    return new TypeError(`ByteLengthQueuingStrategy.prototype.${e2} can only be used on a ByteLengthQueuingStrategy`);
+  }
+  __name(Vr, "Vr");
+  function Ur(e2) {
+    return !!t(e2) && (!!Object.prototype.hasOwnProperty.call(e2, "_byteLengthQueuingStrategyHighWaterMark") && e2 instanceof ByteLengthQueuingStrategy);
+  }
+  __name(Ur, "Ur");
+  Object.defineProperties(ByteLengthQueuingStrategy.prototype, { highWaterMark: { enumerable: true }, size: { enumerable: true } }), "symbol" == typeof Symbol.toStringTag && Object.defineProperty(ByteLengthQueuingStrategy.prototype, Symbol.toStringTag, { value: "ByteLengthQueuingStrategy", configurable: true });
+  var Gr = /* @__PURE__ */ __name(() => 1, "Gr");
+  o(Gr, "size");
+  var CountQueuingStrategy = class {
+    static {
+      __name(this, "CountQueuingStrategy");
+    }
+    constructor(e2) {
+      M(e2, 1, "CountQueuingStrategy"), e2 = Nr(e2, "First parameter"), this._countQueuingStrategyHighWaterMark = e2.highWaterMark;
+    }
+    get highWaterMark() {
+      if (!Jr(this)) throw Xr("highWaterMark");
+      return this._countQueuingStrategyHighWaterMark;
+    }
+    get size() {
+      if (!Jr(this)) throw Xr("size");
+      return Gr;
+    }
+  };
+  function Xr(e2) {
+    return new TypeError(`CountQueuingStrategy.prototype.${e2} can only be used on a CountQueuingStrategy`);
+  }
+  __name(Xr, "Xr");
+  function Jr(e2) {
+    return !!t(e2) && (!!Object.prototype.hasOwnProperty.call(e2, "_countQueuingStrategyHighWaterMark") && e2 instanceof CountQueuingStrategy);
+  }
+  __name(Jr, "Jr");
+  function Kr(e2, t2, r2) {
+    return I(e2, r2), (r3) => g(e2, t2, [r3]);
+  }
+  __name(Kr, "Kr");
+  function Zr(e2, t2, r2) {
+    return I(e2, r2), (r3) => S(e2, t2, [r3]);
+  }
+  __name(Zr, "Zr");
+  function eo(e2, t2, r2) {
+    return I(e2, r2), (r3, o2) => g(e2, t2, [r3, o2]);
+  }
+  __name(eo, "eo");
+  function to(e2, t2, r2) {
+    return I(e2, r2), (r3) => g(e2, t2, [r3]);
+  }
+  __name(to, "to");
+  Object.defineProperties(CountQueuingStrategy.prototype, { highWaterMark: { enumerable: true }, size: { enumerable: true } }), "symbol" == typeof Symbol.toStringTag && Object.defineProperty(CountQueuingStrategy.prototype, Symbol.toStringTag, { value: "CountQueuingStrategy", configurable: true });
+  var TransformStream = class {
+    static {
+      __name(this, "TransformStream");
+    }
+    constructor(e2 = {}, t2 = {}, r2 = {}) {
+      void 0 === e2 && (e2 = null);
+      const o2 = yt(t2, "Second parameter"), n2 = yt(r2, "Third parameter"), i2 = (function(e3, t3) {
+        L(e3, t3);
+        const r3 = null == e3 ? void 0 : e3.cancel, o3 = null == e3 ? void 0 : e3.flush, n3 = null == e3 ? void 0 : e3.readableType, i3 = null == e3 ? void 0 : e3.start, a3 = null == e3 ? void 0 : e3.transform, s3 = null == e3 ? void 0 : e3.writableType;
+        return { cancel: void 0 === r3 ? void 0 : to(r3, e3, `${t3} has member 'cancel' that`), flush: void 0 === o3 ? void 0 : Kr(o3, e3, `${t3} has member 'flush' that`), readableType: n3, start: void 0 === i3 ? void 0 : Zr(i3, e3, `${t3} has member 'start' that`), transform: void 0 === a3 ? void 0 : eo(a3, e3, `${t3} has member 'transform' that`), writableType: s3 };
+      })(e2, "First parameter");
+      if (void 0 !== i2.readableType) throw new RangeError("Invalid readableType specified");
+      if (void 0 !== i2.writableType) throw new RangeError("Invalid writableType specified");
+      const a2 = mt(n2, 0), s2 = pt(n2), l2 = mt(o2, 1), f2 = pt(o2);
+      let b2;
+      !(function(e3, t3, r3, o3, n3, i3) {
+        function a3() {
+          return t3;
+        }
+        __name(a3, "a");
+        function s3(t4) {
+          return (function(e4, t5) {
+            const r4 = e4._transformStreamController;
+            if (e4._backpressure) {
+              return m(e4._backpressureChangePromise, () => {
+                const o4 = e4._writable;
+                if ("erroring" === o4._state) throw o4._storedError;
+                return co(r4, t5);
+              });
+            }
+            return co(r4, t5);
+          })(e3, t4);
+        }
+        __name(s3, "s");
+        function l3(t4) {
+          return (function(e4, t5) {
+            const r4 = e4._transformStreamController;
+            if (void 0 !== r4._finishPromise) return r4._finishPromise;
+            const o4 = e4._readable;
+            r4._finishPromise = u((e5, t6) => {
+              r4._finishPromise_resolve = e5, r4._finishPromise_reject = t6;
+            });
+            const n4 = r4._cancelAlgorithm(t5);
+            return lo(r4), h(n4, () => ("errored" === o4._state ? bo(r4, o4._storedError) : (Tr(o4._readableStreamController, t5), ho(r4)), null), (e5) => (Tr(o4._readableStreamController, e5), bo(r4, e5), null)), r4._finishPromise;
+          })(e3, t4);
+        }
+        __name(l3, "l");
+        function c2() {
+          return (function(e4) {
+            const t4 = e4._transformStreamController;
+            if (void 0 !== t4._finishPromise) return t4._finishPromise;
+            const r4 = e4._readable;
+            t4._finishPromise = u((e5, r5) => {
+              t4._finishPromise_resolve = e5, t4._finishPromise_reject = r5;
+            });
+            const o4 = t4._flushAlgorithm();
+            return lo(t4), h(o4, () => ("errored" === r4._state ? bo(t4, r4._storedError) : (wr(r4._readableStreamController), ho(t4)), null), (e5) => (Tr(r4._readableStreamController, e5), bo(t4, e5), null)), t4._finishPromise;
+          })(e3);
+        }
+        __name(c2, "c");
+        function d2() {
+          return (function(e4) {
+            return ao(e4, false), e4._backpressureChangePromise;
+          })(e3);
+        }
+        __name(d2, "d");
+        function f3(t4) {
+          return (function(e4, t5) {
+            const r4 = e4._transformStreamController;
+            if (void 0 !== r4._finishPromise) return r4._finishPromise;
+            const o4 = e4._writable;
+            r4._finishPromise = u((e5, t6) => {
+              r4._finishPromise_resolve = e5, r4._finishPromise_reject = t6;
+            });
+            const n4 = r4._cancelAlgorithm(t5);
+            return lo(r4), h(n4, () => ("errored" === o4._state ? bo(r4, o4._storedError) : (Gt(o4._writableStreamController, t5), io(e4), ho(r4)), null), (t6) => (Gt(o4._writableStreamController, t6), io(e4), bo(r4, t6), null)), r4._finishPromise;
+          })(e3, t4);
+        }
+        __name(f3, "f");
+        e3._writable = (function(e4, t4, r4, o4, n4 = 1, i4 = () => 1) {
+          const a4 = Object.create(WritableStream.prototype);
+          return Ct(a4), Nt(a4, Object.create(WritableStreamDefaultController.prototype), e4, t4, r4, o4, n4, i4), a4;
+        })(a3, s3, c2, l3, r3, o3), e3._readable = Dr(a3, d2, f3, n3, i3), e3._backpressure = void 0, e3._backpressureChangePromise = void 0, e3._backpressureChangePromise_resolve = void 0, ao(e3, true), e3._transformStreamController = void 0;
+      })(this, u((e3) => {
+        b2 = e3;
+      }), l2, f2, a2, s2), (function(e3, t3) {
+        const r3 = Object.create(TransformStreamDefaultController.prototype);
+        let o3, n3, i3;
+        o3 = void 0 !== t3.transform ? (e4) => t3.transform(e4, r3) : (e4) => {
+          try {
+            return uo(r3, e4), c(void 0);
+          } catch (e5) {
+            return d(e5);
+          }
+        };
+        n3 = void 0 !== t3.flush ? () => t3.flush(r3) : () => c(void 0);
+        i3 = void 0 !== t3.cancel ? (e4) => t3.cancel(e4) : () => c(void 0);
+        !(function(e4, t4, r4, o4, n4) {
+          t4._controlledTransformStream = e4, e4._transformStreamController = t4, t4._transformAlgorithm = r4, t4._flushAlgorithm = o4, t4._cancelAlgorithm = n4, t4._finishPromise = void 0, t4._finishPromise_resolve = void 0, t4._finishPromise_reject = void 0;
+        })(e3, r3, o3, n3, i3);
+      })(this, i2), void 0 !== i2.start ? b2(i2.start(this._transformStreamController)) : b2(void 0);
+    }
+    get readable() {
+      if (!ro(this)) throw _o("readable");
+      return this._readable;
+    }
+    get writable() {
+      if (!ro(this)) throw _o("writable");
+      return this._writable;
+    }
+  };
+  function ro(e2) {
+    return !!t(e2) && (!!Object.prototype.hasOwnProperty.call(e2, "_transformStreamController") && e2 instanceof TransformStream);
+  }
+  __name(ro, "ro");
+  function oo(e2, t2) {
+    Tr(e2._readable._readableStreamController, t2), no(e2, t2);
+  }
+  __name(oo, "oo");
+  function no(e2, t2) {
+    lo(e2._transformStreamController), Gt(e2._writable._writableStreamController, t2), io(e2);
+  }
+  __name(no, "no");
+  function io(e2) {
+    e2._backpressure && ao(e2, false);
+  }
+  __name(io, "io");
+  function ao(e2, t2) {
+    void 0 !== e2._backpressureChangePromise && e2._backpressureChangePromise_resolve(), e2._backpressureChangePromise = u((t3) => {
+      e2._backpressureChangePromise_resolve = t3;
+    }), e2._backpressure = t2;
+  }
+  __name(ao, "ao");
+  Object.defineProperties(TransformStream.prototype, { readable: { enumerable: true }, writable: { enumerable: true } }), "symbol" == typeof Symbol.toStringTag && Object.defineProperty(TransformStream.prototype, Symbol.toStringTag, { value: "TransformStream", configurable: true });
+  var TransformStreamDefaultController = class {
+    static {
+      __name(this, "TransformStreamDefaultController");
+    }
+    constructor() {
+      throw new TypeError("Illegal constructor");
+    }
+    get desiredSize() {
+      if (!so(this)) throw fo("desiredSize");
+      return Pr(this._controlledTransformStream._readable._readableStreamController);
+    }
+    enqueue(e2 = void 0) {
+      if (!so(this)) throw fo("enqueue");
+      uo(this, e2);
+    }
+    error(e2 = void 0) {
+      if (!so(this)) throw fo("error");
+      var t2;
+      t2 = e2, oo(this._controlledTransformStream, t2);
+    }
+    terminate() {
+      if (!so(this)) throw fo("terminate");
+      !(function(e2) {
+        const t2 = e2._controlledTransformStream;
+        wr(t2._readable._readableStreamController);
+        const r2 = new TypeError("TransformStream terminated");
+        no(t2, r2);
+      })(this);
+    }
+  };
+  function so(e2) {
+    return !!t(e2) && (!!Object.prototype.hasOwnProperty.call(e2, "_controlledTransformStream") && e2 instanceof TransformStreamDefaultController);
+  }
+  __name(so, "so");
+  function lo(e2) {
+    e2._transformAlgorithm = void 0, e2._flushAlgorithm = void 0, e2._cancelAlgorithm = void 0;
+  }
+  __name(lo, "lo");
+  function uo(e2, t2) {
+    const r2 = e2._controlledTransformStream, o2 = r2._readable._readableStreamController;
+    if (!Cr(o2)) throw new TypeError("Readable side is not in a state that permits enqueue");
+    try {
+      Rr(o2, t2);
+    } catch (e3) {
+      throw no(r2, e3), r2._readable._storedError;
+    }
+    const n2 = (function(e3) {
+      return !gr(e3);
+    })(o2);
+    n2 !== r2._backpressure && ao(r2, true);
+  }
+  __name(uo, "uo");
+  function co(e2, t2) {
+    return m(e2._transformAlgorithm(t2), void 0, (t3) => {
+      throw oo(e2._controlledTransformStream, t3), t3;
+    });
+  }
+  __name(co, "co");
+  function fo(e2) {
+    return new TypeError(`TransformStreamDefaultController.prototype.${e2} can only be used on a TransformStreamDefaultController`);
+  }
+  __name(fo, "fo");
+  function ho(e2) {
+    void 0 !== e2._finishPromise_resolve && (e2._finishPromise_resolve(), e2._finishPromise_resolve = void 0, e2._finishPromise_reject = void 0);
+  }
+  __name(ho, "ho");
+  function bo(e2, t2) {
+    void 0 !== e2._finishPromise_reject && (p(e2._finishPromise), e2._finishPromise_reject(t2), e2._finishPromise_resolve = void 0, e2._finishPromise_reject = void 0);
+  }
+  __name(bo, "bo");
+  function _o(e2) {
+    return new TypeError(`TransformStream.prototype.${e2} can only be used on a TransformStream`);
+  }
+  __name(_o, "_o");
+  Object.defineProperties(TransformStreamDefaultController.prototype, { enqueue: { enumerable: true }, error: { enumerable: true }, terminate: { enumerable: true }, desiredSize: { enumerable: true } }), o(TransformStreamDefaultController.prototype.enqueue, "enqueue"), o(TransformStreamDefaultController.prototype.error, "error"), o(TransformStreamDefaultController.prototype.terminate, "terminate"), "symbol" == typeof Symbol.toStringTag && Object.defineProperty(TransformStreamDefaultController.prototype, Symbol.toStringTag, { value: "TransformStreamDefaultController", configurable: true });
+
+  // src/blob.js
   var bytesByBlob = /* @__PURE__ */ new WeakMap();
   var readBytes = /* @__PURE__ */ Symbol("readBytes");
   var Blob = class _Blob {
@@ -636,6 +3020,17 @@
     }
     async bytes() {
       return getBytes(this).slice();
+    }
+    stream() {
+      const blob = this;
+      return new ReadableStream({
+        type: "bytes",
+        pull(controller) {
+          const bytes = getBytes(blob);
+          if (bytes.length) controller.enqueue(bytes.slice());
+          controller.close();
+        }
+      });
     }
   };
   var File = class extends Blob {
@@ -838,9 +3233,9 @@
   __name(getArguments, "getArguments");
   function parseValue(source, text) {
     const tokens = tokenize(source.trim(), text);
-    let at = 0;
-    const peek = /* @__PURE__ */ __name(() => tokens[at], "peek");
-    const next = /* @__PURE__ */ __name(() => tokens[at++], "next");
+    let at2 = 0;
+    const peek = /* @__PURE__ */ __name(() => tokens[at2], "peek");
+    const next = /* @__PURE__ */ __name(() => tokens[at2++], "next");
     const sum = /* @__PURE__ */ __name(() => {
       let left = product();
       while (peek() === "+" || peek() === "-") {
@@ -882,7 +3277,7 @@
       }
     }, "term");
     const value = tokens[0] === "calc(" ? term() : next();
-    if (!value?.type || at !== tokens.length) throw syntaxError(text);
+    if (!value?.type || at2 !== tokens.length) throw syntaxError(text);
     return value;
   }
   __name(parseValue, "parseValue");
@@ -989,8 +3384,8 @@
       __name(this, "DOMPointReadOnly");
     }
     #values;
-    constructor(x = 0, y = 0, z = 0, w = 1) {
-      this.#values = [+x, +y, +z, +w];
+    constructor(x2 = 0, y2 = 0, z2 = 0, w2 = 1) {
+      this.#values = [+x2, +y2, +z2, +w2];
     }
     static {
       getPoint = /* @__PURE__ */ __name((point) => point.#values, "getPoint");
@@ -999,12 +3394,12 @@
       return DOMMatrixReadOnly.fromMatrix(matrix).transformPoint(this);
     }
     toJSON() {
-      const { x, y, z, w } = this;
-      return { x, y, z, w };
+      const { x: x2, y: y2, z: z2, w: w2 } = this;
+      return { x: x2, y: y2, z: z2, w: w2 };
     }
     static fromPoint(point) {
-      const { x, y, z, w } = getPointInit(point);
-      return new this(x, y, z, w);
+      const { x: x2, y: y2, z: z2, w: w2 } = getPointInit(point);
+      return new this(x2, y2, z2, w2);
     }
   };
   var DOMPoint = class extends DOMPointReadOnly {
@@ -1017,8 +3412,8 @@
       __name(this, "DOMRectReadOnly");
     }
     #values;
-    constructor(x = 0, y = 0, width = 0, height = 0) {
-      this.#values = [+x, +y, +width, +height];
+    constructor(x2 = 0, y2 = 0, width = 0, height = 0) {
+      this.#values = [+x2, +y2, +width, +height];
     }
     static {
       getRect = /* @__PURE__ */ __name((rect) => rect.#values, "getRect");
@@ -1037,12 +3432,12 @@
       return Math.min(this.x, this.x + this.width);
     }
     toJSON() {
-      const { x, y, width, height, top, right, bottom, left } = this;
-      return { x, y, width, height, top, right, bottom, left };
+      const { x: x2, y: y2, width, height, top, right, bottom, left } = this;
+      return { x: x2, y: y2, width, height, top, right, bottom, left };
     }
     static fromRect(rect) {
-      const { x, y, width, height } = getRectInit(rect);
-      return new this(x, y, width, height);
+      const { x: x2, y: y2, width, height } = getRectInit(rect);
+      return new this(x2, y2, width, height);
     }
   };
   var DOMRect = class extends DOMRectReadOnly {
@@ -1085,12 +3480,12 @@
       return { p1, p2, p3, p4 };
     }
     static fromRect(rect) {
-      const { x, y, width, height } = getRectInit(rect);
+      const { x: x2, y: y2, width, height } = getRectInit(rect);
       return new this(
-        { x, y },
-        { x: x + width, y },
-        { x: x + width, y: y + height },
-        { x, y: y + height }
+        { x: x2, y: y2 },
+        { x: x2 + width, y: y2 },
+        { x: x2 + width, y: y2 + height },
+        { x: x2, y: y2 + height }
       );
     }
     static fromQuad(quad) {
@@ -1120,8 +3515,8 @@
     }
     static {
       getMatrix = /* @__PURE__ */ __name((matrix) => [matrix.#m, matrix.#is2D], "getMatrix");
-      setMatrix = /* @__PURE__ */ __name((matrix, [m, is2D]) => {
-        matrix.#m = m;
+      setMatrix = /* @__PURE__ */ __name((matrix, [m2, is2D]) => {
+        matrix.#m = m2;
         matrix.#is2D = is2D;
         return matrix;
       }, "setMatrix");
@@ -1149,11 +3544,11 @@
     rotate(rx = 0, ry, rz) {
       return operate(this, rotationXYZ(rx, ry, rz));
     }
-    rotateFromVector(x = 0, y = 0) {
-      return operate(this, rotationFromVector(+x, +y));
+    rotateFromVector(x2 = 0, y2 = 0) {
+      return operate(this, rotationFromVector(+x2, +y2));
     }
-    rotateAxisAngle(x = 0, y = 0, z = 0, angle = 0) {
-      return operate(this, rotation(+x, +y, +z, +angle));
+    rotateAxisAngle(x2 = 0, y2 = 0, z2 = 0, angle = 0) {
+      return operate(this, rotation(+x2, +y2, +z2, +angle));
     }
     skewX(sx = 0) {
       return operate(this, get2D([1, 0, Math.tan(toRadians(+sx)), 1, 0, 0]));
@@ -1174,9 +3569,9 @@
       return setMatrix(new DOMMatrix2(), invert(getMatrix(this)));
     }
     transformPoint(point) {
-      const { x, y, z, w } = getPointInit(point);
-      const m = this.#m;
-      const row = /* @__PURE__ */ __name((r) => m[r] * x + m[4 + r] * y + m[8 + r] * z + m[12 + r] * w, "row");
+      const { x: x2, y: y2, z: z2, w: w2 } = getPointInit(point);
+      const m2 = this.#m;
+      const row = /* @__PURE__ */ __name((r2) => m2[r2] * x2 + m2[4 + r2] * y2 + m2[8 + r2] * z2 + m2[12 + r2] * w2, "row");
       return new DOMPoint(row(0), row(1), row(2), row(3));
     }
     toFloat32Array() {
@@ -1196,14 +3591,14 @@
     // `matrix(a, b, c, d, e, f)` or `matrix3d(...)`, its numbers as JavaScript
     // writes them.
     toString() {
-      const m = this.#m;
-      if (!m.every(Number.isFinite)) {
+      const m2 = this.#m;
+      if (!m2.every(Number.isFinite)) {
         throw new DOMException(
           "Unable to write a matrix that is not finite.",
           "InvalidStateError"
         );
       }
-      return this.#is2D ? `matrix(${aliases.map(([, , index]) => m[index]).join(", ")})` : `matrix3d(${m.join(", ")})`;
+      return this.#is2D ? `matrix(${aliases.map(([, , index]) => m2[index]).join(", ")})` : `matrix3d(${m2.join(", ")})`;
     }
     static fromMatrix(other) {
       return setMatrix(new this(), getMatrixInit(other));
@@ -1231,11 +3626,11 @@
     rotateSelf(rx = 0, ry, rz) {
       return change(this, this.rotate(rx, ry, rz));
     }
-    rotateFromVectorSelf(x = 0, y = 0) {
-      return change(this, this.rotateFromVector(x, y));
+    rotateFromVectorSelf(x2 = 0, y2 = 0) {
+      return change(this, this.rotateFromVector(x2, y2));
     }
-    rotateAxisAngleSelf(x = 0, y = 0, z = 0, angle = 0) {
-      return change(this, this.rotateAxisAngle(x, y, z, angle));
+    rotateAxisAngleSelf(x2 = 0, y2 = 0, z2 = 0, angle = 0) {
+      return change(this, this.rotateAxisAngle(x2, y2, z2, angle));
     }
     skewXSelf(sx = 0) {
       return change(this, this.skewX(sx));
@@ -1278,7 +3673,7 @@
     (matrix) => getMatrix(matrix)[0],
     // A matrix that gets a 3D value isn't 2D anymore:
     (matrix, index, value) => {
-      if (threeD.some(([, i, value2D]) => i === index && value !== value2D)) {
+      if (threeD.some(([, i2, value2D]) => i2 === index && value !== value2D)) {
         setMatrix(matrix, [getMatrix(matrix)[0], false]);
       }
     }
@@ -1327,16 +3722,16 @@
     return setMatrix(new DOMMatrix2(), multiply(getMatrix(matrix), other));
   }
   __name(operate, "operate");
-  function multiply([a, is2DA], [b, is2DB]) {
-    const m = [];
-    for (let i = 0; i < 16; i++) {
-      const column = Math.floor(i / 4);
-      const row = i % 4;
+  function multiply([a2, is2DA], [b2, is2DB]) {
+    const m2 = [];
+    for (let i2 = 0; i2 < 16; i2++) {
+      const column = Math.floor(i2 / 4);
+      const row = i2 % 4;
       let value = 0;
-      for (let k = 0; k < 4; k++) value += a[k * 4 + row] * b[column * 4 + k];
-      m.push(value);
+      for (let k2 = 0; k2 < 4; k2++) value += a2[k2 * 4 + row] * b2[column * 4 + k2];
+      m2.push(value);
     }
-    return [m, is2DA && is2DB];
+    return [m2, is2DA && is2DB];
   }
   __name(multiply, "multiply");
   function getMatrixFromCSS(text) {
@@ -1344,55 +3739,55 @@
   }
   __name(getMatrixFromCSS, "getMatrixFromCSS");
   function getTransform(name, args) {
-    const [a, b, c, d] = args;
+    const [a2, b2, c2, d2] = args;
     const tan = /* @__PURE__ */ __name((degrees) => Math.tan(toRadians(degrees)), "tan");
-    const [m, is2D] = {
+    const [m2, is2D] = {
       matrix: /* @__PURE__ */ __name(() => get2D(args), "matrix"),
       matrix3d: /* @__PURE__ */ __name(() => [args, false], "matrix3d"),
-      translate: /* @__PURE__ */ __name(() => translation(a, b ?? 0, 0), "translate"),
-      translatex: /* @__PURE__ */ __name(() => translation(a, 0, 0), "translatex"),
-      translatey: /* @__PURE__ */ __name(() => translation(0, a, 0), "translatey"),
-      translatez: /* @__PURE__ */ __name(() => translation(0, 0, a), "translatez"),
-      translate3d: /* @__PURE__ */ __name(() => translation(a, b, c), "translate3d"),
-      scale: /* @__PURE__ */ __name(() => scaling(a, b ?? a, 1), "scale"),
-      scalex: /* @__PURE__ */ __name(() => scaling(a, 1, 1), "scalex"),
-      scaley: /* @__PURE__ */ __name(() => scaling(1, a, 1), "scaley"),
-      scalez: /* @__PURE__ */ __name(() => scaling(1, 1, a), "scalez"),
-      scale3d: /* @__PURE__ */ __name(() => scaling(a, b, c), "scale3d"),
-      rotate: /* @__PURE__ */ __name(() => rotation(0, 0, 1, a), "rotate"),
-      rotatex: /* @__PURE__ */ __name(() => rotation(1, 0, 0, a), "rotatex"),
-      rotatey: /* @__PURE__ */ __name(() => rotation(0, 1, 0, a), "rotatey"),
-      rotatez: /* @__PURE__ */ __name(() => rotation(0, 0, 1, a), "rotatez"),
-      rotate3d: /* @__PURE__ */ __name(() => rotation(a, b, c, d), "rotate3d"),
-      skew: /* @__PURE__ */ __name(() => get2D([1, tan(b ?? 0), tan(a), 1, 0, 0]), "skew"),
-      skewx: /* @__PURE__ */ __name(() => get2D([1, 0, tan(a), 1, 0, 0]), "skewx"),
-      skewy: /* @__PURE__ */ __name(() => get2D([1, tan(a), 0, 1, 0, 0]), "skewy"),
+      translate: /* @__PURE__ */ __name(() => translation(a2, b2 ?? 0, 0), "translate"),
+      translatex: /* @__PURE__ */ __name(() => translation(a2, 0, 0), "translatex"),
+      translatey: /* @__PURE__ */ __name(() => translation(0, a2, 0), "translatey"),
+      translatez: /* @__PURE__ */ __name(() => translation(0, 0, a2), "translatez"),
+      translate3d: /* @__PURE__ */ __name(() => translation(a2, b2, c2), "translate3d"),
+      scale: /* @__PURE__ */ __name(() => scaling(a2, b2 ?? a2, 1), "scale"),
+      scalex: /* @__PURE__ */ __name(() => scaling(a2, 1, 1), "scalex"),
+      scaley: /* @__PURE__ */ __name(() => scaling(1, a2, 1), "scaley"),
+      scalez: /* @__PURE__ */ __name(() => scaling(1, 1, a2), "scalez"),
+      scale3d: /* @__PURE__ */ __name(() => scaling(a2, b2, c2), "scale3d"),
+      rotate: /* @__PURE__ */ __name(() => rotation(0, 0, 1, a2), "rotate"),
+      rotatex: /* @__PURE__ */ __name(() => rotation(1, 0, 0, a2), "rotatex"),
+      rotatey: /* @__PURE__ */ __name(() => rotation(0, 1, 0, a2), "rotatey"),
+      rotatez: /* @__PURE__ */ __name(() => rotation(0, 0, 1, a2), "rotatez"),
+      rotate3d: /* @__PURE__ */ __name(() => rotation(a2, b2, c2, d2), "rotate3d"),
+      skew: /* @__PURE__ */ __name(() => get2D([1, tan(b2 ?? 0), tan(a2), 1, 0, 0]), "skew"),
+      skewx: /* @__PURE__ */ __name(() => get2D([1, 0, tan(a2), 1, 0, 0]), "skewx"),
+      skewy: /* @__PURE__ */ __name(() => get2D([1, tan(a2), 0, 1, 0, 0]), "skewy"),
       // `m34`, of a distance of 1 at least:
       perspective: /* @__PURE__ */ __name(() => {
-        const m2 = [...identity];
-        m2[11] = -1 / Math.max(a, 1);
-        return [m2, false];
+        const m3 = [...identity];
+        m3[11] = -1 / Math.max(a2, 1);
+        return [m3, false];
       }, "perspective")
     }[name]();
-    return [m, is2D && !/3d$|z$|^rotate[xy]$|^perspective$/.test(name)];
+    return [m2, is2D && !/3d$|z$|^rotate[xy]$|^perspective$/.test(name)];
   }
   __name(getTransform, "getTransform");
-  function get2D([a, b, c, d, e, f]) {
-    const m = [...identity];
-    [m[0], m[1], m[4], m[5], m[12], m[13]] = [a, b, c, d, e, f];
-    return [m, true];
+  function get2D([a2, b2, c2, d2, e2, f2]) {
+    const m2 = [...identity];
+    [m2[0], m2[1], m2[4], m2[5], m2[12], m2[13]] = [a2, b2, c2, d2, e2, f2];
+    return [m2, true];
   }
   __name(get2D, "get2D");
-  function translation(x, y, z) {
-    const m = [...identity];
-    [m[12], m[13], m[14]] = [x, y, z];
-    return [m, z === 0];
+  function translation(x2, y2, z2) {
+    const m2 = [...identity];
+    [m2[12], m2[13], m2[14]] = [x2, y2, z2];
+    return [m2, z2 === 0];
   }
   __name(translation, "translation");
-  function scaling(x, y, z) {
-    const m = [...identity];
-    [m[0], m[5], m[10]] = [x, y, z];
-    return [m, z === 1];
+  function scaling(x2, y2, z2) {
+    const m2 = [...identity];
+    [m2[0], m2[5], m2[10]] = [x2, y2, z2];
+    return [m2, z2 === 1];
   }
   __name(scaling, "scaling");
   function scalingAround(sx, sy, sz, ox, oy, oz) {
@@ -1403,86 +3798,86 @@
   }
   __name(scalingAround, "scalingAround");
   function rotationXYZ(rx, ry, rz) {
-    const [x, y, z] = ry === void 0 && rz === void 0 ? [0, 0, +rx] : [+rx, +(ry ?? 0), +(rz ?? 0)];
-    let result = rotation(0, 0, 1, z);
-    if (y !== 0) result = multiply(result, rotation(0, 1, 0, y));
-    if (x !== 0) result = multiply(result, rotation(1, 0, 0, x));
+    const [x2, y2, z2] = ry === void 0 && rz === void 0 ? [0, 0, +rx] : [+rx, +(ry ?? 0), +(rz ?? 0)];
+    let result = rotation(0, 0, 1, z2);
+    if (y2 !== 0) result = multiply(result, rotation(0, 1, 0, y2));
+    if (x2 !== 0) result = multiply(result, rotation(1, 0, 0, x2));
     return result;
   }
   __name(rotationXYZ, "rotationXYZ");
-  function rotationFromVector(x, y) {
+  function rotationFromVector(x2, y2) {
     return rotation(
       0,
       0,
       1,
-      x === 0 && y === 0 ? 0 : Math.atan2(y, x) * 180 / Math.PI
+      x2 === 0 && y2 === 0 ? 0 : Math.atan2(y2, x2) * 180 / Math.PI
     );
   }
   __name(rotationFromVector, "rotationFromVector");
-  function rotation(x, y, z, degrees) {
-    const is2D = x === 0 && y === 0;
-    const length = Math.hypot(x, y, z);
+  function rotation(x2, y2, z2, degrees) {
+    const is2D = x2 === 0 && y2 === 0;
+    const length = Math.hypot(x2, y2, z2);
     if (length === 0 || !Number.isFinite(length)) return [[...identity], is2D];
-    [x, y, z] = [x / length, y / length, z / length];
+    [x2, y2, z2] = [x2 / length, y2 / length, z2 / length];
     const half = toRadians(degrees) / 2;
     const sc = Math.sin(half) * Math.cos(half);
     const sq = Math.sin(half) ** 2;
-    const m = [
-      1 - 2 * (y * y + z * z) * sq,
-      2 * (x * y * sq + z * sc),
-      2 * (x * z * sq - y * sc),
+    const m2 = [
+      1 - 2 * (y2 * y2 + z2 * z2) * sq,
+      2 * (x2 * y2 * sq + z2 * sc),
+      2 * (x2 * z2 * sq - y2 * sc),
       0,
-      2 * (x * y * sq - z * sc),
-      1 - 2 * (x * x + z * z) * sq,
-      2 * (y * z * sq + x * sc),
+      2 * (x2 * y2 * sq - z2 * sc),
+      1 - 2 * (x2 * x2 + z2 * z2) * sq,
+      2 * (y2 * z2 * sq + x2 * sc),
       0,
-      2 * (x * z * sq + y * sc),
-      2 * (y * z * sq - x * sc),
-      1 - 2 * (x * x + y * y) * sq,
+      2 * (x2 * z2 * sq + y2 * sc),
+      2 * (y2 * z2 * sq - x2 * sc),
+      1 - 2 * (x2 * x2 + y2 * y2) * sq,
       0,
       0,
       0,
       0,
       1
     ];
-    return [m, is2D];
+    return [m2, is2D];
   }
   __name(rotation, "rotation");
-  function invert([m, is2D]) {
+  function invert([m2, is2D]) {
     const singular = [new Array(16).fill(NaN), false];
-    if (!m.every(Number.isFinite)) return singular;
+    if (!m2.every(Number.isFinite)) return singular;
     if (is2D) {
-      const [a, b, c, d, e, f] = aliases.map(([, , index]) => m[index]);
-      const det2 = a * d - b * c;
+      const [a2, b2, c2, d2, e2, f2] = aliases.map(([, , index]) => m2[index]);
+      const det2 = a2 * d2 - b2 * c2;
       return det2 === 0 ? singular : get2D([
-        d / det2,
-        -b / det2,
-        -c / det2,
-        a / det2,
-        (c * f - d * e) / det2,
-        (b * e - a * f) / det2
+        d2 / det2,
+        -b2 / det2,
+        -c2 / det2,
+        a2 / det2,
+        (c2 * f2 - d2 * e2) / det2,
+        (b2 * e2 - a2 * f2) / det2
       ]);
     }
-    const i = [
-      m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] + m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10],
-      -m[1] * m[10] * m[15] + m[1] * m[11] * m[14] + m[9] * m[2] * m[15] - m[9] * m[3] * m[14] - m[13] * m[2] * m[11] + m[13] * m[3] * m[10],
-      m[1] * m[6] * m[15] - m[1] * m[7] * m[14] - m[5] * m[2] * m[15] + m[5] * m[3] * m[14] + m[13] * m[2] * m[7] - m[13] * m[3] * m[6],
-      -m[1] * m[6] * m[11] + m[1] * m[7] * m[10] + m[5] * m[2] * m[11] - m[5] * m[3] * m[10] - m[9] * m[2] * m[7] + m[9] * m[3] * m[6],
-      -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] - m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10],
-      m[0] * m[10] * m[15] - m[0] * m[11] * m[14] - m[8] * m[2] * m[15] + m[8] * m[3] * m[14] + m[12] * m[2] * m[11] - m[12] * m[3] * m[10],
-      -m[0] * m[6] * m[15] + m[0] * m[7] * m[14] + m[4] * m[2] * m[15] - m[4] * m[3] * m[14] - m[12] * m[2] * m[7] + m[12] * m[3] * m[6],
-      m[0] * m[6] * m[11] - m[0] * m[7] * m[10] - m[4] * m[2] * m[11] + m[4] * m[3] * m[10] + m[8] * m[2] * m[7] - m[8] * m[3] * m[6],
-      m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] + m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9],
-      -m[0] * m[9] * m[15] + m[0] * m[11] * m[13] + m[8] * m[1] * m[15] - m[8] * m[3] * m[13] - m[12] * m[1] * m[11] + m[12] * m[3] * m[9],
-      m[0] * m[5] * m[15] - m[0] * m[7] * m[13] - m[4] * m[1] * m[15] + m[4] * m[3] * m[13] + m[12] * m[1] * m[7] - m[12] * m[3] * m[5],
-      -m[0] * m[5] * m[11] + m[0] * m[7] * m[9] + m[4] * m[1] * m[11] - m[4] * m[3] * m[9] - m[8] * m[1] * m[7] + m[8] * m[3] * m[5],
-      -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] - m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9],
-      m[0] * m[9] * m[14] - m[0] * m[10] * m[13] - m[8] * m[1] * m[14] + m[8] * m[2] * m[13] + m[12] * m[1] * m[10] - m[12] * m[2] * m[9],
-      -m[0] * m[5] * m[14] + m[0] * m[6] * m[13] + m[4] * m[1] * m[14] - m[4] * m[2] * m[13] - m[12] * m[1] * m[6] + m[12] * m[2] * m[5],
-      m[0] * m[5] * m[10] - m[0] * m[6] * m[9] - m[4] * m[1] * m[10] + m[4] * m[2] * m[9] + m[8] * m[1] * m[6] - m[8] * m[2] * m[5]
+    const i2 = [
+      m2[5] * m2[10] * m2[15] - m2[5] * m2[11] * m2[14] - m2[9] * m2[6] * m2[15] + m2[9] * m2[7] * m2[14] + m2[13] * m2[6] * m2[11] - m2[13] * m2[7] * m2[10],
+      -m2[1] * m2[10] * m2[15] + m2[1] * m2[11] * m2[14] + m2[9] * m2[2] * m2[15] - m2[9] * m2[3] * m2[14] - m2[13] * m2[2] * m2[11] + m2[13] * m2[3] * m2[10],
+      m2[1] * m2[6] * m2[15] - m2[1] * m2[7] * m2[14] - m2[5] * m2[2] * m2[15] + m2[5] * m2[3] * m2[14] + m2[13] * m2[2] * m2[7] - m2[13] * m2[3] * m2[6],
+      -m2[1] * m2[6] * m2[11] + m2[1] * m2[7] * m2[10] + m2[5] * m2[2] * m2[11] - m2[5] * m2[3] * m2[10] - m2[9] * m2[2] * m2[7] + m2[9] * m2[3] * m2[6],
+      -m2[4] * m2[10] * m2[15] + m2[4] * m2[11] * m2[14] + m2[8] * m2[6] * m2[15] - m2[8] * m2[7] * m2[14] - m2[12] * m2[6] * m2[11] + m2[12] * m2[7] * m2[10],
+      m2[0] * m2[10] * m2[15] - m2[0] * m2[11] * m2[14] - m2[8] * m2[2] * m2[15] + m2[8] * m2[3] * m2[14] + m2[12] * m2[2] * m2[11] - m2[12] * m2[3] * m2[10],
+      -m2[0] * m2[6] * m2[15] + m2[0] * m2[7] * m2[14] + m2[4] * m2[2] * m2[15] - m2[4] * m2[3] * m2[14] - m2[12] * m2[2] * m2[7] + m2[12] * m2[3] * m2[6],
+      m2[0] * m2[6] * m2[11] - m2[0] * m2[7] * m2[10] - m2[4] * m2[2] * m2[11] + m2[4] * m2[3] * m2[10] + m2[8] * m2[2] * m2[7] - m2[8] * m2[3] * m2[6],
+      m2[4] * m2[9] * m2[15] - m2[4] * m2[11] * m2[13] - m2[8] * m2[5] * m2[15] + m2[8] * m2[7] * m2[13] + m2[12] * m2[5] * m2[11] - m2[12] * m2[7] * m2[9],
+      -m2[0] * m2[9] * m2[15] + m2[0] * m2[11] * m2[13] + m2[8] * m2[1] * m2[15] - m2[8] * m2[3] * m2[13] - m2[12] * m2[1] * m2[11] + m2[12] * m2[3] * m2[9],
+      m2[0] * m2[5] * m2[15] - m2[0] * m2[7] * m2[13] - m2[4] * m2[1] * m2[15] + m2[4] * m2[3] * m2[13] + m2[12] * m2[1] * m2[7] - m2[12] * m2[3] * m2[5],
+      -m2[0] * m2[5] * m2[11] + m2[0] * m2[7] * m2[9] + m2[4] * m2[1] * m2[11] - m2[4] * m2[3] * m2[9] - m2[8] * m2[1] * m2[7] + m2[8] * m2[3] * m2[5],
+      -m2[4] * m2[9] * m2[14] + m2[4] * m2[10] * m2[13] + m2[8] * m2[5] * m2[14] - m2[8] * m2[6] * m2[13] - m2[12] * m2[5] * m2[10] + m2[12] * m2[6] * m2[9],
+      m2[0] * m2[9] * m2[14] - m2[0] * m2[10] * m2[13] - m2[8] * m2[1] * m2[14] + m2[8] * m2[2] * m2[13] + m2[12] * m2[1] * m2[10] - m2[12] * m2[2] * m2[9],
+      -m2[0] * m2[5] * m2[14] + m2[0] * m2[6] * m2[13] + m2[4] * m2[1] * m2[14] - m2[4] * m2[2] * m2[13] - m2[12] * m2[1] * m2[6] + m2[12] * m2[2] * m2[5],
+      m2[0] * m2[5] * m2[10] - m2[0] * m2[6] * m2[9] - m2[4] * m2[1] * m2[10] + m2[4] * m2[2] * m2[9] + m2[8] * m2[1] * m2[6] - m2[8] * m2[2] * m2[5]
     ];
-    const det = m[0] * i[0] + m[1] * i[4] + m[2] * i[8] + m[3] * i[12];
-    return det !== 0 && Number.isFinite(det) ? [i.map((value) => value / det), false] : singular;
+    const det = m2[0] * i2[0] + m2[1] * i2[4] + m2[2] * i2[8] + m2[3] * i2[12];
+    return det !== 0 && Number.isFinite(det) ? [i2.map((value) => value / det), false] : singular;
   }
   __name(invert, "invert");
   function toRadians(degrees) {
@@ -1499,27 +3894,27 @@
   __name(getDictionary, "getDictionary");
   function getPointInit(point) {
     const {
-      x = 0,
-      y = 0,
-      z = 0,
-      w = 1
+      x: x2 = 0,
+      y: y2 = 0,
+      z: z2 = 0,
+      w: w2 = 1
     } = getDictionary(point, "DOMPointInit") ?? {};
-    return { x: +x, y: +y, z: +z, w: +w };
+    return { x: +x2, y: +y2, z: +z2, w: +w2 };
   }
   __name(getPointInit, "getPointInit");
   function getRectInit(rect) {
     const {
-      x = 0,
-      y = 0,
+      x: x2 = 0,
+      y: y2 = 0,
       width = 0,
       height = 0
     } = getDictionary(rect, "DOMRectInit") ?? {};
-    return { x: +x, y: +y, width: +width, height: +height };
+    return { x: +x2, y: +y2, width: +width, height: +height };
   }
   __name(getRectInit, "getRectInit");
   function getMatrixInit(init) {
     init = getDictionary(init, "DOMMatrixInit") ?? {};
-    const m = [...identity];
+    const m2 = [...identity];
     for (const [alias, name, index] of aliases) {
       const aliasValue = init[alias] === void 0 ? void 0 : +init[alias];
       const value = init[name] === void 0 ? void 0 : +init[name];
@@ -1527,20 +3922,20 @@
       aliasValue !== value && !Object.is(aliasValue, value)) {
         throw new TypeError(`Invalid matrix: its ${name} and ${alias} disagree.`);
       }
-      m[index] = value ?? aliasValue ?? m[index];
+      m2[index] = value ?? aliasValue ?? m2[index];
     }
     let hasThreeD = false;
     for (const [name, index, default2D] of threeD) {
       if (init[name] !== void 0) {
-        m[index] = +init[name];
-        hasThreeD ||= m[index] !== default2D;
+        m2[index] = +init[name];
+        hasThreeD ||= m2[index] !== default2D;
       }
     }
     const is2D = init.is2D === void 0 ? void 0 : !!init.is2D;
     if (is2D && hasThreeD) {
       throw new TypeError("Invalid matrix: a 2D matrix has 3D values.");
     }
-    return [m, is2D ?? !hasThreeD];
+    return [m2, is2D ?? !hasThreeD];
   }
   __name(getMatrixInit, "getMatrixInit");
   function getMatrixFromList(list) {
@@ -1604,8 +3999,8 @@
       this.#text = text;
       this.#settings = settings;
       const { clusters } = values;
-      for (let at = 0; at < clusters.length; at += 8) {
-        const [start, end, left, advance, inkLeft, inkRight, top, bottom] = clusters.subarray(at, at + 8);
+      for (let at2 = 0; at2 < clusters.length; at2 += 8) {
+        const [start, end, left, advance, inkLeft, inkRight, top, bottom] = clusters.subarray(at2, at2 + 8);
         this.#clusters.push({
           start,
           end,
@@ -1629,14 +4024,14 @@
         align = this.#settings.textAlign,
         baseline = this.#settings.textBaseline
       } = options;
-      const y = -this.#getBaselineHeight(baseline);
+      const y2 = -this.#getBaselineHeight(baseline);
       return this.#getClusters(start, end, "getTextClusters").map(
         (cluster) => new TextCluster(
           internal,
           {
             text: this.#text.slice(cluster.start, cluster.end),
             x: cluster.left + getAlignOffset(align, cluster.advance, this.#settings),
-            y,
+            y: y2,
             start: cluster.start,
             end: cluster.end,
             align,
@@ -1690,11 +4085,11 @@
       const clusters = this.#clusters;
       const isRightToLeft = /* @__PURE__ */ __name((index) => {
         const [cluster, next, previous] = [index, index + 1, index - 1].map(
-          (i) => clusters[i]
+          (i2) => clusters[i2]
         );
         return next ? next.left < cluster.left : previous ? previous.left > cluster.left : this.#settings.direction === "rtl";
       }, "isRightToLeft");
-      const visual = clusters.map((cluster, index) => ({ ...cluster, rtl: isRightToLeft(index) })).sort((a, b) => a.left - b.left);
+      const visual = clusters.map((cluster, index) => ({ ...cluster, rtl: isRightToLeft(index) })).sort((a2, b2) => a2.left - b2.left);
       for (const { start, end, left, advance, rtl } of visual) {
         if (offset <= left + advance / 2) {
           return rtl ? end : start;
@@ -1778,7 +4173,7 @@
     }
   };
   setToStringTag(TextMetrics, TextCluster);
-  function drawCluster(context, draw, cluster, x, y, options = {}) {
+  function drawCluster(context, draw, cluster, x2, y2, options = {}) {
     if (!(cluster instanceof TextCluster)) {
       throw new TypeError(`Invalid text cluster: '${cluster}'.`);
     }
@@ -1793,7 +4188,7 @@
       textAlign: align,
       textBaseline: baseline
     });
-    context[draw](cluster.text, Number(x) + dx, Number(y) + dy);
+    context[draw](cluster.text, Number(x2) + dx, Number(y2) + dy);
     context.restore();
   }
   __name(drawCluster, "drawCluster");
@@ -1952,13 +4347,13 @@
         settings
       );
     }
-    fillTextCluster(cluster, x, y, options) {
+    fillTextCluster(cluster, x2, y2, options) {
       checkArguments(arguments, 3, "fillTextCluster");
-      drawCluster(this, "fillText", cluster, x, y, options);
+      drawCluster(this, "fillText", cluster, x2, y2, options);
     }
-    strokeTextCluster(cluster, x, y, options) {
+    strokeTextCluster(cluster, x2, y2, options) {
       checkArguments(arguments, 3, "strokeTextCluster");
-      drawCluster(this, "strokeText", cluster, x, y, options);
+      drawCluster(this, "strokeText", cluster, x2, y2, options);
     }
     // Transparent black, of a size, either way round, or of another
     // `ImageData`'s.
@@ -1974,9 +4369,9 @@
         );
       }
     }
-    getImageData(x, y, width, height) {
+    getImageData(x2, y2, width, height) {
       checkArguments(arguments, 4, "getImageData");
-      const args = [x, y, width, height].map(getLong);
+      const args = [x2, y2, width, height].map(getLong);
       if (args[2] === 0 || args[3] === 0) {
         throw new DOMException(
           "Invalid getImageData(): the width and height must not be 0.",
@@ -2004,9 +4399,9 @@
       checkArguments(arguments, 6, "createRadialGradient");
       return createGradient("radial", x0, y0, r0, x1, y1, r1);
     }
-    createConicGradient(angle, x, y) {
+    createConicGradient(angle, x2, y2) {
       checkArguments(arguments, 3, "createConicGradient");
-      return createGradient("conic", angle, x, y);
+      return createGradient("conic", angle, x2, y2);
     }
     createPattern(image, repetition) {
       checkArguments(arguments, 2, "createPattern");
@@ -2035,9 +4430,9 @@
     isPointInStroke(...args) {
       return callWithPath(this.#surface, "isPointInStroke", args, 2);
     }
-    roundRect(x, y, w, h, radii) {
+    roundRect(x2, y2, w2, h2, radii) {
       checkArguments(arguments, 4, "roundRect");
-      const args = getRoundRect(x, y, w, h, radii);
+      const args = getRoundRect(x2, y2, w2, h2, radii);
       if (args) canvas.methods.roundRect.call(this.#surface, ...args);
     }
   };
@@ -2172,9 +4567,9 @@
     static {
       getPath = /* @__PURE__ */ __name((path) => path instanceof _Path2D ? path.#path : void 0, "getPath");
     }
-    roundRect(x, y, w, h, radii) {
+    roundRect(x2, y2, w2, h2, radii) {
       checkArguments(arguments, 4, "roundRect");
-      const args = getRoundRect(x, y, w, h, radii);
+      const args = getRoundRect(x2, y2, w2, h2, radii);
       if (args) canvas.pathMethods.roundRect.call(this.#path, ...args);
     }
     addPath(path, transform) {
@@ -2272,8 +4667,8 @@
       getPatternPaint = /* @__PURE__ */ __name((pattern) => pattern.#paint, "getPatternPaint");
     }
     setTransform(transform = {}) {
-      const { a, b, c, d, e, f } = DOMMatrix.fromMatrix(transform);
-      canvas.setPatternTransform.call(this.#paint, a, b, c, d, e, f);
+      const { a: a2, b: b2, c: c2, d: d2, e: e2, f: f2 } = DOMMatrix.fromMatrix(transform);
+      canvas.setPatternTransform.call(this.#paint, a2, b2, c2, d2, e2, f2);
     }
   };
   setToStringTag(
@@ -2361,7 +4756,7 @@
     return size;
   }
   __name(getSize, "getSize");
-  function getRoundRect(x, y, w, h, radii = 0) {
+  function getRoundRect(x2, y2, w2, h2, radii = 0) {
     const list = isObject(radii) && typeof radii[Symbol.iterator] === "function" ? Array.from(radii) : [radii];
     if (list.length < 1 || list.length > 4) {
       throw new RangeError(
@@ -2372,16 +4767,16 @@
       const { x: rx = 0, y: ry = 0 } = isObject(radius) || radius === void 0 ? radius ?? {} : { x: radius, y: radius };
       return [+rx, +ry];
     });
-    const numbers2 = [+x, +y, +w, +h, ...corners.flat()];
+    const numbers2 = [+x2, +y2, +w2, +h2, ...corners.flat()];
     if (!numbers2.every(Number.isFinite)) return null;
-    if (corners.flat().some((r) => r < 0)) {
+    if (corners.flat().some((r2) => r2 < 0)) {
       throw new RangeError("Invalid roundRect() radius: it is negative.");
     }
-    const [a, b = a, c = a, d = b] = corners;
-    let [ul, ur, lr, ll] = corners.length === 3 ? [a, b, c, b] : [a, b, c, d];
-    if (w < 0) [ul, ur, lr, ll] = [ur, ul, ll, lr];
-    if (h < 0) [ul, ur, lr, ll] = [ll, lr, ur, ul];
-    return [+x, +y, +w, +h, ...ul, ...ur, ...lr, ...ll];
+    const [a2, b2 = a2, c2 = a2, d2 = b2] = corners;
+    let [ul, ur2, lr2, ll] = corners.length === 3 ? [a2, b2, c2, b2] : [a2, b2, c2, d2];
+    if (w2 < 0) [ul, ur2, lr2, ll] = [ur2, ul, ll, lr2];
+    if (h2 < 0) [ul, ur2, lr2, ll] = [ll, lr2, ur2, ul];
+    return [+x2, +y2, +w2, +h2, ...ul, ...ur2, ...lr2, ...ll];
   }
   __name(getRoundRect, "getRoundRect");
   function getContextAttributes(options) {
@@ -2613,12 +5008,12 @@ ${stack}` : ""));
     const tag = Object.prototype.toString.call(value);
     if (tag === "[object Array]") {
       return depth > maxDepth ? "[Array]" : `[${getItems(
-        Array.from({ length: Math.min(value.length, maxItems) }, (_, i) => [
-          i,
-          value[i]
+        Array.from({ length: Math.min(value.length, maxItems) }, (_2, i2) => [
+          i2,
+          value[i2]
         ]),
         value.length,
-        (_, item) => inspect(item, depth + 1)
+        (_2, item) => inspect(item, depth + 1)
       )}]`;
     } else if (/^\[object (Async|Generator)?Function\]$/.test(tag)) {
       return `\u0192 ${value.name}()`;
@@ -2680,10 +5075,10 @@ ${stack}` : ""));
       ])
     ];
     const widths = grid[0].map(
-      (_, i) => Math.max(...grid.map((row) => [...row[i]].length))
+      (_2, i2) => Math.max(...grid.map((row) => [...row[i2]].length))
     );
     return grid.map(
-      (row) => `\u2502 ${row.map((cell, i) => cell + " ".repeat(widths[i] - [...cell].length)).join(" \u2502 ")} \u2502`
+      (row) => `\u2502 ${row.map((cell, i2) => cell + " ".repeat(widths[i2] - [...cell].length)).join(" \u2502 ")} \u2502`
     ).join("\n");
   }
   __name(formatTable, "formatTable");
@@ -2852,8 +5247,8 @@ ${stack}` : ""));
     return JSON.parse(JSON.stringify(value ?? null) ?? "null");
   }
   __name(toJSON, "toJSON");
-  function then(value, f) {
-    return value instanceof Promise ? value.then(f) : f(value);
+  function then(value, f2) {
+    return value instanceof Promise ? value.then(f2) : f2(value);
   }
   __name(then, "then");
   async function pick(picker, options) {
@@ -2900,9 +5295,9 @@ ${stack}` : ""));
   }
   __name(getPickerOptions, "getPickerOptions");
   function getTypes(types2) {
-    const entries = Array.isArray(types2) ? Array.from({ length: Math.ceil(types2.length / 2) }, (_, i) => [
-      types2[i * 2],
-      types2[i * 2 + 1] ?? types2[i * 2]
+    const entries = Array.isArray(types2) ? Array.from({ length: Math.ceil(types2.length / 2) }, (_2, i2) => [
+      types2[i2 * 2],
+      types2[i2 * 2 + 1] ?? types2[i2 * 2]
     ]) : Object.entries(types2);
     return entries.map(([label, patterns]) => [
       String(label),
@@ -3057,7 +5452,83 @@ ${stack}` : ""));
       { enumerable: true }
     );
   }
-  setToStringTag(TextEncoder2, TextDecoder2);
+  var TextEncoderStream = class {
+    static {
+      __name(this, "TextEncoderStream");
+    }
+    #transform;
+    constructor() {
+      const encoder = new TextEncoder2();
+      let pending = "";
+      this.#transform = new TransformStream({
+        transform(chunk, controller) {
+          let text = pending + String(chunk);
+          pending = /[\ud800-\udbff]$/.test(text) ? text.slice(-1) : "";
+          if (pending) text = text.slice(0, -1);
+          if (text) controller.enqueue(encoder.encode(text));
+        },
+        flush(controller) {
+          if (pending) controller.enqueue(encoder.encode(pending));
+        }
+      });
+    }
+    get readable() {
+      return this.#transform.readable;
+    }
+    get writable() {
+      return this.#transform.writable;
+    }
+  };
+  var TextDecoderStream = class {
+    static {
+      __name(this, "TextDecoderStream");
+    }
+    #decoder;
+    #transform;
+    constructor(label, options) {
+      const decoder = this.#decoder = new TextDecoder2(label, options);
+      this.#transform = new TransformStream({
+        transform(chunk, controller) {
+          if (!getBufferBytes(chunk)) {
+            throw new TypeError(`Invalid chunk: '${chunk}', not a buffer.`);
+          }
+          const text = decoder.decode(chunk, { stream: true });
+          if (text) controller.enqueue(text);
+        },
+        flush(controller) {
+          const text = decoder.decode();
+          if (text) controller.enqueue(text);
+        }
+      });
+    }
+    get fatal() {
+      return this.#decoder.fatal;
+    }
+    get ignoreBOM() {
+      return this.#decoder.ignoreBOM;
+    }
+    get readable() {
+      return this.#transform.readable;
+    }
+    get writable() {
+      return this.#transform.writable;
+    }
+  };
+  for (const target of [
+    TextEncoderStream.prototype,
+    TextDecoderStream.prototype
+  ]) {
+    inject(
+      target,
+      {
+        get encoding() {
+          return "utf-8";
+        }
+      },
+      { enumerable: true }
+    );
+  }
+  setToStringTag(TextEncoder2, TextDecoder2, TextEncoderStream, TextDecoderStream);
   function getIncomplete(bytes) {
     for (let back = 1; back <= Math.min(3, bytes.length); back++) {
       const byte = bytes[bytes.length - back];
@@ -4520,7 +6991,7 @@ ${value}\r
     }
     // By name, in UTF-16 code units, as strings compare: stable.
     sort() {
-      this.#pairs.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+      this.#pairs.sort(([a2], [b2]) => a2 < b2 ? -1 : a2 > b2 ? 1 : 0);
       this.#update();
     }
     *entries() {
@@ -5211,6 +7682,12 @@ ${value}\r
   }
   if (!globalThis.TextEncoder) {
     inject(globalThis, { TextEncoder: TextEncoder2, TextDecoder: TextDecoder2 });
+  }
+  if (!globalThis.ReadableStream) {
+    inject(globalThis, { ...streams_exports });
+  }
+  if (!globalThis.TextEncoderStream) {
+    inject(globalThis, { TextEncoderStream, TextDecoderStream });
   }
   if (!globalThis.crypto) {
     inject(globalThis, { Crypto, crypto: new Crypto() });
