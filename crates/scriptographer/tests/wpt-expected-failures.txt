@@ -123,3 +123,57 @@ streams/readable-streams/owning-type.tentative.any.js: ReadableStream of type ow
 streams/readable-streams/owning-type.tentative.any.js: ReadableStream should be able to call enqueue with an empty transfer list
 streams/readable-streams/owning-type.tentative.any.js: ReadableStream should check transfer parameter
 streams/writable-streams/general.any.js: WritableStream's strategy.size should not be called as a method
+urlpattern/urlpattern-generate.tentative.any.js: Pattern: "https://example.com/:foo" Component: pathname Groups: {"foo":" "}
+urlpattern/urlpattern-generate.tentative.any.js: Pattern: "original-scheme://example.com/:foo" Component: pathname Groups: {"foo":" "}
+urlpattern/urlpattern-generate.tentative.any.js: Pattern: {"hostname":"{:foo}.example.com"} Component: hostname Groups: {"foo":"🍅"}
+urlpattern/urlpattern-generate.tentative.any.js: Pattern: {"pathname":"/:foo"} Component: pathname Groups: {"foo":"bar"}
+urlpattern/urlpattern-generate.tentative.any.js: Pattern: {"pathname":"/:foo"} Component: pathname Groups: {"foo":"🍅"}
+urlpattern/urlpattern-generate.tentative.any.js: Pattern: {"pathname":"/:foo/:bar"} Component: pathname Groups: {"foo":"baz","bar":"qux"}
+urlpattern/urlpattern-generate.tentative.any.js: Pattern: {"pathname":"/foo"} Component: pathname Groups: {}
+urlpattern/urlpattern-generate.tentative.any.js: Pattern: {"pathname":"/foo/:bar"} Component: pathname Groups: {"bar":"baz"}
+urlpattern/urlpattern-generate.tentative.any.js: Pattern: {"pathname":"/foo:bar"} Component: pathname Groups: {"bar":"baz"}
+urlpattern/urlpattern-generate.tentative.any.js: Pattern: {"port":"([^\\:]+?)"} Component: port Groups: {}
+urlpattern/urlpattern.any.js: Pattern: ["https://{sub.}?example{.com/}foo"] Inputs: ["https://example.com/foo"]
+urlpattern/urlpattern.any.js: Pattern: [{"hostname":"bad#hostname"}] Inputs: [{"hostname":"bad"}]
+urlpattern/urlpattern.any.js: Pattern: [{"hostname":"bad/hostname"}] Inputs: [{"hostname":"bad"}]
+urlpattern/urlpattern.any.js: Pattern: [{"hostname":"bad\\\\hostname"}] Inputs: [{"hostname":"badhostname"}]
+urlpattern/urlpattern.any.js: Pattern: [{"hostname":"bad\nhostname"}] Inputs: [{"hostname":"badhostname"}]
+urlpattern/urlpattern.any.js: Pattern: [{"hostname":"bad\rhostname"}] Inputs: [{"hostname":"badhostname"}]
+urlpattern/urlpattern.any.js: Pattern: [{"hostname":"bad\thostname"}] Inputs: [{"hostname":"badhostname"}]
+urlpattern/urlpattern.any.js: Pattern: [{"pathname":"/([[a-z]--a])"}] Inputs: [{"pathname":"/a"}]
+urlpattern/urlpattern.any.js: Pattern: [{"pathname":"/([[a-z]--a])"}] Inputs: [{"pathname":"/z"}]
+urlpattern/urlpattern.any.js: Pattern: [{"pathname":"/([\\d&&[0-1]])"}] Inputs: [{"pathname":"/0"}]
+urlpattern/urlpattern.any.js: Pattern: [{"pathname":"/([\\d&&[0-1]])"}] Inputs: [{"pathname":"/3"}]
+urlpattern/urlpattern.any.js: Pattern: [{"pathname":"/:𠀀"}] Inputs: [{"pathname":"/foo"}]
+urlpattern/urlpattern.any.js: Pattern: [{"pathname":":a󠄀b"}] Inputs: []
+urlpattern/urlpattern.any.js: Pattern: [{"pathname":"test/:a𐑐b"}] Inputs: [{"pathname":"test/foo"}]
+urlpattern/urlpattern.any.js: Pattern: [{"port":"80"}] Inputs: [{"port":"80?x"}]
+urlpattern/urlpattern.any.js: Pattern: [{"port":"80"}] Inputs: [{"port":"80\\x"}]
+urlpattern/urlpattern.any.js: Pattern: [{"port":"80"}] Inputs: [{"port":"80x"}]
+urlpattern/urlpattern.any.js: Pattern: [{"port":"80"}] Inputs: [{"port":"8\t0"}]
+urlpattern/urlpattern.any.js: Pattern: [{"protocol":"http","hostname":"example.com#ignoredhash"}] Inputs: ["http://example.com/"]
+urlpattern/urlpattern.any.js: Pattern: [{"protocol":"http","hostname":"example.com/ignoredpath"}] Inputs: ["http://example.com/"]
+urlpattern/urlpattern.any.js: Pattern: [{"protocol":"http","hostname":"example.com\\?ignoredsearch"}] Inputs: ["http://example.com/"]
+urlpattern/urlpattern.any.js: Pattern: [{"protocol":"http","port":"80 "}] Inputs: [{"protocol":"http","port":"80"}]
+urlpattern/urlpattern.https.any.js: Pattern: ["https://{sub.}?example{.com/}foo"] Inputs: ["https://example.com/foo"]
+urlpattern/urlpattern.https.any.js: Pattern: [{"hostname":"bad#hostname"}] Inputs: [{"hostname":"bad"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"hostname":"bad/hostname"}] Inputs: [{"hostname":"bad"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"hostname":"bad\\\\hostname"}] Inputs: [{"hostname":"badhostname"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"hostname":"bad\nhostname"}] Inputs: [{"hostname":"badhostname"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"hostname":"bad\rhostname"}] Inputs: [{"hostname":"badhostname"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"hostname":"bad\thostname"}] Inputs: [{"hostname":"badhostname"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"pathname":"/([[a-z]--a])"}] Inputs: [{"pathname":"/a"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"pathname":"/([[a-z]--a])"}] Inputs: [{"pathname":"/z"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"pathname":"/([\\d&&[0-1]])"}] Inputs: [{"pathname":"/0"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"pathname":"/([\\d&&[0-1]])"}] Inputs: [{"pathname":"/3"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"pathname":"/:𠀀"}] Inputs: [{"pathname":"/foo"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"pathname":":a󠄀b"}] Inputs: []
+urlpattern/urlpattern.https.any.js: Pattern: [{"pathname":"test/:a𐑐b"}] Inputs: [{"pathname":"test/foo"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"port":"80"}] Inputs: [{"port":"80?x"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"port":"80"}] Inputs: [{"port":"80\\x"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"port":"80"}] Inputs: [{"port":"80x"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"port":"80"}] Inputs: [{"port":"8\t0"}]
+urlpattern/urlpattern.https.any.js: Pattern: [{"protocol":"http","hostname":"example.com#ignoredhash"}] Inputs: ["http://example.com/"]
+urlpattern/urlpattern.https.any.js: Pattern: [{"protocol":"http","hostname":"example.com/ignoredpath"}] Inputs: ["http://example.com/"]
+urlpattern/urlpattern.https.any.js: Pattern: [{"protocol":"http","hostname":"example.com\\?ignoredsearch"}] Inputs: ["http://example.com/"]
+urlpattern/urlpattern.https.any.js: Pattern: [{"protocol":"http","port":"80 "}] Inputs: [{"protocol":"http","port":"80"}]

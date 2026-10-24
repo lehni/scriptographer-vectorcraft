@@ -3,7 +3,7 @@
 //! The web-platform-tests of the browser APIs Scriptographer has, against them in V8, when `cargo xtask
 //! corpus --wpt` has fetched them; skipped when it hasn't: `OffscreenCanvas` in a worker
 //! (`html/canvas/offscreen`), the geometry interfaces (`css/geometry`), streams (`streams`,
-//! `encoding/streams`) and compression (`compression`). A test's scripts (its `importScripts()`, `<script>`s, or an `.any.js`
+//! `encoding/streams`), compression (`compression`) and `URLPattern` (`urlpattern`). A test's scripts (its `importScripts()`, `<script>`s, or an `.any.js`
 //! file's `// META: script=`s) run as one, after testharness.js, as a shell runs them. The tests that fail are listed in `tests/wpt-expected-failures.txt`: this test
 //! fails when another one fails, or when a listed one passes, so the list stays the truth.
 //! `WPT_UPDATE=1` writes the list anew. The pass rate by folder prints with `--nocapture`, the
@@ -11,8 +11,8 @@
 //! `WPT_FILTER=text` runs only the files whose path contains `text` and prints each test's result
 //! and message, without checking the list.
 //!
-//! What fails, by cause (2026-10-24: 3328 of 3451 pass, 3299 of the standard's 3394 and 29 of
-//! the 57 tentative ones), to come back to; most of it rarely matters to a script. `docs/gaps.md`
+//! What fails, by cause (2026-10-24: 4089 of 4266 pass, 3998 of the standard's 4137 and 91 of
+//! the 129 tentative ones), to come back to; most of it rarely matters to a script. `docs/gaps.md`
 //! (G6) sums it up:
 //!
 //! - Streams (about 45): `TextDecoderStream` decodes UTF-8 only, as `TextDecoder` does;
@@ -20,6 +20,9 @@
 //!   that compress media files, fetch by a relative URL, which scripts have no base for; and what web-streams-polyfill doesn't do: the tentative
 //!   `owning` type, a string to `ReadableStream.from()`, the async iterators' prototype, a write
 //!   that `enqueue()` starts at once in a pipe, and `strategy.size` called as a method.
+//! - `URLPattern` (about 55): what urlpattern-polyfill doesn't do: the tentative `generate()` and
+//!   `compareComponent()`, the hostname checks the standard added, and character classes of the
+//!   `v` flag (`[[a-z]--a]`).
 //! - Text (canvas/text, 9): colour emoji, which VectorCraft's text has no glyphs for (bitmap and
 //!   COLR fonts); fonts whose family, style and version are another's (the `CanvasTest` variants),
 //!   which the app's font database keeps one of; `lang`, which shaping doesn't take.
@@ -60,8 +63,14 @@ const TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The folders of the tests that run, in the corpus, and whether their HTML pages run too: the
 /// canvas's are its tests in a window and its reftests, which compare renderings.
-const SUITES: [(&str, bool); 5] =
-    [("html/canvas/offscreen", false), ("css/geometry", true), ("streams", false), ("encoding/streams", false), ("compression", false)];
+const SUITES: [(&str, bool); 6] = [
+    ("html/canvas/offscreen", false),
+    ("css/geometry", true),
+    ("streams", false),
+    ("encoding/streams", false),
+    ("compression", false),
+    ("urlpattern", false),
+];
 
 struct Harness {
     corpus: PathBuf,
@@ -222,8 +231,12 @@ fn scripts(harness: &Harness, file: &Path) -> String {
             source.push('\n');
         }
     }
-    // What they fetch, and the fonts they load, from the server's root:
-    source.replace("fetch('/", &format!("fetch('{}/", harness.server)).replace("url('/", &format!("url('{}/", harness.server))
+    // What they fetch, and the fonts they load, from the server's root, or from next to the test:
+    let folder = file.parent().and_then(|f| f.strip_prefix(&harness.corpus).ok()).map(|f| f.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+    source
+        .replace("fetch('/", &format!("fetch('{}/", harness.server))
+        .replace("fetch('resources/", &format!("fetch('{}/{folder}/resources/", harness.server))
+        .replace("url('/", &format!("url('{}/", harness.server))
 }
 
 /// Each test of the test `file`, with its status and message; the file's own name when the harness
