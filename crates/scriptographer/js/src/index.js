@@ -4,6 +4,7 @@ import { natives } from './natives.js'
 import { inject, internal } from './define.js'
 import * as abort from './abort.js'
 import * as blob from './blob.js'
+import { BroadcastChannel } from './broadcast-channel.js'
 import * as canvas from './canvas.js'
 import { dom } from './dom.js'
 import { Clipboard } from './clipboard.js'
@@ -109,6 +110,9 @@ if (!globalThis.MessageChannel) {
   inject(globalThis, { MessageChannel, MessagePort })
   // What the runtime makes the ports it receives with:
   Object.assign(natives, { makePort })
+}
+if (!globalThis.BroadcastChannel) {
+  inject(globalThis, { BroadcastChannel })
 }
 // A DOM outside a browser, after Paper.js, which would take one for a browser's:
 if (natives.dom && !globalThis.document) {

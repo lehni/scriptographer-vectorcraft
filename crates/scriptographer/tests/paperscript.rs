@@ -318,6 +318,47 @@ fn unhandled_rejections_are_reported<E: Engine>() {
     assert_eq!(runtime.take_output(), ["handled quiet true"]);
 }
 
+/// A `BroadcastChannel` message reaches the other channels of its name, in any runtime, on their
+/// turn: in the order the messages were posted, and to the channels in the order they were opened.
+fn broadcast_channels_reach_the_others_of_their_name<E: Engine>(engine: &str) {
+    let name = format!("broadcast-{engine}");
+    let mut first = Runtime::<E>::new().unwrap();
+    let scope = first.create_scope(800.0, 600.0).unwrap();
+    first
+        .execute(
+            &scope,
+            &format!(
+                "const log = label => event => console.log(label, JSON.stringify(event.data), event instanceof MessageEvent)\n\
+                 globalThis.one = new BroadcastChannel('{name}')\n\
+                 globalThis.two = new BroadcastChannel('{name}')\n\
+                 const other = new BroadcastChannel('{name}-other')\n\
+                 one.onmessage = log('one')\n\
+                 two.addEventListener('message', log('two'))\n\
+                 other.onmessage = log('other')\n\
+                 one.postMessage({{ n: 1 }})"
+            ),
+        )
+        .unwrap();
+    let mut second = Runtime::<E>::new().unwrap();
+    let scope = second.create_scope(800.0, 600.0).unwrap();
+    second
+        .execute(&scope, &format!("const three = new BroadcastChannel('{name}')\nthree.onmessage = event => console.log('three', event.data)\nthree.postMessage('hi')\nthree.close()"))
+        .unwrap();
+    assert!(first.take_output().is_empty(), "on the receiver's turn");
+    first.run_timers(0.0).unwrap();
+    second.run_timers(0.0).unwrap();
+    assert_eq!(first.take_output(), ["two {\"n\":1} true", "one \"hi\" true", "two \"hi\" true"]);
+    assert!(second.take_output().is_empty(), "the one opened after the post gets nothing, nor the one closed");
+    // A runtime without PaperScript, whose view would wait for a frame:
+    let mut third = Runtime::<E>::new().unwrap();
+    third.eval(&format!("globalThis.channel = new BroadcastChannel('{name}')")).unwrap();
+    assert!(third.is_running(), "an open channel keeps its script running");
+    third.eval("channel.close()").unwrap();
+    assert!(!third.is_running());
+    first.eval("one.close(); two.close(); try { one.postMessage(1) } catch (e) { console.log(e.name, one.name === two.name) }").unwrap();
+    assert_eq!(first.take_output(), ["InvalidStateError true"]);
+}
+
 fn scripts_have_the_browsers_everyday_apis<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
@@ -1810,6 +1851,11 @@ macro_rules! engine_tests {
             #[test]
             fn promises_resolve() {
                 super::promises_resolve::<$engine>();
+            }
+
+            #[test]
+            fn broadcast_channels_reach_the_others_of_their_name() {
+                super::broadcast_channels_reach_the_others_of_their_name::<$engine>(stringify!($module));
             }
 
             #[test]

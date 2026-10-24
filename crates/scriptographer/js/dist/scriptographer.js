@@ -692,6 +692,46 @@
   }
   __name(getType, "getType");
 
+  // src/broadcast-channel.js
+  var BroadcastChannel = class extends EventTarget {
+    static {
+      __name(this, "BroadcastChannel");
+    }
+    #name;
+    // `null` once the channel is closed:
+    #number;
+    constructor(name) {
+      checkArguments(arguments, 1, "BroadcastChannel");
+      super();
+      this.#name = String(name);
+      this.#number = natives.broadcast.open(
+        this.#name,
+        ({ type, data }) => fire(this, new MessageEvent(type, { data }))
+      );
+    }
+    get name() {
+      return this.#name;
+    }
+    postMessage(message) {
+      checkArguments(arguments, 1, "postMessage");
+      if (this.#number === null) {
+        throw new DOMException(
+          "Unable to post to a BroadcastChannel that is closed.",
+          "InvalidStateError"
+        );
+      }
+      natives.broadcast.post(this.#number, message);
+    }
+    close() {
+      if (this.#number !== null) {
+        natives.broadcast.close(this.#number);
+        this.#number = null;
+      }
+    }
+  };
+  defineEventHandlers(BroadcastChannel.prototype, "message", "messageerror");
+  setToStringTag(BroadcastChannel);
+
   // src/canvas.js
   var canvas_exports = {};
   __export(canvas_exports, {
@@ -5158,6 +5198,9 @@ ${value}\r
   if (!globalThis.MessageChannel) {
     inject(globalThis, { MessageChannel, MessagePort });
     Object.assign(natives, { makePort });
+  }
+  if (!globalThis.BroadcastChannel) {
+    inject(globalThis, { BroadcastChannel });
   }
   if (natives.dom && !globalThis.document) {
     inject(globalThis, dom, { configurable: true });
