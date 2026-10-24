@@ -34,6 +34,8 @@ mod fetch;
 #[cfg(not(target_arch = "wasm32"))]
 mod fs;
 pub mod host;
+#[cfg(not(target_arch = "wasm32"))]
+mod locks;
 mod modules;
 mod palette;
 mod path2d;
@@ -199,6 +201,9 @@ pub struct Host<H> {
     coders: Vec<compression::Coder>,
     #[cfg(not(target_arch = "wasm32"))]
     next_coder: u32,
+    /// The runtime's Web Locks.
+    #[cfg(not(target_arch = "wasm32"))]
+    locks: locks::Locks<H>,
     /// The open `EventSource`s, and the number the next one gets.
     #[cfg(not(target_arch = "wasm32"))]
     event_sources: Vec<event_source::Connection<H>>,
@@ -287,6 +292,8 @@ impl<H> Default for Host<H> {
             #[cfg(not(target_arch = "wasm32"))]
             next_channel: 0,
             #[cfg(not(target_arch = "wasm32"))]
+            locks: locks::Locks::default(),
+            #[cfg(not(target_arch = "wasm32"))]
             coders: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
             next_coder: 0,
@@ -333,10 +340,13 @@ pub struct Setup {
 pub struct Scope<H>(H);
 
 impl<E: Engine> Drop for Runtime<E> {
-    /// Writes what's left of the script's `localStorage`; a failure can't reach the script now.
+    /// Writes what's left of the script's `localStorage`, and lets go of its locks; a failure
+    /// can't reach the script now.
     fn drop(&mut self) {
         if let Ok(mut host) = self.host.try_borrow_mut() {
             let _ = host.local_storage.write(None);
+            #[cfg(not(target_arch = "wasm32"))]
+            locks::forget(&host.locks);
         }
     }
 }
@@ -376,6 +386,8 @@ impl<E: Engine> Runtime<E> {
             ("eventSource", event_source::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
             ("compression", compression::natives(&mut engine)?),
+            #[cfg(not(target_arch = "wasm32"))]
+            ("locks", locks::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
             ("url", urls::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
@@ -545,6 +557,8 @@ impl<E: Engine> Runtime<E> {
             broadcast_channel::poll(call)?;
             #[cfg(not(target_arch = "wasm32"))]
             event_source::poll(call)?;
+            #[cfg(not(target_arch = "wasm32"))]
+            locks::poll(call)?;
             for callback in due {
                 call.call(&callback, &Value::Undefined, &[])?;
             }
@@ -572,6 +586,7 @@ impl<E: Engine> Runtime<E> {
             || host.ports.iter().any(|p| p.is_open())
             || !host.channels.is_empty()
             || !host.event_sources.is_empty()
+            || host.locks.is_waiting()
         {
             return true;
         }

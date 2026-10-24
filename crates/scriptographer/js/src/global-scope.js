@@ -2,8 +2,11 @@ import { formatError } from './format-error.js'
 import { natives } from './natives.js'
 
 // What a browser's global object has besides its classes, for scripts outside
-// one: `performance`, `queueMicrotask()`, `reportError()`, `atob()` and
-// `btoa()`.
+// one: `isSecureContext`, `performance`, `queueMicrotask()`, `reportError()`,
+// `atob()` and `btoa()`.
+
+// The user's own scripts run as a browser's pages on localhost do, secure:
+export const isSecureContext = true
 
 export const performance = {
   timeOrigin: Date.now(),

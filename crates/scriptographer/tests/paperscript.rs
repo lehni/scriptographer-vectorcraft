@@ -478,6 +478,54 @@ fn scripts_keep_their_own_files<E: Engine>(name: &str) {
     assert_eq!(typed, ["SecurityError"]);
 }
 
+/// Web Locks are the app's: a lock one script holds, another one waits for, unless it asks only
+/// if it's available; shared ones are held together.
+fn locks_are_shared_by_scripts<E: Engine>(name: &str) {
+    let lock = format!("lock-{name}");
+    let mut first = Runtime::<E>::new().unwrap();
+    first
+        .eval(&format!(
+            "navigator.locks.request('{lock}', async lock => {{\n\
+               console.log('first', lock.mode, lock instanceof Lock)\n\
+               await new Promise(resolve => setTimeout(resolve, 50))\n\
+               console.log('first done')\n\
+             }})"
+        ))
+        .unwrap();
+    first.run_timers(0.0).unwrap();
+    let mut second = Runtime::<E>::new().unwrap();
+    second
+        .eval(&format!(
+            "navigator.locks.request('{lock}', {{ ifAvailable: true }}, lock => console.log('available', lock))\n\
+             navigator.locks.request('{lock}', lock => 'got it').then(result => console.log('second', result))\n\
+             Promise.all(['a', 'b'].map(id => navigator.locks.request('{lock}-shared', {{ mode: 'shared' }}, () => navigator.locks.query())))\n\
+               .then(([state]) => console.log('shared', state.held.filter(h => h.name === '{lock}-shared').length))"
+        ))
+        .unwrap();
+    second.run_timers(0.0).unwrap();
+    assert!(second.is_running(), "a request that waits keeps the script running");
+    let started = std::time::Instant::now();
+    while (first.is_running() || second.is_running()) && started.elapsed() < std::time::Duration::from_secs(5) {
+        let now = started.elapsed().as_secs_f64() * 1000.0;
+        first.run_timers(now).unwrap();
+        second.run_timers(now).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(first.take_output(), ["first exclusive true", "first done"]);
+    assert_eq!(second.take_output(), ["available null", "shared 2", "second got it"]);
+    // A script that ends lets go of what it holds:
+    let mut holder = Runtime::<E>::new().unwrap();
+    holder.eval(&format!("navigator.locks.request('{lock}-kept', () => new Promise(() => {{}}))")).unwrap();
+    holder.run_timers(0.0).unwrap();
+    second.eval(&format!("navigator.locks.request('{lock}-kept', () => console.log('freed'))")).unwrap();
+    second.run_timers(0.0).unwrap();
+    assert!(second.take_output().is_empty());
+    drop(holder);
+    second.run_timers(0.0).unwrap();
+    second.run_timers(0.0).unwrap();
+    assert_eq!(second.take_output(), ["freed"]);
+}
+
 /// Encoding as the Encoding standard has it, and base64 as browsers read it.
 fn text_encodes_as_the_standard_has_it<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
@@ -2144,6 +2192,11 @@ macro_rules! engine_tests {
             #[test]
             fn scripts_keep_their_own_files() {
                 super::scripts_keep_their_own_files::<$engine>(stringify!($module));
+            }
+
+            #[test]
+            fn locks_are_shared_by_scripts() {
+                super::locks_are_shared_by_scripts::<$engine>(stringify!($module));
             }
 
             #[test]
