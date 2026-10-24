@@ -6,9 +6,9 @@ import { ReadableStream } from './streams.js'
 
 // The browser's `fetch()` for scripts outside a browser, with `Headers`,
 // `FormData`, `Request` and `Response`. The runtime sends the requests, on
-// threads of its own. Bodies arrive whole, and stream as one chunk; a stream
-// that a request sends is read before it goes. There is no CORS, cookie store
-// or HTTP cache outside a browser.
+// threads of its own. A response's body streams as it arrives; a stream that
+// a request sends is read before it goes. There is no CORS, cookie store or
+// HTTP cache outside a browser.
 
 export class Headers {
   // The headers as they came, names in lower case:
@@ -313,8 +313,9 @@ export class Response extends Body {
 
 setToStringTag(Headers, FormData, Request, Response)
 
-// A Promise of the `Response`, rejected with a `TypeError` when the request
-// fails, or with the signal's reason when it aborts.
+// A Promise of the `Response`, once its head is in, rejected with a
+// `TypeError` when the request fails, or with the signal's reason when it
+// aborts, which errors the body too while it arrives.
 export async function fetch(input, init) {
   const request = new Request(input, init)
   const { method, url, headers, signal, redirect } = request
@@ -322,15 +323,54 @@ export async function fetch(input, init) {
   const body = await Body.read(request)
   signal?.throwIfAborted()
   return new Promise((resolve, reject) => {
-    const abort = () => reject(signal.reason)
-    signal?.addEventListener('abort', abort)
-    natives
-      .request(method, url, [...headers], body, redirect === 'follow')
-      .then(({ status, statusText, url, redirected, headers, body }) => {
-        const response = new Response(body, { status, statusText, headers })
+    let controller
+    const stream = new ReadableStream({
+      type: 'bytes',
+      start(c) {
+        controller = c
+      },
+      cancel() {
+        finish()
+      }
+    })
+    // What the runtime hands on: the response's head, then the parts of its
+    // body, and `null` at its end; or why the request failed.
+    const receive = value => {
+      if (typeof value === 'string') {
+        const err = new TypeError(`fetch failed: ${value}`)
+        reject(err)
+        controller.error(err)
+        finish()
+      } else if (value instanceof Uint8Array) {
+        controller.enqueue(value)
+      } else if (value) {
+        const { status, statusText, url, redirected, headers } = value
+        const response = new Response(stream, { status, statusText, headers })
         resolve(setResponse(response, { url, redirected, type: 'basic' }))
-      }, reject)
-      .finally(() => signal?.removeEventListener('abort', abort))
+      } else {
+        controller.close()
+        finish()
+      }
+    }
+    const number = natives.fetch.request(
+      method,
+      url,
+      [...headers],
+      body,
+      redirect === 'follow',
+      receive
+    )
+    const finish = () => {
+      natives.fetch.cancel(number)
+      signal?.removeEventListener('abort', abort)
+    }
+    // Once the response is complete, an abort changes nothing:
+    const abort = () => {
+      reject(signal.reason)
+      controller.error(signal.reason)
+      finish()
+    }
+    signal?.addEventListener('abort', abort)
   })
 }
 
