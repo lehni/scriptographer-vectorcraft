@@ -1680,6 +1680,44 @@ fn run_until_done<E: Engine>(runtime: &mut Runtime<E>) {
     }
 }
 
+/// The scripts that open a `SharedWorker` of the same script and name share one worker, each
+/// through its own port; another name is another worker.
+fn shared_workers_are_shared_by_scripts<E: Engine>(name: &str) {
+    let folder = std::env::temp_dir().join(format!("scriptographer-shared-workers-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(
+        folder.join("count.js"),
+        "let count = 0\n\
+         onconnect = event => {\n\
+             const [port] = event.ports\n\
+             port.onmessage = message => port.postMessage(`${message.data} ${++count} ${self.name} ${typeof postMessage}`)\n\
+         }",
+    )
+    .unwrap();
+    let open = |worker: &str, said: &str| {
+        let mut runtime = Runtime::<E>::new().unwrap();
+        runtime.set_script(&Setup { file: Some(folder.join("script.js").to_string_lossy().into_owned()), ..Setup::default() }).unwrap();
+        runtime
+            .eval(&format!(
+                "const worker = new SharedWorker('count.js', '{worker}')\n\
+                 worker.port.onmessage = event => {{ console.log(event.data); worker.port.close() }}\n\
+                 worker.port.postMessage('{said}')"
+            ))
+            .unwrap();
+        runtime
+    };
+    let mut first = open(name, "one");
+    run_until_done(&mut first);
+    let mut second = open(name, "two");
+    run_until_done(&mut second);
+    let mut other = open(&format!("{name}-other"), "three");
+    run_until_done(&mut other);
+    assert_eq!(first.take_output(), [format!("one 1 {name} undefined")]);
+    assert_eq!(second.take_output(), [format!("two 2 {name} undefined")], "the same worker, which counts on");
+    assert_eq!(other.take_output(), [format!("three 1 {name}-other undefined")]);
+}
+
 fn workers_run_scripts_on_their_threads<E: Engine>(name: &str) {
     let folder = std::env::temp_dir().join(format!("scriptographer-workers-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&folder);
@@ -2262,6 +2300,11 @@ macro_rules! engine_tests {
             #[test]
             fn web_sockets_that_cant_connect_close() {
                 super::web_sockets_that_cant_connect_close::<$engine>();
+            }
+
+            #[test]
+            fn shared_workers_are_shared_by_scripts() {
+                super::shared_workers_are_shared_by_scripts::<$engine>(stringify!($module));
             }
 
             #[test]

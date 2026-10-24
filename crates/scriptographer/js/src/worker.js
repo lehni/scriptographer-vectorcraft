@@ -6,7 +6,7 @@ import {
   defineEventHandlers,
   fire
 } from './events.js'
-import { postWith } from './message-port.js'
+import { MessageChannel, postWith, takePort } from './message-port.js'
 import { natives } from './natives.js'
 
 // `Worker` for scripts outside a browser, and what a worker's global object
@@ -57,24 +57,67 @@ export class Worker extends EventTarget {
 }
 
 defineEventHandlers(Worker.prototype, 'message', 'messageerror', 'error')
-setToStringTag(Worker)
+
+// The worker of the script at `url` and its name that all of the app's scripts
+// share, as of one origin: each one talks to it through its own `port`.
+export class SharedWorker extends EventTarget {
+  #port
+
+  constructor(url, options) {
+    super()
+    const { type = 'classic', name = '' } =
+      typeof options === 'string' ? { name: options } : (options ?? {})
+    if (type === 'module') {
+      throw new DOMException(
+        'Unsupported SharedWorker: module workers are not supported.',
+        'NotSupportedError'
+      )
+    }
+    const { port1, port2 } = new MessageChannel()
+    this.#port = port1
+    natives.worker.connect(
+      String(url),
+      String(name),
+      takePort(port2),
+      ({ message }) => {
+        // Unless a handler prevents it, the error shows in the console too.
+        const event = new ErrorEvent('error', { message, cancelable: true })
+        if (fire(this, event)) {
+          console.error(`Uncaught (in shared worker) ${message}`)
+        }
+      }
+    )
+  }
+
+  get port() {
+    return this.#port
+  }
+}
+
+defineEventHandlers(SharedWorker.prototype, 'error')
+setToStringTag(Worker, SharedWorker)
 
 // Give the worker's global object, an `EventTarget` as every one is here, what
-// a worker's has: `name`, `postMessage()`, `close()` and `importScripts()`.
-// What the parent sends, the runtime hands to the function this returns.
-export function setupWorker(name) {
+// a worker's has: `name`, `close()` and `importScripts()`, and a dedicated
+// one's `postMessage()`. What the parent sends, or the port of a script that
+// connects to a shared one, the runtime hands to the function this returns.
+export function setupWorker(name, isShared) {
   const { close, importScripts } = natives.worker.self
-  inject(globalThis, {
-    name,
-    postMessage(data, transfer) {
-      postWith(transfer, (ports, numbers) =>
-        natives.worker.self.postMessage(data, ports, numbers)
-      )
-    },
-    close,
-    importScripts
-  })
-  defineEventHandlers(globalThis, 'message', 'messageerror')
-  return ({ type, data, ports }) =>
-    fire(globalThis, new MessageEvent(type, { data, ports }))
+  inject(globalThis, { name, close, importScripts })
+  if (isShared) {
+    defineEventHandlers(globalThis, 'connect')
+    return port =>
+      fire(globalThis, new MessageEvent('connect', { data: '', ports: [port] }))
+  } else {
+    inject(globalThis, {
+      postMessage(data, transfer) {
+        postWith(transfer, (ports, numbers) =>
+          natives.worker.self.postMessage(data, ports, numbers)
+        )
+      }
+    })
+    defineEventHandlers(globalThis, 'message', 'messageerror')
+    return ({ type, data, ports }) =>
+      fire(globalThis, new MessageEvent(type, { data, ports }))
+  }
 }

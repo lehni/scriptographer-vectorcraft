@@ -8204,6 +8204,12 @@ ${value}\r
     list.forEach(detach);
   }
   __name(postWith, "postWith");
+  function takePort(port) {
+    const number = getNumber(port);
+    detach(port);
+    return number;
+  }
+  __name(takePort, "takePort");
   function makePort(number) {
     return new MessagePort(internal, number);
   }
@@ -8251,22 +8257,58 @@ ${value}\r
     }
   };
   defineEventHandlers(Worker.prototype, "message", "messageerror", "error");
-  setToStringTag(Worker);
-  function setupWorker(name) {
-    const { close, importScripts } = natives.worker.self;
-    inject(globalThis, {
-      name,
-      postMessage(data, transfer) {
-        postWith(
-          transfer,
-          (ports, numbers2) => natives.worker.self.postMessage(data, ports, numbers2)
+  var SharedWorker = class extends EventTarget {
+    static {
+      __name(this, "SharedWorker");
+    }
+    #port;
+    constructor(url, options) {
+      super();
+      const { type = "classic", name = "" } = typeof options === "string" ? { name: options } : options ?? {};
+      if (type === "module") {
+        throw new DOMException(
+          "Unsupported SharedWorker: module workers are not supported.",
+          "NotSupportedError"
         );
-      },
-      close,
-      importScripts
-    });
-    defineEventHandlers(globalThis, "message", "messageerror");
-    return ({ type, data, ports }) => fire(globalThis, new MessageEvent(type, { data, ports }));
+      }
+      const { port1, port2 } = new MessageChannel();
+      this.#port = port1;
+      natives.worker.connect(
+        String(url),
+        String(name),
+        takePort(port2),
+        ({ message }) => {
+          const event = new ErrorEvent("error", { message, cancelable: true });
+          if (fire(this, event)) {
+            console.error(`Uncaught (in shared worker) ${message}`);
+          }
+        }
+      );
+    }
+    get port() {
+      return this.#port;
+    }
+  };
+  defineEventHandlers(SharedWorker.prototype, "error");
+  setToStringTag(Worker, SharedWorker);
+  function setupWorker(name, isShared) {
+    const { close, importScripts } = natives.worker.self;
+    inject(globalThis, { name, close, importScripts });
+    if (isShared) {
+      defineEventHandlers(globalThis, "connect");
+      return (port) => fire(globalThis, new MessageEvent("connect", { data: "", ports: [port] }));
+    } else {
+      inject(globalThis, {
+        postMessage(data, transfer) {
+          postWith(
+            transfer,
+            (ports, numbers2) => natives.worker.self.postMessage(data, ports, numbers2)
+          );
+        }
+      });
+      defineEventHandlers(globalThis, "message", "messageerror");
+      return ({ type, data, ports }) => fire(globalThis, new MessageEvent(type, { data, ports }));
+    }
   }
   __name(setupWorker, "setupWorker");
 
@@ -8711,6 +8753,9 @@ ${value}\r
   if (!globalThis.Worker) {
     inject(globalThis, { Worker });
     Object.assign(natives, { setupWorker });
+  }
+  if (!globalThis.SharedWorker) {
+    inject(globalThis, { SharedWorker });
   }
   if (!globalThis.MessageChannel) {
     inject(globalThis, { MessageChannel, MessagePort });

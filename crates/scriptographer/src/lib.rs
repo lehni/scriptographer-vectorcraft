@@ -562,7 +562,7 @@ impl<E: Engine> Runtime<E> {
         #[cfg(not(target_arch = "wasm32"))]
         if !host.fetches.is_empty()
             || !host.sockets.is_empty()
-            || !host.children.is_empty()
+            || host.children.iter().any(|c| !c.shared)
             || host.ports.iter().any(|p| p.is_open())
             || !host.channels.is_empty()
             || !host.event_sources.is_empty()

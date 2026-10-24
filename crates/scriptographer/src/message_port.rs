@@ -61,7 +61,7 @@ fn new_channel<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, _args: &[Valu
 }
 
 /// Numbers `ends` as a port of the runtime.
-fn add<H>(call: &mut dyn Call<H>, ends: Ends) -> Result<u32, Error> {
+pub(crate) fn add<H>(call: &mut dyn Call<H>, ends: Ends) -> Result<u32, Error> {
     let host = call.host()?;
     let mut host = host.borrow_mut();
     host.next_port = host.next_port.wrapping_add(1);
@@ -101,15 +101,17 @@ pub(crate) fn message<H: Clone>(call: &mut dyn Call<H>, args: &[Value<H>]) -> Re
             numbers.push(call.to_number(&number)? as u32);
         }
     }
+    let ports = numbers.into_iter().map(|number| take(call, number)).collect::<Result<_, _>>()?;
+    Ok(Message { data, ports })
+}
+
+/// Takes the ends of the port `number` from the runtime, to send them.
+pub(crate) fn take<H>(call: &mut dyn Call<H>, number: u32) -> Result<Ends, Error> {
     let host = call.host()?;
     let mut host = host.borrow_mut();
-    let mut ports = Vec::with_capacity(numbers.len());
-    for number in numbers {
-        let at = host.ports.iter().position(|p| p.number == number);
-        let port = at.map(|at| host.ports.swap_remove(at));
-        ports.push(port.ok_or_else(|| Error::Dom("DataCloneError", "a port that was closed or sent can't be transferred".into()))?.ends);
-    }
-    Ok(Message { data, ports })
+    let at = host.ports.iter().position(|p| p.number == number);
+    let port = at.map(|at| host.ports.swap_remove(at));
+    Ok(port.ok_or_else(|| Error::Dom("DataCloneError", "a port that was closed or sent can't be transferred".into()))?.ends)
 }
 
 /// `message`, made in the realm `call` is in, as `{ type, data, ports }` for a `MessageEvent`: its
