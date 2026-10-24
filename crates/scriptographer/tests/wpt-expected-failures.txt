@@ -55,7 +55,7 @@ encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to rej
 encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to reject invalid sequences in UTF-16LE
 encoding/streams/decode-utf8.any.js: decoding a transferred ArrayBuffer chunk should give no output
 encoding/streams/decode-utf8.any.js: decoding a transferred Uint8Array chunk should give no output
-html/canvas/offscreen/canvas-context/2d.getContext.options.any.js: Untitled
+html/canvas/offscreen/canvas-context/2d.getContext.options.any.js: 2d
 html/canvas/offscreen/color-type/2d.color.type.u8p3.to.u8srgb.to.u8p3.worker.js: test srgb unorm8 canvas storing 8-bit display-p3 data accurately
 html/canvas/offscreen/color-type/2d.color.type.u8srgb.to.u8p3.to.u8srgb.worker.js: test display-p3 unorm8 canvas not storing 8-bit srgb data accurately
 html/canvas/offscreen/fill-and-stroke-styles/2d.fillStyle.toStringFunctionCallback.worker.js: Passing a function in to ctx.fillStyle or ctx.strokeStyle with a toString callback works as specified
@@ -90,7 +90,7 @@ html/canvas/offscreen/layers/2d.layer.valid-calls.beginLayer-endLayer.worker.js:
 html/canvas/offscreen/layers/2d.layer.valid-calls.beginLayer-save.worker.js: No exception raised on beginLayer() + save().
 html/canvas/offscreen/layers/2d.layer.valid-calls.beginLayer.worker.js: No exception raised on lone beginLayer() calls.
 html/canvas/offscreen/layers/2d.layer.valid-calls.save-beginLayer.worker.js: No exception raised on save() + beginLayer().
-html/canvas/offscreen/line-styles/2d.line.cross.worker.js: Untitled
+html/canvas/offscreen/line-styles/2d.line.cross.worker.js: 2d
 html/canvas/offscreen/pixel-manipulation/2d.imageData.createImageBitmap.srgb.rgba.float16.worker.js: Verify round-trip of 16-bit float sRGB data ImageData through ImageBitmap
 html/canvas/offscreen/pixel-manipulation/2d.imageData.put.basic.rgba.float16.worker.js: putImageData() puts 16-bit floating point image data from getImageData() onto the canvas
 html/canvas/offscreen/text/2d.text.measure.emHeights-low-ascent.worker.js: Testing emHeights with reduced ascent metric
@@ -177,3 +177,7 @@ urlpattern/urlpattern.https.any.js: Pattern: [{"protocol":"http","hostname":"exa
 urlpattern/urlpattern.https.any.js: Pattern: [{"protocol":"http","hostname":"example.com/ignoredpath"}] Inputs: ["http://example.com/"]
 urlpattern/urlpattern.https.any.js: Pattern: [{"protocol":"http","hostname":"example.com\\?ignoredsearch"}] Inputs: ["http://example.com/"]
 urlpattern/urlpattern.https.any.js: Pattern: [{"protocol":"http","port":"80 "}] Inputs: [{"protocol":"http","port":"80"}]
+web-locks/idlharness.https.any.js: idl_test setup
+web-locks/non-secure-context.any.js: API presence in non-secure contexts
+web-locks/secure-context.https.any.js: API presence in secure contexts
+web-locks/storage-buckets.tentative.https.any.js: Storage buckets have independent locks

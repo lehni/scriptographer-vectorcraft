@@ -82,6 +82,7 @@
   __export(global_scope_exports, {
     atob: () => atob,
     btoa: () => btoa,
+    isSecureContext: () => isSecureContext,
     performance: () => performance,
     queueMicrotask: () => queueMicrotask2,
     reportError: () => reportError
@@ -96,6 +97,7 @@
   __name(formatError, "formatError");
 
   // src/global-scope.js
+  var isSecureContext = true;
   var performance = {
     timeOrigin: Date.now(),
     // The milliseconds since the runtime started.
@@ -6819,6 +6821,124 @@ ${value}\r
   }
   __name(getFontBytes, "getFontBytes");
 
+  // src/locks.js
+  var Lock = class {
+    static {
+      __name(this, "Lock");
+    }
+    #name;
+    #mode;
+    constructor(key, name, mode) {
+      checkInternal(key, "Lock", "navigator.locks.request() gives them");
+      this.#name = name;
+      this.#mode = mode;
+    }
+    get name() {
+      return this.#name;
+    }
+    get mode() {
+      return this.#mode;
+    }
+  };
+  var LockManager = class {
+    static {
+      __name(this, "LockManager");
+    }
+    constructor(key) {
+      checkInternal(key, "LockManager", "navigator.locks is one");
+    }
+    // `request(name, [options,] callback)`: a Promise of what the callback gives
+    // once it ran with the lock, which is released then.
+    async request(name, ...args) {
+      const callback = args.pop();
+      const options = args[0] ?? {};
+      if (typeof callback !== "function") {
+        throw new TypeError(`Invalid callback: '${callback}', not a function.`);
+      }
+      const {
+        mode = "exclusive",
+        ifAvailable = false,
+        steal = false,
+        signal
+      } = options;
+      name = String(name);
+      const unsupported = /* @__PURE__ */ __name((message) => new DOMException(message, "NotSupportedError"), "unsupported");
+      if (mode !== "exclusive" && mode !== "shared") {
+        throw new TypeError(`Invalid lock mode: '${mode}'.`);
+      } else if (name.startsWith("-")) {
+        throw unsupported(`Invalid lock name: '${name}', starting with '-'.`);
+      } else if (steal && (ifAvailable || mode === "shared")) {
+        throw unsupported("Unable to steal a lock if available or shared.");
+      } else if (signal && (steal || ifAvailable)) {
+        throw unsupported("Unable to abort a request that steals or waits not.");
+      }
+      signal?.throwIfAborted();
+      return new Promise((resolve, reject) => {
+        let id;
+        const abort2 = /* @__PURE__ */ __name(() => {
+          natives.locks.cancel(id);
+          reject(signal.reason);
+        }, "abort");
+        const run = /* @__PURE__ */ __name(async (isGranted) => {
+          signal?.removeEventListener("abort", abort2);
+          if (signal?.aborted) {
+            natives.locks.release(id);
+            reject(signal.reason);
+            return;
+          }
+          try {
+            resolve(
+              await callback(isGranted ? new Lock(internal, name, mode) : null)
+            );
+          } catch (err) {
+            reject(err);
+          } finally {
+            if (isGranted) natives.locks.release(id);
+          }
+        }, "run");
+        const receive = /* @__PURE__ */ __name((state2) => {
+          if (state2 === "granted") {
+            run(true);
+          } else {
+            reject(new DOMException("The lock was stolen.", "AbortError"));
+          }
+        }, "receive");
+        const [number, state] = natives.locks.request(
+          toKey(name),
+          mode === "exclusive",
+          ifAvailable,
+          steal,
+          receive
+        );
+        id = number;
+        if (state === "waiting") {
+          signal?.addEventListener("abort", abort2);
+        } else {
+          queueMicrotask(() => run(state === "granted"));
+        }
+      });
+    }
+    async query() {
+      const { held, pending } = natives.locks.query();
+      const decode = /* @__PURE__ */ __name((list) => list.map((info) => ({ ...info, name: fromKey(info.name) })), "decode");
+      return { held: decode(held), pending: decode(pending) };
+    }
+  };
+  setToStringTag(Lock, LockManager);
+  function toKey(name) {
+    return Array.from(
+      { length: name.length },
+      (_3, i2) => name.charCodeAt(i2).toString(16).padStart(4, "0")
+    ).join("");
+  }
+  __name(toKey, "toKey");
+  function fromKey(key) {
+    return String.fromCharCode(
+      ...(key.match(/.{4}/g) ?? []).map((code) => parseInt(code, 16))
+    );
+  }
+  __name(fromKey, "fromKey");
+
   // src/palette.js
   var palettes = /* @__PURE__ */ new Map();
   var lastId = 0;
@@ -8785,6 +8905,10 @@ ${value}\r
   if (!globalThis.Worker) {
     inject(globalThis, { Worker });
     Object.assign(natives, { setupWorker });
+  }
+  if (globalThis.navigator && !navigator.locks) {
+    inject(globalThis, { Lock, LockManager });
+    inject(navigator, { locks: new LockManager(internal) }, { writable: false });
   }
   if (!globalThis.SharedWorker) {
     inject(globalThis, { SharedWorker });

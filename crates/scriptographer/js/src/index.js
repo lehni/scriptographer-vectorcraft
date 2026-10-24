@@ -29,6 +29,7 @@ import * as streams from './streams.js'
 import { notifyRejections, reportRejections } from './rejections.js'
 import { FontFace, FontFaceSet } from './font-face.js'
 import { LocalFile } from './local-file.js'
+import { Lock, LockManager } from './locks.js'
 import {
   Palette,
   handlePaletteEvent,
@@ -130,6 +131,11 @@ if (!globalThis.Worker) {
   inject(globalThis, { Worker })
   // What the runtime makes a worker's global object with:
   Object.assign(natives, { setupWorker })
+}
+// The Web Locks of all of the app's scripts:
+if (globalThis.navigator && !navigator.locks) {
+  inject(globalThis, { Lock, LockManager })
+  inject(navigator, { locks: new LockManager(internal) }, { writable: false })
 }
 if (!globalThis.SharedWorker) {
   inject(globalThis, { SharedWorker })

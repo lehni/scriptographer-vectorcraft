@@ -3,7 +3,8 @@
 //! The web-platform-tests of the browser APIs Scriptographer has, against them in V8, when `cargo xtask
 //! corpus --wpt` has fetched them; skipped when it hasn't: `OffscreenCanvas` in a worker
 //! (`html/canvas/offscreen`), the geometry interfaces (`css/geometry`), streams (`streams`,
-//! `encoding/streams`), compression (`compression`) and `URLPattern` (`urlpattern`). A test's scripts (its `importScripts()`, `<script>`s, or an `.any.js`
+//! `encoding/streams`), compression (`compression`), `URLPattern` (`urlpattern`) and Web Locks
+//! (`web-locks`). A test's scripts (its `importScripts()`, `<script>`s, or an `.any.js`
 //! file's `// META: script=`s) run as one, after testharness.js, as a shell runs them. The tests that fail are listed in `tests/wpt-expected-failures.txt`: this test
 //! fails when another one fails, or when a listed one passes, so the list stays the truth.
 //! `WPT_UPDATE=1` writes the list anew. The pass rate by folder prints with `--nocapture`, the
@@ -11,8 +12,8 @@
 //! `WPT_FILTER=text` runs only the files whose path contains `text` and prints each test's result
 //! and message, without checking the list.
 //!
-//! What fails, by cause (2026-10-24: 4089 of 4266 pass, 3998 of the standard's 4137 and 91 of
-//! the 129 tentative ones), to come back to; most of it rarely matters to a script. `docs/gaps.md`
+//! What fails, by cause (2026-10-24: 4159 of 4340 pass, 4068 of the standard's 4210 and 91 of
+//! the 130 tentative ones), to come back to; most of it rarely matters to a script. `docs/gaps.md`
 //! (G6) sums it up:
 //!
 //! - Streams (about 45): `TextDecoderStream` decodes UTF-8 only, as `TextDecoder` does;
@@ -23,6 +24,8 @@
 //! - `URLPattern` (about 55): what urlpattern-polyfill doesn't do: the tentative `generate()` and
 //!   `compareComponent()`, the hostname checks the standard added, and character classes of the
 //!   `v` flag (`[[a-z]--a]`).
+//! - Web Locks (5): scripts are secure contexts, also the test that expects one that isn't;
+//!   `navigator.locks` is the navigator's own, not its prototype's; and storage buckets.
 //! - Text (canvas/text, 9): colour emoji, which VectorCraft's text has no glyphs for (bitmap and
 //!   COLR fonts); fonts whose family, style and version are another's (the `CanvasTest` variants),
 //!   which the app's font database keeps one of; `lang`, which shaping doesn't take.
@@ -63,13 +66,14 @@ const TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The folders of the tests that run, in the corpus, and whether their HTML pages run too: the
 /// canvas's are its tests in a window and its reftests, which compare renderings.
-const SUITES: [(&str, bool); 6] = [
+const SUITES: [(&str, bool); 7] = [
     ("html/canvas/offscreen", false),
     ("css/geometry", true),
     ("streams", false),
     ("encoding/streams", false),
     ("compression", false),
     ("urlpattern", false),
+    ("web-locks", false),
 ];
 
 struct Harness {
@@ -242,8 +246,13 @@ fn scripts(harness: &Harness, file: &Path) -> String {
 /// Each test of the test `file`, with its status and message; the file's own name when the harness
 /// reported nothing.
 fn run(harness: &Harness, file: &Path) -> Vec<(String, String, String)> {
-    let source = format!("{}\n;\n{REPORTER}\n;\n{}", harness.testharness, scripts(harness, file));
+    // The test's URL on the server, which a worker's `location` would be:
+    let path = file.strip_prefix(&harness.corpus).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+    let location = format!("Object.defineProperty(globalThis, 'location', {{ value: new URL('{}/{path}') }})", harness.server);
+    let source = format!("{location}\n;\n{}\n;\n{REPORTER}\n;\n{}", harness.testharness, scripts(harness, file));
     let mut runtime = Runtime::<V8>::new().unwrap();
+    // At the test's path, so the workers it starts are found next to it:
+    runtime.set_script(&vectorcraft_scriptographer::Setup { file: Some(file.to_string_lossy().into_owned()), ..Default::default() }).unwrap();
     let interrupt = runtime.interrupt().unwrap();
     let (stop, stopped) = std::sync::mpsc::channel::<()>();
     let watchdog = std::thread::spawn(move || {
