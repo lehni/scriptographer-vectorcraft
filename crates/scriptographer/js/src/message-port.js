@@ -132,6 +132,13 @@ export function postWith(transfer, send) {
   list.forEach(detach)
 }
 
+// The number of `port`, which goes elsewhere: it's no longer the script's.
+export function takePort(port) {
+  const number = getNumber(port)
+  detach(port)
+  return number
+}
+
 // A port the runtime received in a message, by its number:
 export function makePort(number) {
   return new MessagePort(internal, number)

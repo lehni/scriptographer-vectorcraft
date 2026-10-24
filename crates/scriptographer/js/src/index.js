@@ -40,7 +40,7 @@ import { URL, URLSearchParams } from './url.js'
 import { URLPattern } from './url-pattern.js'
 import { WebSocket } from './websocket.js'
 import { MessageChannel, MessagePort, makePort } from './message-port.js'
-import { Worker, setupWorker } from './worker.js'
+import { SharedWorker, Worker, setupWorker } from './worker.js'
 import * as xhr from './xhr.js'
 
 delete globalThis.__scriptographer
@@ -129,6 +129,9 @@ if (!globalThis.Worker) {
   inject(globalThis, { Worker })
   // What the runtime makes a worker's global object with:
   Object.assign(natives, { setupWorker })
+}
+if (!globalThis.SharedWorker) {
+  inject(globalThis, { SharedWorker })
 }
 if (!globalThis.MessageChannel) {
   inject(globalThis, { MessageChannel, MessagePort })
