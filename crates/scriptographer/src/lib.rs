@@ -156,6 +156,10 @@ pub struct Host<H> {
     file: Option<std::path::PathBuf>,
     /// The script's folder, which relative paths of `LocalFile`s are in.
     directory: Option<std::path::PathBuf>,
+    /// The folder of the script's own files, `navigator.storage.getDirectory()`, when the app keeps
+    /// them.
+    #[cfg(not(target_arch = "wasm32"))]
+    private_directory: Option<std::path::PathBuf>,
     /// What `import` needs, once a script runs.
     loader: Option<modules::Loader<H>>,
     /// The modules the scripts imported.
@@ -253,6 +257,8 @@ impl<H> Default for Host<H> {
             dialog_globals: None,
             file: None,
             directory: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            private_directory: None,
             loader: None,
             modules: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -601,6 +607,10 @@ impl<E: Engine> Runtime<E> {
             let mut host = self.host.borrow_mut();
             if let (Some(folder), Some(file)) = (storage, file) {
                 host.local_storage = storage::Storage::kept_in(storage::Storage::file_for(folder, std::path::Path::new(file)));
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    host.private_directory = Some(storage::Storage::directory_for(folder, std::path::Path::new(file)));
+                }
             }
             host.language.clone_from(language);
             host.cache.clone_from(cache);

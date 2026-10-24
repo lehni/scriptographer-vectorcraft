@@ -444,6 +444,40 @@ fn url_patterns_match_urls<E: Engine>() {
     assert_eq!(runtime.take_output(), ["false 42 true"]);
 }
 
+/// `navigator.storage.getDirectory()` is the script's own folder, which the app keeps for it next
+/// to its `localStorage`, there again the next time it runs; code typed in the console has none.
+fn scripts_keep_their_own_files<E: Engine>(name: &str) {
+    let folder = std::env::temp_dir().join(format!("scriptographer-own-files-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    let run = |setup: Setup, source: &str| {
+        let mut runtime = Runtime::<E>::new().unwrap();
+        runtime.set_script(&setup).unwrap();
+        let scope = runtime.create_scope(800.0, 600.0).unwrap();
+        runtime.execute(&scope, source).unwrap();
+        runtime.take_output()
+    };
+    let setup =
+        Setup { file: Some(folder.join("script.js").to_string_lossy().into_owned()), storage: Some(folder.join("storage")), ..Setup::default() };
+    let written = run(
+        setup.clone(),
+        "const root = await navigator.storage.getDirectory()\n\
+         const file = await root.getFileHandle('notes.txt', { create: true })\n\
+         const writable = await file.createWritable()\n\
+         await writable.write('hello')\n\
+         await writable.close()\n\
+         const { usage } = await navigator.storage.estimate()\n\
+         console.log(usage >= 5, await navigator.storage.persisted(), navigator.storage instanceof StorageManager)",
+    );
+    assert_eq!(written, ["true true true"]);
+    let read = run(
+        setup,
+        "const root = await navigator.storage.getDirectory()\nconsole.log(await (await (await root.getFileHandle('notes.txt')).getFile()).text())",
+    );
+    assert_eq!(read, ["hello"], "the next time it runs");
+    let typed = run(Setup::default(), "console.log(await navigator.storage.getDirectory().catch(e => e.name))");
+    assert_eq!(typed, ["SecurityError"]);
+}
+
 /// Encoding as the Encoding standard has it, and base64 as browsers read it.
 fn text_encodes_as_the_standard_has_it<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
@@ -2105,6 +2139,11 @@ macro_rules! engine_tests {
             #[test]
             fn bodies_are_streams() {
                 super::bodies_are_streams::<$engine>();
+            }
+
+            #[test]
+            fn scripts_keep_their_own_files() {
+                super::scripts_keep_their_own_files::<$engine>(stringify!($module));
             }
 
             #[test]
