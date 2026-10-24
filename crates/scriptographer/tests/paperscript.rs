@@ -1290,7 +1290,10 @@ fn structured_clone_copies_as_browsers_do<E: Engine>() {
              const error = structuredClone(new RangeError('far'))\n\
              console.log(error instanceof RangeError, error.message, structuredClone(5), structuredClone('text'))\n\
              const thrown = f => { try { f() } catch (e) { return e.name } }\n\
-             console.log(thrown(() => structuredClone(() => 1)), thrown(() => structuredClone({ f: Symbol() })), thrown(() => structuredClone(new OffscreenCanvas(1, 1))))",
+             console.log(thrown(() => structuredClone(() => 1)), thrown(() => structuredClone({ f: Symbol() })), thrown(() => structuredClone(new OffscreenCanvas(1, 1))))\n\
+             const buffer = new Uint8Array([1, 2]).buffer\n\
+             const moved = structuredClone({ view: new Uint8Array(buffer) }, { transfer: [buffer] })\n\
+             console.log(buffer.byteLength, moved.view.join(), thrown(() => structuredClone(1, { transfer: [{}] })))",
         )
         .unwrap();
     assert_eq!(
@@ -1301,6 +1304,8 @@ fn structured_clone_copies_as_browsers_do<E: Engine>() {
             "5 /a/gi true 1,2 true 3",
             "true far 5 text",
             "DataCloneError DataCloneError DataCloneError",
+            // A transferred buffer is the copy's alone.
+            "0 1,2 DataCloneError",
         ]
     );
 }

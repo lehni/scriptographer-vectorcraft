@@ -56,6 +56,9 @@ pub trait Call<H> {
 
     fn new_uint16_array(&mut self, elements: &[u16]) -> Result<H, Error>;
 
+    /// Detaches the `ArrayBuffer` `buffer`, as transferring it does: it has no bytes from then on.
+    fn detach(&mut self, buffer: &H) -> Result<(), Error>;
+
     /// `object[key]`.
     fn get(&mut self, object: &H, key: &str) -> Result<Value<H>, Error>;
 
