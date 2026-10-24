@@ -250,6 +250,11 @@ function getPath(handle) {
   return path
 }
 
+// The handle of the directory at `path`, which the runtime gives:
+export function getDirectoryHandle(path) {
+  return new FileSystemDirectoryHandle(internal, path)
+}
+
 function createHandle(path, isDirectory = natives.fs.info(path).isDirectory) {
   const Handle = isDirectory ? FileSystemDirectoryHandle : FileSystemFileHandle
   return new Handle(internal, path)

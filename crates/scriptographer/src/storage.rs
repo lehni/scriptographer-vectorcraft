@@ -54,12 +54,24 @@ impl Storage {
         }
     }
 
+    /// The file it's kept in, if it's kept.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn file(&self) -> Option<&Path> {
+        self.file.as_deref()
+    }
+
     /// The file for the script at `script`'s storage in `folder`: its path's hash.
     pub(crate) fn file_for(folder: &Path, script: &Path) -> PathBuf {
+        Self::directory_for(folder, script).with_extension("json")
+    }
+
+    /// The folder of the script at `script`'s own files in `folder` (`navigator.storage`), next to
+    /// its storage's file.
+    pub(crate) fn directory_for(folder: &Path, script: &Path) -> PathBuf {
         use sha2::Digest as _;
         let digest = sha2::Sha256::digest(script.to_string_lossy().as_bytes());
         let name: String = digest.iter().take(8).map(|b| format!("{b:02x}")).collect();
-        folder.join(format!("{name}.json"))
+        folder.join(name)
     }
 
     /// Sets item `key` to `value`, or fails with a `QuotaExceededError` when that's more than it

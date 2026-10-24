@@ -36,6 +36,7 @@ import {
   takePalettes
 } from './palette.js'
 import { Storage, createStorage } from './storage.js'
+import { StorageManager } from './storage-manager.js'
 import { URL, URLSearchParams } from './url.js'
 import { URLPattern } from './url-pattern.js'
 import { WebSocket } from './websocket.js'
@@ -147,8 +148,10 @@ if (natives.dom && !globalThis.document) {
 }
 // The file system on desktop, by path; the web has the browser's:
 if (natives.fs) {
-  const { getHandlePath, ...classes } = fileSystem
-  inject(globalThis, { LocalFile, ...classes })
+  const { getHandlePath, getDirectoryHandle, ...classes } = fileSystem
+  inject(globalThis, { LocalFile, StorageManager, ...classes })
+  // With each script's own folder of files:
+  inject(navigator, { storage: new StorageManager() }, { writable: false })
 }
 if (!globalThis.OffscreenCanvas) {
   inject(globalThis, { ...canvas })

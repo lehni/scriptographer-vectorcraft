@@ -13,7 +13,9 @@ use crate::{Call, Engine, Error, HostFunction, Value};
 /// gives the new path, `copy(from, to)`, `relative(directory, path)`, the names from the directory
 /// down to the path or `null`, and `userDirectory(name)`, one of the user's directories.
 pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E::Handle)>, Error> {
-    let natives: [(&str, HostFunction<E::Handle>); 11] = [
+    let natives: [(&str, HostFunction<E::Handle>); 13] = [
+        ("privateDirectory", private_directory),
+        ("usage", usage),
         ("path", |call, _, args| {
             let mut path = PathBuf::new();
             for part in args {
@@ -138,6 +140,42 @@ fn write<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) 
 fn path<H>(call: &mut dyn Call<H>, args: &[Value<H>], n: usize) -> Result<PathBuf, Error> {
     let path = call.to_string(args.get(n).unwrap_or(&Value::Undefined))?;
     absolute(call, Path::new(&path))
+}
+
+/// `privateDirectory()`: the folder of the script's own files, made when it isn't there yet; `null`
+/// when the app keeps none, for code typed in the console or a worker.
+fn private_directory<H>(call: &mut dyn Call<H>, _this: &Value<H>, _args: &[Value<H>]) -> Result<Value<H>, Error> {
+    let Some(directory) = call.host()?.borrow().private_directory.clone() else {
+        return Ok(Value::Null);
+    };
+    std::fs::create_dir_all(&directory).map_err(|e| io_error(&directory, &e, true))?;
+    Ok(Value::String(display(&directory)))
+}
+
+/// `usage()`: the bytes the script keeps, in its own files and its `localStorage`.
+fn usage<H>(call: &mut dyn Call<H>, _this: &Value<H>, _args: &[Value<H>]) -> Result<Value<H>, Error> {
+    let (directory, storage) = {
+        let host = call.host()?;
+        let host = host.borrow();
+        (host.private_directory.clone(), host.local_storage.file().map(Path::to_path_buf))
+    };
+    let mut bytes = storage.and_then(|file| std::fs::metadata(file).ok()).map_or(0, |m| m.len());
+    // What's in its folder, up to a million entries, links not followed:
+    let mut folders: Vec<PathBuf> = directory.into_iter().collect();
+    let mut seen = 0;
+    while let Some(folder) = folders.pop()
+        && seen < 1_000_000
+    {
+        for entry in std::fs::read_dir(&folder).into_iter().flatten().flatten() {
+            seen += 1;
+            match entry.metadata() {
+                Ok(m) if m.is_dir() => folders.push(entry.path()),
+                Ok(m) => bytes += m.len(),
+                Err(_) => {}
+            }
+        }
+    }
+    Ok(Value::Number(bytes as f64))
 }
 
 /// `path`, from the script's folder when it's relative.

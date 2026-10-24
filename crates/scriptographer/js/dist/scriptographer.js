@@ -6109,6 +6109,7 @@ ${value}\r
     FileSystemFileHandle: () => FileSystemFileHandle,
     FileSystemHandle: () => FileSystemHandle,
     FileSystemWritableFileStream: () => FileSystemWritableFileStream,
+    getDirectoryHandle: () => getDirectoryHandle,
     getHandlePath: () => getHandlePath,
     showDirectoryPicker: () => showDirectoryPicker2,
     showOpenFilePicker: () => showOpenFilePicker2,
@@ -6448,6 +6449,10 @@ ${value}\r
     return path;
   }
   __name(getPath2, "getPath");
+  function getDirectoryHandle(path) {
+    return new FileSystemDirectoryHandle(internal, path);
+  }
+  __name(getDirectoryHandle, "getDirectoryHandle");
   function createHandle(path, isDirectory = natives.fs.info(path).isDirectory) {
     const Handle = isDirectory ? FileSystemDirectoryHandle : FileSystemFileHandle;
     return new Handle(internal, path);
@@ -6997,6 +7002,33 @@ ${value}\r
     return typeof key === "string" && !(key in target);
   }
   __name(isItemKey, "isItemKey");
+
+  // src/storage-manager.js
+  var StorageManager = class {
+    static {
+      __name(this, "StorageManager");
+    }
+    async estimate() {
+      return { usage: natives.fs.usage() };
+    }
+    async persist() {
+      return true;
+    }
+    async persisted() {
+      return true;
+    }
+    async getDirectory() {
+      const path = natives.fs.privateDirectory();
+      if (path === null) {
+        throw new DOMException(
+          "Unable to get the directory: the script has no storage of its own.",
+          "SecurityError"
+        );
+      }
+      return getDirectoryHandle(path);
+    }
+  };
+  setToStringTag(StorageManager);
 
   // src/url.js
   var parts = [
@@ -8768,8 +8800,9 @@ ${value}\r
     inject(globalThis, dom, { configurable: true });
   }
   if (natives.fs) {
-    const { getHandlePath: getHandlePath2, ...classes } = file_system_exports;
-    inject(globalThis, { LocalFile: LocalFile2, ...classes });
+    const { getHandlePath: getHandlePath2, getDirectoryHandle: getDirectoryHandle2, ...classes } = file_system_exports;
+    inject(globalThis, { LocalFile: LocalFile2, StorageManager, ...classes });
+    inject(navigator, { storage: new StorageManager() }, { writable: false });
   }
   if (!globalThis.OffscreenCanvas) {
     inject(globalThis, { ...canvas_exports });
