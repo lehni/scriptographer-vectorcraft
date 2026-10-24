@@ -5379,6 +5379,35 @@ ${stack}` : ""));
   }
   __name(getLocalFile, "getLocalFile");
 
+  // src/effects.js
+  function watchEffects(Effect) {
+    const { add, remove: remove2 } = Effect;
+    Effect.add = function(effect) {
+      natives.effects.define(
+        effect.type,
+        effect.label,
+        JSON.stringify(effect.parameters)
+      );
+      return add.call(this, effect);
+    };
+    Effect.remove = function(effect) {
+      const removed = remove2.call(this, effect);
+      if (removed) natives.effects.forget(effect.type);
+      return removed;
+    };
+  }
+  __name(watchEffects, "watchEffects");
+  function applyEffect(scope, type, parameters, art, key) {
+    const { Effect, EffectInstance, Base, project } = scope;
+    const effect = Effect.get(type);
+    const input = Base.importJSON(art);
+    const instance = new EffectInstance({ type, parameters });
+    const item = project.getItemByKey(key);
+    const output = effect?.onApply?.call(instance, { art: input, item }) ?? input;
+    return output.exportJSON();
+  }
+  __name(applyEffect, "applyEffect");
+
   // src/dom-exception.js
   var constants = [
     ["IndexSizeError", "INDEX_SIZE_ERR"],
@@ -8949,4 +8978,5 @@ ${value}\r
   setupDialog(globalThis.Dialog ??= {});
   inject(globalThis, { Palette });
   Object.assign(natives, { takePalettes, hasPalettes, handlePaletteEvent });
+  Object.assign(natives, { watchEffects, applyEffect });
 })();

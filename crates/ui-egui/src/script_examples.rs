@@ -19,6 +19,7 @@ const EXAMPLES: &[(&str, &str)] = examples![
     "Scripts/Spiro.js",
     "Scripts/Stitch.js",
     "Scripts/Text Ranges.js",
+    "Scripts/Wobble.js",
     "Tools/Area Text.js",
     "Tools/Clone Brush.js",
     "Tools/Clouds.js",

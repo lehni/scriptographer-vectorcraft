@@ -12,6 +12,7 @@ import { CompressionStream, DecompressionStream } from './compression.js'
 import { createConsole } from './console.js'
 import { Crypto } from './crypto.js'
 import { setupDialog } from './dialog.js'
+import { applyEffect, watchEffects } from './effects.js'
 import { DOMException } from './dom-exception.js'
 import {
   TextDecoder,
@@ -180,3 +181,5 @@ setupDialog((globalThis.Dialog ??= {}))
 inject(globalThis, { Palette })
 // What the runtime reports of the palettes, and tells them:
 Object.assign(natives, { takePalettes, hasPalettes, handlePaletteEvent })
+// What it watches the scripts' effects with, and draws them with:
+Object.assign(natives, { watchEffects, applyEffect })

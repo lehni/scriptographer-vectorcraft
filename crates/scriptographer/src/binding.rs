@@ -67,6 +67,8 @@ impl<E: Engine> Runtime<E> {
                 call.set(&props, "onApply", &Value::Js(apply_effect.clone()))?;
                 call.construct(&effect, &[Value::Js(props)])?;
             }
+            // Those the scripts define from now on, the app lists while they run:
+            crate::call_bundle(call, "watchEffects", &[Value::Js(effect)])?;
             let host = call.new_object()?;
             call.set(&host, "getChildren", &Value::Js(get_children))?;
             call.set(&host, "getItem", &Value::Js(get_item))?;
@@ -465,7 +467,7 @@ fn lay_out<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]
 }
 
 /// A JSON value as a JS value.
-fn js_value<H: Clone>(call: &mut dyn Call<H>, json: &Json) -> Result<Value<H>, Error> {
+pub(crate) fn js_value<H: Clone>(call: &mut dyn Call<H>, json: &Json) -> Result<Value<H>, Error> {
     Ok(match json {
         Json::Null => Value::Null,
         Json::Bool(b) => Value::Bool(*b),

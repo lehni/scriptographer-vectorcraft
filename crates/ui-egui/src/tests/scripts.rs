@@ -909,6 +909,51 @@ fn the_live_effects_example_adds_effects() {
     assert!(texts.iter().any(|(t, _)| t.contains("Preview bounds: -0.5, -0.5, 51, 41")), "{texts:?}");
 }
 
+/// The Wobble example's effect is in Effect › Scriptographer while it runs. Applied, the script
+/// draws it, and what it drew is part of the edit that changed its input: one undo step each.
+#[test]
+fn the_wobble_example_draws_its_effect_into_the_edits_undo_step() {
+    let (mut app, id) = app();
+    let temp = TempFolder::new("wobble");
+    crate::scripts::set_up_script_folders(&mut app, &temp.0, None);
+    let path = temp.0.join("Scripts").join("Wobble.js");
+    app.run("ui.runScript", json!({ "path": path.to_string_lossy() })).unwrap();
+    let ctx = egui::Context::default();
+    let mut now = 0.5;
+    let mut frame = |app: &mut VectorcraftApp| {
+        for _ in 0..3 {
+            now += 0.1;
+            crate::scripts::frame(app, &ctx, now);
+        }
+    };
+    frame(&mut app);
+    let listed = crate::menus::menu_entries(&app).into_iter().any(|e| e.path == ["Effect", "Scriptographer"] && e.label == "Wobble…");
+    assert!(listed, "the effect is listed while its script runs");
+    let effect = |app: &VectorcraftApp| {
+        let node = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+        node.appearance.effects.first().map(|e| (e.id.clone(), e.params.get("_output").is_some(), node.geometric_bounds().unwrap().x0))
+    };
+    app.run("effect.apply", json!({ "effect": "script.wobble", "params": {}, "ids": [id] })).unwrap();
+    assert_eq!(effect(&app), Some(("script.wobble".into(), false, 10.0)), "applied, not drawn yet");
+    frame(&mut app);
+    let errors: Vec<&str> = app.scripts.log().iter().filter(|l| l.error).map(|l| l.text.as_str()).collect();
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(effect(&app), Some(("script.wobble".into(), true, 10.0)), "the script drew it");
+    let drawn = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params["_output"].clone();
+    let wobbled: vectorcraft_geom::PathData = serde_json::from_value(drawn.clone()).unwrap();
+    assert!(wobbled.subpaths[0].anchors.len() > 4, "the rectangle, in waves");
+    app.run("object.move", json!({ "ids": [id], "dx": 10, "dy": 0 })).unwrap();
+    frame(&mut app);
+    let moved = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params["_output"].clone();
+    assert_ne!(moved, drawn, "drawn again where it moved");
+    app.run("edit.undo", json!({})).unwrap();
+    frame(&mut app);
+    let undone = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params["_output"].clone();
+    assert_eq!((effect(&app), undone), (Some(("script.wobble".into(), true, 10.0)), drawn), "one undo step: the move and what was drawn of it");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(effect(&app), None, "one undo step: the effect and what was drawn of it");
+}
+
 /// Double-clicking the Scriptographer Tool's button calls its script's `onEditOptions()`, as
 /// Scriptographer's tool buttons did.
 #[test]

@@ -66,8 +66,10 @@ pub enum Reply {
     /// web, the script goes on, and the answer comes as [`Work::Answer`] or [`Work::Picked`].
     Ask(Json),
     /// What the script changed: a patch of `base`, the document it read (the app answers with
-    /// [`Request::Applied`]), and the objects selected in its project before and after.
-    Changes { patch: Option<Json>, base: Arc<Document>, before: BTreeSet<NodeId>, selected: BTreeSet<NodeId> },
+    /// [`Request::Applied`]), and the objects selected in its project before and after. `effects`
+    /// when it's what the script's effects drew of objects whose input changed, which belongs to the
+    /// newest undo step, the edit that changed it ([`crate::Runtime::effect_outputs`]).
+    Changes { patch: Option<Json>, base: Arc<Document>, before: BTreeSet<NodeId>, selected: BTreeSet<NodeId>, effects: bool },
     /// The work is done: what the script printed, its error if it threw, whether it has timers
     /// left, whether it made a tool, whether that tool handles keys, the palettes that are new or
     /// changed (as [`crate::Runtime::take_palettes`] has them), whether it has palettes open, and
@@ -145,7 +147,12 @@ impl<E: Engine> Script<E> {
         let mut replies = Vec::new();
         #[cfg(target_arch = "wasm32")]
         replies.extend(self.runtime.take_question().map(Reply::Ask));
-        let changes = self.changes(before).map(|changes| replies.extend(changes));
+        // The script's effects draw on a turn it changed nothing itself, from the document as it is:
+        let changes = match self.changes(before.clone()) {
+            Ok(None) => self.effect_changes(before),
+            changes => changes,
+        };
+        let changes = changes.map(|changes| replies.extend(changes));
         replies.push(self.done(result.and(changes).err().map(|e| e.to_string())));
         replies
     }
@@ -160,7 +167,16 @@ impl<E: Engine> Script<E> {
         let base = self.runtime.document().ok_or_else(|| Error::Script("no document is bound".into()))?;
         let params = patch.as_ref().map(|p| p.params.clone());
         self.pending = patch;
-        Ok(Some(Reply::Changes { patch: params, base, before, selected }))
+        Ok(Some(Reply::Changes { patch: params, base, before, selected, effects: false }))
+    }
+
+    /// What the script's effects drew of the objects whose input changed, if anything.
+    fn effect_changes(&mut self, selected: BTreeSet<NodeId>) -> Result<Option<Reply>, Error> {
+        let Some(patch) = self.runtime.effect_outputs(&self.scope)? else {
+            return Ok(None);
+        };
+        let base = self.runtime.document().ok_or_else(|| Error::Script("no document is bound".into()))?;
+        Ok(Some(Reply::Changes { patch: Some(patch), base, before: selected.clone(), selected, effects: true }))
     }
 
     fn done(&mut self, error: Option<String>) -> Reply {
