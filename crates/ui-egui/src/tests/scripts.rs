@@ -880,6 +880,35 @@ fn a_palettes_menu_runs_its_entries() {
     assert!(app.scripts.log().iter().any(|l| l.text == "about"), "{:?}", app.scripts.log().iter().map(|l| &l.text).collect::<Vec<_>>());
 }
 
+/// The Live Effects example adds an effect to the selected object that the app draws, and shows
+/// the object's bounds with it.
+#[test]
+fn the_live_effects_example_adds_effects() {
+    let (mut app, id) = app();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    let temp = TempFolder::new("live-effects");
+    crate::scripts::set_up_script_folders(&mut app, &temp.0, None);
+    let path = temp.0.join("Scripts").join("Live Effects.js");
+    app.run("ui.runScript", json!({ "path": path.to_string_lossy() })).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::scripts::frame(&mut app, &ctx, 0.5);
+    palettes_frame(&mut app, &ctx, vec![]);
+    let texts = palettes_frame(&mut app, &ctx, vec![]);
+    let at = crate::tests_removeanchors::at(&texts, "Add");
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    palettes_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), press(true)]);
+    palettes_frame(&mut app, &ctx, vec![press(false)]);
+    crate::scripts::frame(&mut app, &ctx, 1.0);
+    let errors: Vec<&str> = app.scripts.log().iter().filter(|l| l.error).map(|l| l.text.as_str()).collect();
+    assert!(errors.is_empty(), "{errors:?}");
+    let node = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    assert_eq!(node.appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["path.offsetPath"]);
+    // The rectangle, 30 × 20 with a 1 pt stroke, offset by the app's 10 pt:
+    let texts = palettes_frame(&mut app, &ctx, vec![]);
+    assert!(texts.iter().any(|(t, _)| t.contains("Preview bounds: -0.5, -0.5, 51, 41")), "{texts:?}");
+}
+
 /// Double-clicking the Scriptographer Tool's button calls its script's `onEditOptions()`, as
 /// Scriptographer's tool buttons did.
 #[test]

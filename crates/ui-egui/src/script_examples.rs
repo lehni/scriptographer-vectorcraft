@@ -15,6 +15,7 @@ macro_rules! examples {
 /// The examples: their paths in the folder, and their sources.
 const EXAMPLES: &[(&str, &str)] = examples![
     "Scripts/Growth.js",
+    "Scripts/Live Effects.js",
     "Scripts/Spiro.js",
     "Scripts/Stitch.js",
     "Scripts/Text Ranges.js",
