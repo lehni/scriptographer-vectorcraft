@@ -759,6 +759,30 @@ fn item_effects(item: &vectorcraft_doc::AppearanceItem) -> &[vectorcraft_doc::Ef
     }
 }
 
+/// A script's effect is its type, without what the script keeps in it, which stays when the script
+/// changes the object's effects.
+fn script_effects_keep_what_they_drew<E: Engine>() {
+    let (mut s, a, _) = document();
+    let mut object = s.execute("document.node", &json!({ "id": a.0 })).unwrap();
+    object["appearance"]["effects"] =
+        json!([{ "id": "script.wobble", "params": { "amount": 3, "_input": "kept", "_output": { "subpaths": [] } }, "visible": true }]);
+    s.execute("document.patch", &json!({ "replace": [object] })).unwrap();
+    let output = run::<E>(
+        &mut s,
+        &format!(
+            "var item = project.getItemByKey({})\n\
+             console.log(item.effects[0].type, Object.keys(item.effects[0].parameters).join())\n\
+             item.effects[0].parameters.amount = 4\n\
+             item.addEffect({{ type: 'offset', parameters: {{ distance: 2 }} }})",
+            a.0
+        ),
+    );
+    assert_eq!(output, ["wobble amount"]);
+    let effects = node(&s, a).appearance.effects.clone();
+    assert_eq!((effects[0].id.as_str(), &effects[0].params["amount"], &effects[0].params["_input"]), ("script.wobble", &json!(4), &json!("kept")));
+    assert_eq!(effects[1].id, "path.offsetPath");
+}
+
 /// Groups' effects go back too, which Paper.js doesn't export with their content.
 fn writes_effects_of_groups<E: Engine>() {
     let (mut s, a, b) = document();
@@ -914,6 +938,11 @@ macro_rules! engine_tests {
             #[test]
             fn writes_effects() {
                 super::writes_effects::<$engine>();
+            }
+
+            #[test]
+            fn script_effects_keep_what_they_drew() {
+                super::script_effects_keep_what_they_drew::<$engine>();
             }
 
             #[test]

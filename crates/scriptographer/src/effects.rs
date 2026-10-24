@@ -1,9 +1,12 @@
 //! Live effects as Paper.js has them: an object's own effects are its item's `effects`, each
 //! `{ type, parameters, visible }`, and VectorCraft's geometry effects are Paper.js effects whose
-//! `onApply()` draws what the app draws.
+//! `onApply()` draws what the app draws. The effects scripts define are `script.<type>`, a type
+//! without a dot, as the app's have one; what the script keeps in them (`_input`, `_output`)
+//! isn't theirs to see.
 
 use serde_json::{Map, Value as Json, json};
 use vectorcraft_doc::{Document, Effect, Node};
+use vectorcraft_effects::script;
 
 use crate::Error;
 use crate::host::tree_json;
@@ -23,8 +26,14 @@ const NAMES: &[Name] = &[
 
 /// An effect as Paper.js JSON.
 pub(crate) fn effect_json(effect: &Effect) -> Json {
-    let parameters: Map<String, Json> =
-        effect.params.as_object().into_iter().flatten().map(|(key, value)| (renamed(&effect.id, key).into(), value.clone())).collect();
+    let parameters: Map<String, Json> = effect
+        .params
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter(|(key, _)| script::script_type(&effect.id).is_none() || !key.starts_with('_'))
+        .map(|(key, value)| (renamed(&effect.id, key).into(), value.clone()))
+        .collect();
     let mut json = json!({ "type": paper_type(&effect.id), "parameters": parameters });
     // Paper.js writes the visibility of hidden effects only:
     if !effect.visible {
@@ -40,7 +49,11 @@ pub(crate) fn effect(json: &Json) -> Option<Effect> {
     let ours = |key: &str| name.and_then(|name| name.parameters.iter().find(|(_, theirs)| *theirs == key)).map_or(key, |(ours, _)| *ours).to_string();
     let parameters = json.get("parameters").and_then(Json::as_object).into_iter().flatten();
     Some(Effect {
-        id: name.map_or(kind, |name| name.id).into(),
+        id: match name {
+            Some(name) => name.id.into(),
+            None if !kind.contains('.') => script::effect_id(kind),
+            None => kind.into(),
+        },
         params: Json::Object(parameters.map(|(key, value)| (ours(key), value.clone())).collect()),
         visible: json.get("visible").and_then(Json::as_bool).unwrap_or(true),
     })
@@ -58,7 +71,7 @@ pub(crate) fn types() -> impl Iterator<Item = (&'static str, &'static str, Map<S
 
 /// The Paper.js type of the effect `id`.
 fn paper_type(id: &str) -> &str {
-    NAMES.iter().find(|name| name.id == id).map_or(id, |name| name.paper)
+    NAMES.iter().find(|name| name.id == id).map_or_else(|| script::script_type(id).unwrap_or(id), |name| name.paper)
 }
 
 /// The Paper.js name of the parameter `key` of the effect `id`.

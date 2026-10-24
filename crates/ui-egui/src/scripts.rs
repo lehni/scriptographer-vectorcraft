@@ -634,8 +634,8 @@ fn settle(app: &mut VectorcraftApp, script: &mut Running, wait: Duration) -> Opt
     let mut failed = None;
     while let Some(reply) = script.worker.recv(wait) {
         match reply {
-            Reply::Changes { patch, base, before, selected } => {
-                if let Err(e) = write_back(app, script, patch, base, &before, &selected) {
+            Reply::Changes { patch, base, before, selected, effects } => {
+                if let Err(e) = write_back(app, script, patch, base, &before, &selected, effects) {
                     failed.get_or_insert(e);
                 }
             }
@@ -1171,21 +1171,27 @@ fn write_back(
     base: Arc<Document>,
     before: &BTreeSet<NodeId>,
     selected: &BTreeSet<NodeId>,
+    effects: bool,
 ) -> Result<(), String> {
     if let Some(mut params) = patch {
         let current = app.session.doc().map_err(|e| e.to_string())?.doc.clone();
         let behind = !Arc::ptr_eq(&base, &current);
+        let is_last = script.last.as_ref().is_some_and(|last| Arc::ptr_eq(last, &current));
         if let Some(params) = params.as_object_mut() {
             if behind {
                 params.insert("keep".into(), vectorcraft_engine::cmd::patch::changes_between(&base, &current));
-            } else if script.last.as_ref().is_some_and(|last| Arc::ptr_eq(last, &current)) {
+            }
+            // What the script's effects drew belongs to the edit that changed their input, the
+            // newest one; the script's own edits extend its own last one.
+            if effects || !behind && is_last {
                 params.insert("extend".into(), json!(true));
             }
         }
         let applied = app.run("document.patch", params);
         let state = app.session.doc().map_err(|e| e.to_string())?;
         let (doc, selection) = (state.doc.clone(), state.selection.clone());
-        script.last = Some(doc.clone());
+        // Drawing its effects into another's edit doesn't make that edit the script's.
+        script.last = (!effects || is_last).then(|| doc.clone());
         // A patch that failed changed nothing: the script reloads all that changed since `base`.
         let (result, behind) = match &applied {
             Ok(result) => (result.clone(), behind),

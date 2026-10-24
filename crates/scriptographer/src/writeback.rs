@@ -530,7 +530,16 @@ fn apply_attributes(node: &mut Node, props: &Map<String, Json>, before: &Json) {
     let list = props.get("effects").unwrap_or(&Json::Null);
     if !is_close(list, before.get("effects").unwrap_or(&Json::Null)) {
         let mut appearance = (*node.appearance).clone();
-        appearance.effects = list.as_array().into_iter().flatten().filter_map(effects::effect).collect();
+        let mut list: Vec<_> = list.as_array().into_iter().flatten().filter_map(effects::effect).collect();
+        // What a script keeps in its effect stays with the effect where it was:
+        for (effect, before) in list.iter_mut().zip(&appearance.effects) {
+            if effect.id == before.id
+                && let (Some(params), Some(kept)) = (effect.params.as_object_mut(), before.params.as_object())
+            {
+                params.extend(kept.iter().filter(|(key, _)| key.starts_with('_')).map(|(k, v)| (k.clone(), v.clone())));
+            }
+        }
+        appearance.effects = list;
         node.appearance = appearance.into();
     }
 }

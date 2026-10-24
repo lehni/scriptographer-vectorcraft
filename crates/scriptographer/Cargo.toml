@@ -20,6 +20,8 @@ vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
 # The app's geometry effects, for what scripts' effects draw.
 vectorcraft-effects = { workspace = true }
+# The manifests of the effects scripts define, as plug-ins describe theirs.
+vectorcraft-plugins = { workspace = true }
 vectorcraft-geom = { workspace = true }
 # Text measuring on the canvas, with the app's fonts and shaping.
 vectorcraft-text = { workspace = true }
@@ -46,8 +48,6 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 vectorcraft-engine = { workspace = true }
-# Effect plug-ins for the tests, from the plug-in crate's templates.
-vectorcraft-plugins = { workspace = true }
 wat = { workspace = true }
 # The tests measure and draw text in the bundled fonts (the workspace leaves turning them on to the
 # engine).

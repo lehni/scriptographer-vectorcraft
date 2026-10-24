@@ -40,6 +40,7 @@ mod modules;
 mod palette;
 mod path2d;
 mod rejections;
+mod script_effects;
 mod storage;
 mod text;
 #[cfg(not(target_arch = "wasm32"))]
@@ -230,6 +231,8 @@ pub struct Host<H> {
     handlers: Vec<(&'static str, H)>,
     /// Why a script with top-level `await` failed, once it did, for the call it happened in.
     failure: Option<Error>,
+    /// The effects the scripts define.
+    script_effects: script_effects::Defined,
     /// The Promises the engine's call rejected without a handler, and those handled since.
     rejections: Vec<rejections::Rejection<H>>,
 }
@@ -312,6 +315,7 @@ impl<H> Default for Host<H> {
             handlers: Vec::new(),
             failure: None,
             rejections: Vec::new(),
+            script_effects: script_effects::Defined::default(),
         }
     }
 }
@@ -345,6 +349,7 @@ impl<E: Engine> Drop for Runtime<E> {
     fn drop(&mut self) {
         if let Ok(mut host) = self.host.try_borrow_mut() {
             let _ = host.local_storage.write(None);
+            script_effects::forget_all(&host.script_effects);
             #[cfg(not(target_arch = "wasm32"))]
             locks::forget(&host.locks);
         }
@@ -371,6 +376,7 @@ impl<E: Engine> Runtime<E> {
         .concat();
         let groups = [
             ("storage", storage::natives(&mut engine)?),
+            ("effects", script_effects::natives(&mut engine)?),
             ("canvas", canvas::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
             ("fetch", fetch::natives(&mut engine)?),
@@ -576,7 +582,7 @@ impl<E: Engine> Runtime<E> {
     }
 
     /// Whether the scripts have something left to run: a timer, which `onFrame` uses too, a frame
-    /// callback, a request out, or a connection or channel open.
+    /// callback, a request out, a connection or channel open, or an effect of theirs.
     pub fn is_running(&self) -> bool {
         let host = self.host.borrow();
         #[cfg(not(target_arch = "wasm32"))]
@@ -590,7 +596,8 @@ impl<E: Engine> Runtime<E> {
         {
             return true;
         }
-        !host.intervals.is_empty() || !host.frames.is_empty()
+        // A script's effects draw on its turns:
+        !host.intervals.is_empty() || !host.frames.is_empty() || !host.script_effects.types.is_empty()
     }
 
     /// Sets the current styles of `scope`'s project, `project.currentStyle` and
