@@ -2,11 +2,13 @@ import { Blob, File, getBufferBytes, getBytes } from './blob.js'
 import { checkArguments, inject, setToStringTag } from './define.js'
 import { natives } from './natives.js'
 import { getPairs, pairIterable, setFirst } from './pairs.js'
+import { ReadableStream } from './streams.js'
 
 // The browser's `fetch()` for scripts outside a browser, with `Headers`,
 // `FormData`, `Request` and `Response`. The runtime sends the requests, on
-// threads of its own. Bodies arrive whole: no streams. There is no CORS, cookie
-// store or HTTP cache outside a browser.
+// threads of its own. Bodies arrive whole, and stream as one chunk; a stream
+// that a request sends is read before it goes. There is no CORS, cookie store
+// or HTTP cache outside a browser.
 
 export class Headers {
   // The headers as they came, names in lower case:
@@ -101,14 +103,19 @@ for (const Class of [Headers, FormData]) {
   inject(Class.prototype, pairIterable)
 }
 
-// What `Request` and `Response` share: their body, read once.
+// What `Request` and `Response` share: their body, read once, as its bytes
+// or as a stream.
 class Body {
-  #bytes
+  #bytes = null
+  #stream = null
   #isUsed = false
 
-  // The body's bytes, its type in `headers` unless they have one.
+  // The body's bytes, or the stream it is, its type in `headers` unless they
+  // have one.
   constructor(body, headers) {
-    if (body != null) {
+    if (body instanceof ReadableStream) {
+      this.#stream = body
+    } else if (body != null) {
       const { bytes, type } = getBody(body)
       if (type && !headers.has('content-type')) {
         headers.set('content-type', type)
@@ -117,12 +124,27 @@ class Body {
     }
   }
 
+  get body() {
+    if (!this.#stream && this.#bytes) {
+      const bytes = this.#bytes
+      this.#stream = new ReadableStream({
+        type: 'bytes',
+        pull(controller) {
+          if (bytes.length) controller.enqueue(bytes.slice())
+          controller.close()
+        }
+      })
+    }
+    return this.#stream
+  }
+
+  // Read once its stream was read from, as web-streams-polyfill marks it:
   get bodyUsed() {
-    return this.#isUsed
+    return this.#isUsed || !!this.#stream?._disturbed
   }
 
   async text() {
-    return new TextDecoder().decode(this.#take())
+    return new TextDecoder().decode(await this.#take())
   }
 
   async json() {
@@ -130,32 +152,45 @@ class Body {
   }
 
   async arrayBuffer() {
-    return this.#take().slice().buffer
+    return (await this.#take()).slice().buffer
   }
 
   async bytes() {
-    return this.#take().slice()
+    return (await this.#take()).slice()
   }
 
   async blob() {
     const type = this.headers.get('content-type') ?? ''
-    return new Blob([this.#take()], { type })
+    return new Blob([await this.#take()], { type })
   }
 
-  #take() {
-    if (this.#isUsed) {
+  async #take() {
+    if (this.bodyUsed || this.#stream?.locked) {
       throw new TypeError('Unable to read the body: it was read already.')
     }
     this.#isUsed = true
-    return this.#bytes ?? new Uint8Array()
+    return this.#stream
+      ? readStream(this.#stream)
+      : (this.#bytes ?? new Uint8Array())
   }
 
-  // The body, unread, for a copy.
-  static getBytes(body) {
-    if (body.#isUsed) {
+  // The body, unread, for a copy: its bytes, or a branch of its stream, which
+  // keeps the other.
+  static copy(body) {
+    if (body.bodyUsed || body.#stream?.locked) {
       throw new TypeError('Unable to copy the body: it was read already.')
     }
-    return body.#bytes ?? null
+    if (body.#stream) {
+      const [kept, copied] = body.#stream.tee()
+      body.#stream = kept
+      return copied
+    }
+    return body.#bytes
+  }
+
+  // The body's bytes, to send, or `null` without a body.
+  static async read(body) {
+    return body.#stream || body.#bytes ? body.#take() : null
   }
 }
 
@@ -170,7 +205,7 @@ export class Request extends Body {
     const from = input instanceof Request ? input : null
     const method = String(init.method ?? from?.method ?? 'GET').toUpperCase()
     const headers = new Headers(init.headers ?? from?.headers)
-    const body = init.body ?? (from && Body.getBytes(from))
+    const body = init.body ?? (from && Body.copy(from))
     if (body != null && (method === 'GET' || method === 'HEAD')) {
       throw new TypeError(`Invalid Request: a ${method} request has no body.`)
     }
@@ -270,7 +305,7 @@ export class Response extends Body {
   clone() {
     const { status, statusText, headers } = this
     return setResponse(
-      new Response(Body.getBytes(this), { status, statusText, headers }),
+      new Response(Body.copy(this), { status, statusText, headers }),
       this
     )
   }
@@ -283,8 +318,9 @@ setToStringTag(Headers, FormData, Request, Response)
 export async function fetch(input, init) {
   const request = new Request(input, init)
   const { method, url, headers, signal, redirect } = request
+  // Read before it's sent, so the signal may have aborted meanwhile:
+  const body = await Body.read(request)
   signal?.throwIfAborted()
-  const body = Body.getBytes(request)
   return new Promise((resolve, reject) => {
     const abort = () => reject(signal.reason)
     signal?.addEventListener('abort', abort)
@@ -296,6 +332,24 @@ export async function fetch(input, init) {
       }, reject)
       .finally(() => signal?.removeEventListener('abort', abort))
   })
+}
+
+// The bytes of `stream`, which gives them as `Uint8Array`s, together:
+async function readStream(stream) {
+  const chunks = []
+  for await (const chunk of stream) {
+    if (!(chunk instanceof Uint8Array)) {
+      throw new TypeError(`Invalid body chunk: '${chunk}', not a Uint8Array.`)
+    }
+    chunks.push(chunk)
+  }
+  const bytes = new Uint8Array(chunks.reduce((size, c) => size + c.length, 0))
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.length
+  }
+  return bytes
 }
 
 // A body's bytes and the content type it implies, which the runtime reads too:

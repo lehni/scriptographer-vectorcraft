@@ -553,6 +553,28 @@ fn settle<E: Engine>(runtime: &mut Runtime<E>) {
     }
 }
 
+/// Bodies are streams too: a response's reads as one, a stream is a body, and a request sends the
+/// one it has once it's read.
+fn bodies_are_streams<E: Engine>() {
+    let address = serve(1);
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    let script = format!(
+        "const response = new Response('héllo')\n\
+         const {{ value }} = await response.body.getReader().read()\n\
+         console.log(value.length, response.bodyUsed, new Response().body, await response.text().catch(e => e.name))\n\
+         const streamed = new Response(new Blob(['ab', 'cd']).stream())\n\
+         const copy = streamed.clone()\n\
+         console.log(await streamed.text(), await copy.text(), streamed.bodyUsed)\n\
+         console.log(await new Response(ReadableStream.from(['text'])).text().catch(e => e.name))\n\
+         const sent = await fetch('{address}/echo', {{ method: 'POST', body: ReadableStream.from([new Uint8Array([104, 105])]), duplex: 'half' }})\n\
+         console.log(await sent.text())"
+    );
+    runtime.execute(&scope, &format!("(async () => {{ try {{ {script} }} catch (e) {{ console.log('error', e.name, e.message) }} }})()")).unwrap();
+    settle(&mut runtime);
+    assert_eq!(runtime.take_output(), ["6 true null TypeError", "abcd abcd true", "TypeError", "POST \nhi"]);
+}
+
 fn scripts_fetch<E: Engine>() {
     let address = serve(4);
     let mut runtime = Runtime::<E>::new().unwrap();
@@ -1943,6 +1965,11 @@ macro_rules! engine_tests {
             #[test]
             fn event_sources_read_streams_and_reconnect() {
                 super::event_sources_read_streams_and_reconnect::<$engine>();
+            }
+
+            #[test]
+            fn bodies_are_streams() {
+                super::bodies_are_streams::<$engine>();
             }
 
             #[test]
