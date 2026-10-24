@@ -59,12 +59,10 @@ export class Worker extends EventTarget {
 defineEventHandlers(Worker.prototype, 'message', 'messageerror', 'error')
 setToStringTag(Worker)
 
-// Give the worker's global object what a worker's has: `self` is an
-// `EventTarget`, with `name`, `postMessage()`, `close()` and `importScripts()`.
+// Give the worker's global object, an `EventTarget` as every one is here, what
+// a worker's has: `name`, `postMessage()`, `close()` and `importScripts()`.
 // What the parent sends, the runtime hands to the function this returns.
 export function setupWorker(name) {
-  const { addEventListener, removeEventListener, dispatchEvent } =
-    EventTarget.prototype
   const { close, importScripts } = natives.worker.self
   inject(globalThis, {
     name,
@@ -74,10 +72,7 @@ export function setupWorker(name) {
       )
     },
     close,
-    importScripts,
-    addEventListener,
-    removeEventListener,
-    dispatchEvent
+    importScripts
   })
   defineEventHandlers(globalThis, 'message', 'messageerror')
   return ({ type, data, ports }) =>

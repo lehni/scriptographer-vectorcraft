@@ -17,6 +17,7 @@ import * as fetch from './fetch.js'
 import * as fileSystem from './file-system.js'
 import * as geometry from './geometry.js'
 import * as globalScope from './global-scope.js'
+import { notifyRejections, reportRejections } from './rejections.js'
 import { FontFace, FontFaceSet } from './font-face.js'
 import { LocalFile } from './local-file.js'
 import {
@@ -60,7 +61,21 @@ if (!globalThis.DOMException) {
   inject(globalThis, { DOMException })
 }
 if (!globalThis.EventTarget) {
-  inject(globalThis, { ...events })
+  const { defineEventHandlers, fire, ...classes } = events
+  // The global object is an `EventTarget` too, as a browser's is, whose methods
+  // work called bare:
+  const { prototype } = classes.EventTarget
+  inject(globalThis, {
+    ...classes,
+    addEventListener: prototype.addEventListener.bind(globalThis),
+    removeEventListener: prototype.removeEventListener.bind(globalThis),
+    dispatchEvent: prototype.dispatchEvent.bind(globalThis)
+  })
+  defineEventHandlers(globalThis, 'unhandledrejection', 'rejectionhandled')
+  // What the runtime hands the rejections of its calls to:
+  Object.assign(natives, { notifyRejections })
+} else {
+  reportRejections()
 }
 if (!globalThis.fetch) {
   const { Blob, File, getBytes } = blob

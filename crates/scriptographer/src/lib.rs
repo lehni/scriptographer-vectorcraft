@@ -31,6 +31,7 @@ pub mod host;
 mod modules;
 mod palette;
 mod path2d;
+mod rejections;
 mod storage;
 mod text;
 #[cfg(not(target_arch = "wasm32"))]
@@ -197,6 +198,8 @@ pub struct Host<H> {
     handlers: Vec<(&'static str, H)>,
     /// Why a script with top-level `await` failed, once it did, for the call it happened in.
     failure: Option<Error>,
+    /// The Promises the engine's call rejected without a handler, and those handled since.
+    rejections: Vec<rejections::Rejection<H>>,
 }
 
 struct Interval<H> {
@@ -259,6 +262,7 @@ impl<H> Default for Host<H> {
             cache: None,
             handlers: Vec::new(),
             failure: None,
+            rejections: Vec::new(),
         }
     }
 }

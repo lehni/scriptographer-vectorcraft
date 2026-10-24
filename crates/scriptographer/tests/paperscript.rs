@@ -291,6 +291,33 @@ fn promises_resolve<E: Engine>() {
     assert_eq!(runtime.take_output(), ["first", "then 2"], "after the script, before the host goes on");
 }
 
+/// A rejection nothing handled once the microtasks ran fires `unhandledrejection` at the global
+/// object, and shows in the console unless a listener prevents it; handled later, it fires
+/// `rejectionhandled`.
+fn unhandled_rejections_are_reported<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    runtime
+        .execute(
+            &scope,
+            "onunhandledrejection = event => console.log('handler', event.reason, event.cancelable, event instanceof PromiseRejectionEvent)\n\
+             addEventListener('unhandledrejection', event => event.reason === 'quiet' && event.preventDefault())\n\
+             addEventListener('rejectionhandled', event => console.log('handled', event.reason, event.promise === late))\n\
+             Promise.reject('lost')\n\
+             Promise.reject('caught').catch(() => {})\n\
+             globalThis.late = Promise.reject('quiet')\n\
+             console.log('script')",
+        )
+        .unwrap();
+    assert_eq!(
+        runtime.take_output(),
+        ["script", "handler lost true true", "Uncaught (in promise) lost", "handler quiet true true"],
+        "after the microtasks, those handled in time left out"
+    );
+    runtime.eval("late.catch(() => {})").unwrap();
+    assert_eq!(runtime.take_output(), ["handled quiet true"]);
+}
+
 fn scripts_have_the_browsers_everyday_apis<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
@@ -1783,6 +1810,11 @@ macro_rules! engine_tests {
             #[test]
             fn promises_resolve() {
                 super::promises_resolve::<$engine>();
+            }
+
+            #[test]
+            fn unhandled_rejections_are_reported() {
+                super::unhandled_rejections_are_reported::<$engine>();
             }
 
             #[test]

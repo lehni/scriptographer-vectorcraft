@@ -236,6 +236,16 @@ export class ErrorEvent extends Event {
   }
 }
 
+export class PromiseRejectionEvent extends Event {
+  constructor(type, init) {
+    super(...arguments)
+    if (!init || !('promise' in init)) {
+      throw new TypeError('Invalid event: its promise is missing.')
+    }
+    setMembers(this, init, { promise: null, reason: undefined })
+  }
+}
+
 // What every event has, and the subclasses' own, read-only:
 const fields = {
   [Event.name]: [
@@ -254,7 +264,8 @@ const fields = {
   [MessageEvent.name]: ['data', 'origin', 'lastEventId', 'source', 'ports'],
   [CloseEvent.name]: ['wasClean', 'code', 'reason'],
   [ProgressEvent.name]: ['lengthComputable', 'loaded', 'total'],
-  [ErrorEvent.name]: ['message', 'filename', 'lineno', 'colno', 'error']
+  [ErrorEvent.name]: ['message', 'filename', 'lineno', 'colno', 'error'],
+  [PromiseRejectionEvent.name]: ['promise', 'reason']
 }
 
 for (const Class of [
@@ -263,7 +274,8 @@ for (const Class of [
   MessageEvent,
   CloseEvent,
   ProgressEvent,
-  ErrorEvent
+  ErrorEvent,
+  PromiseRejectionEvent
 ]) {
   for (const name of fields[Class.name]) {
     inject(
@@ -287,7 +299,8 @@ setToStringTag(
   MessageEvent,
   CloseEvent,
   ProgressEvent,
-  ErrorEvent
+  ErrorEvent,
+  PromiseRejectionEvent
 )
 
 // The `on…` event handlers of `target`, a prototype or the global object, for
