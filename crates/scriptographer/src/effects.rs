@@ -1,6 +1,6 @@
 //! Live effects as Paper.js has them: an object's own effects are its item's `effects`, each
-//! `{ type, parameters, visible }`, and VectorCraft's geometry effects are Paper.js effect types
-//! whose `apply()` draws what the app draws.
+//! `{ type, parameters, visible }`, and VectorCraft's geometry effects are Paper.js effects whose
+//! `onApply()` draws what the app draws.
 
 use serde_json::{Map, Value as Json, json};
 use vectorcraft_doc::{Document, Effect, Node};
@@ -47,13 +47,13 @@ pub(crate) fn effect(json: &Json) -> Option<Effect> {
 }
 
 /// The Paper.js types of the app's geometry effects and of the installed effect plug-ins, which
-/// [`apply`] draws, with their defaults.
-pub(crate) fn types() -> impl Iterator<Item = (&'static str, Map<String, Json>)> {
+/// [`apply`] draws, with their labels and defaults.
+pub(crate) fn types() -> impl Iterator<Item = (&'static str, &'static str, Map<String, Json>)> {
     vectorcraft_effects::effect_catalog()
         .into_iter()
         .chain(vectorcraft_effects::plugin_effects())
         .filter(|info| vectorcraft_effects::is_geometry(info.id))
-        .map(|info| (paper_type(info.id), defaults(info.id)))
+        .map(|info| (paper_type(info.id), info.label.trim_end_matches('…'), defaults(info.id)))
 }
 
 /// The Paper.js type of the effect `id`.
