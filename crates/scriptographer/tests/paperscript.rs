@@ -1850,6 +1850,23 @@ fn workers_run_scripts_on_their_threads<E: Engine>(name: &str) {
     std::fs::remove_dir_all(&folder).unwrap();
 }
 
+/// A message transfers buffers too: the receiver gets their bytes, the sender's are detached.
+fn messages_transfer_buffers<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    runtime
+        .eval(
+            "const { port1, port2 } = new MessageChannel()\n\
+             port2.onmessage = event => console.log('got', event.data.bytes.byteLength, new Uint8Array(event.data.bytes).join())\n\
+             const bytes = new Uint8Array([1, 2, 3]).buffer\n\
+             port1.postMessage({ bytes }, [bytes])\n\
+             const thrown = f => { try { f() } catch (e) { return e.name } }\n\
+             console.log('sent', bytes.byteLength, thrown(() => port1.postMessage(1, [{}])), thrown(() => port1.postMessage(1, [bytes, bytes])))",
+        )
+        .unwrap();
+    runtime.run_timers(0.0).unwrap();
+    assert_eq!(runtime.take_output(), ["sent 0 DataCloneError DataCloneError", "got 3 1,2,3"]);
+}
+
 fn message_channels_join_ports_in_a_script_and_across_workers<E: Engine>(name: &str) {
     let folder = std::env::temp_dir().join(format!("scriptographer-ports-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&folder);
@@ -2422,6 +2439,11 @@ macro_rules! engine_tests {
             #[test]
             fn font_faces_give_canvases_fonts_by_the_scripts_names() {
                 super::font_faces_give_canvases_fonts_by_the_scripts_names::<$engine>();
+            }
+
+            #[test]
+            fn messages_transfer_buffers() {
+                super::messages_transfer_buffers::<$engine>();
             }
 
             #[test]

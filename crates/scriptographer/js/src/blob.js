@@ -85,12 +85,16 @@ export function getBytes(blob) {
 }
 
 // The bytes of a buffer or a view, not copied, or `null` for anything else.
+// A detached buffer has none, which a view of it can't be made of.
 export function getBufferBytes(value) {
-  return value instanceof ArrayBuffer
-    ? new Uint8Array(value)
-    : ArrayBuffer.isView(value)
-      ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
-      : null
+  const isView = ArrayBuffer.isView(value)
+  return !(isView || value instanceof ArrayBuffer)
+    ? null
+    : (isView ? value.buffer : value).byteLength === 0
+      ? new Uint8Array()
+      : isView
+        ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+        : new Uint8Array(value)
 }
 
 // The bytes of a `Blob`'s parts: strings (UTF-8), buffers, views and `Blob`s.

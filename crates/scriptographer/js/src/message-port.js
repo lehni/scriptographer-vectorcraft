@@ -58,7 +58,7 @@ export class MessagePort extends EventTarget {
 
   postMessage(message, transfer) {
     checkArguments(arguments, 1, 'postMessage')
-    postWith(transfer, (ports, numbers) => {
+    postWith(transfer, (ports, numbers, buffers) => {
       if (this.#number !== null) {
         if (ports.includes(this)) {
           throw new DOMException(
@@ -66,7 +66,7 @@ export class MessagePort extends EventTarget {
             'DataCloneError'
           )
         }
-        natives.port.post(this.#number, message, ports, numbers)
+        natives.port.post(this.#number, message, ports, numbers, buffers)
       }
     })
   }
@@ -101,9 +101,10 @@ Object.defineProperty(MessagePort.prototype, 'onmessage', {
 })
 setToStringTag(MessageChannel, MessagePort)
 
-// Sends a message with the ports in `transfer`, a list of them or `{ transfer }`
-// as `postMessage()` takes it: `send(ports, numbers)` sends, and once it did,
-// the ports are the receiver's.
+// Sends a message with the ports and the buffers in `transfer`, a list of them
+// or `{ transfer }` as `postMessage()` takes it: `send(ports, numbers, buffers)`
+// sends, and once it did, the ports are the receiver's, and the runtime detached
+// the buffers, which the receiver got copies of.
 export function postWith(transfer, send) {
   const list =
     transfer === undefined || transfer === null
@@ -116,20 +117,24 @@ export function postWith(transfer, send) {
   if (!list) {
     throw new TypeError(`Invalid transfer list: '${transfer}'.`)
   }
-  for (const [index, port] of list.entries()) {
+  for (const [index, value] of list.entries()) {
     if (
-      !(port instanceof MessagePort) ||
-      getNumber(port) === null ||
-      list.indexOf(port) !== index
+      !(
+        value instanceof MessagePort && getNumber(value) !== null ||
+        value instanceof ArrayBuffer
+      ) ||
+      list.indexOf(value) !== index
     ) {
       throw new DOMException(
-        `Invalid transfer list: '${port}' can't be transferred.`,
+        `Invalid transfer list: '${value}' can't be transferred.`,
         'DataCloneError'
       )
     }
   }
-  send(list, list.map(getNumber))
-  list.forEach(detach)
+  const ports = list.filter(value => value instanceof MessagePort)
+  const buffers = list.filter(value => value instanceof ArrayBuffer)
+  send(ports, ports.map(getNumber), buffers)
+  ports.forEach(detach)
 }
 
 // The number of `port`, which goes elsewhere: it's no longer the script's.

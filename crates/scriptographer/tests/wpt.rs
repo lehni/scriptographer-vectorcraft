@@ -12,15 +12,15 @@
 //! `WPT_FILTER=text` runs only the files whose path contains `text` and prints each test's result
 //! and message, without checking the list.
 //!
-//! What fails, by cause (2026-10-24: 4159 of 4340 pass, 4068 of the standard's 4210 and 91 of
+//! What fails, by cause (2026-10-24: 4161 of 4340 pass, 4070 of the standard's 4210 and 91 of
 //! the 130 tentative ones), to come back to; most of it rarely matters to a script. `docs/gaps.md`
 //! (G6) sums it up:
 //!
-//! - Streams (about 45): `TextDecoderStream` decodes UTF-8 only, as `TextDecoder` does;
-//!   `postMessage()` transfers ports only, not `ArrayBuffer`s; the IDL tests, and compression's
-//!   that compress media files, fetch by a relative URL, which scripts have no base for; and what web-streams-polyfill doesn't do: the tentative
-//!   `owning` type, a string to `ReadableStream.from()`, the async iterators' prototype, a write
-//!   that `enqueue()` starts at once in a pipe, and `strategy.size` called as a method.
+//! - Streams (about 45): `TextDecoderStream` decodes UTF-8 only, as `TextDecoder` does; the IDL
+//!   tests, and compression's that compress media files, fetch by a relative URL, which scripts
+//!   have no base for; and what web-streams-polyfill doesn't do: the tentative `owning` type, a
+//!   string to `ReadableStream.from()`, the async iterators' prototype, a write that `enqueue()`
+//!   starts at once in a pipe, and `strategy.size` called as a method.
 //! - `URLPattern` (about 55): what urlpattern-polyfill doesn't do: the tentative `generate()` and
 //!   `compareComponent()`, the hostname checks the standard added, and character classes of the
 //!   `v` flag (`[[a-z]--a]`).

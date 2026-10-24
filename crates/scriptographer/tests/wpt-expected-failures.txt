@@ -53,8 +53,6 @@ encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to rej
 encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to reject invalid sequences in Shift_JIS
 encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to reject invalid sequences in UTF-16BE
 encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to reject invalid sequences in UTF-16LE
-encoding/streams/decode-utf8.any.js: decoding a transferred ArrayBuffer chunk should give no output
-encoding/streams/decode-utf8.any.js: decoding a transferred Uint8Array chunk should give no output
 html/canvas/offscreen/canvas-context/2d.getContext.options.any.js: 2d
 html/canvas/offscreen/color-type/2d.color.type.u8p3.to.u8srgb.to.u8p3.worker.js: test srgb unorm8 canvas storing 8-bit display-p3 data accurately
 html/canvas/offscreen/color-type/2d.color.type.u8srgb.to.u8p3.to.u8srgb.worker.js: test display-p3 unorm8 canvas not storing 8-bit srgb data accurately

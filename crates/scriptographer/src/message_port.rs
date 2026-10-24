@@ -43,7 +43,7 @@ impl<H> Port<H> {
 }
 
 /// The natives `js/src/message-port.js` talks through: `channel()`, which gives the numbers of
-/// two new ports, `post(number, message, ports, numbers)`, `start(number, receive)` and
+/// two new ports, `post(number, message, ports, numbers, buffers)`, `start(number, receive)` and
 /// `close(number)`.
 pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E::Handle)>, Error> {
     let natives: [(&str, HostFunction<E::Handle>); 4] = [("channel", new_channel), ("post", post), ("start", start), ("close", close)];
@@ -88,7 +88,7 @@ fn post<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -
 }
 
 /// The [`Message`] of `args`: a value, then the ports it transfers as objects and by number, whose
-/// ends it takes from the runtime.
+/// ends it takes from the runtime, and the buffers it transfers, which it copies and detaches.
 pub(crate) fn message<H: Clone>(call: &mut dyn Call<H>, args: &[Value<H>]) -> Result<Message, Error> {
     let value = args.first().cloned().unwrap_or(Value::Undefined);
     let transferred = args.get(1).cloned().unwrap_or(Value::Undefined);
@@ -102,6 +102,14 @@ pub(crate) fn message<H: Clone>(call: &mut dyn Call<H>, args: &[Value<H>]) -> Re
         }
     }
     let ports = numbers.into_iter().map(|number| take(call, number)).collect::<Result<_, _>>()?;
+    if let Some(Value::Js(buffers)) = args.get(3) {
+        let length = call.get(buffers, "length")?;
+        for i in 0..call.to_number(&length)? as usize {
+            if let Value::Js(buffer) = call.get(buffers, &i.to_string())? {
+                call.detach(&buffer)?;
+            }
+        }
+    }
     Ok(Message { data, ports })
 }
 
