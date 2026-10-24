@@ -83,7 +83,7 @@
     atob: () => atob,
     btoa: () => btoa,
     isSecureContext: () => isSecureContext,
-    performance: () => performance,
+    performance: () => performance2,
     queueMicrotask: () => queueMicrotask2,
     reportError: () => reportError
   });
@@ -98,7 +98,7 @@
 
   // src/global-scope.js
   var isSecureContext = true;
-  var performance = {
+  var performance2 = {
     timeOrigin: Date.now(),
     // The milliseconds since the runtime started.
     now() {
@@ -609,6 +609,7 @@
     File: () => File,
     getBufferBytes: () => getBufferBytes,
     getBytes: () => getBytes,
+    joinBytes: () => joinBytes,
     readBytes: () => readBytes
   });
 
@@ -3069,10 +3070,15 @@
   __name(getBufferBytes, "getBufferBytes");
   function getPartBytes(parts2) {
     const encoder = new TextEncoder();
-    const list = Array.from(
-      parts2,
-      (part) => getBufferBytes(part) ?? (part instanceof Blob ? getBytes(part) : encoder.encode(String(part)))
+    return joinBytes(
+      Array.from(
+        parts2,
+        (part) => getBufferBytes(part) ?? (part instanceof Blob ? getBytes(part) : encoder.encode(String(part)))
+      )
     );
+  }
+  __name(getPartBytes, "getPartBytes");
+  function joinBytes(list) {
     const bytes = new Uint8Array(
       list.reduce((size, part) => size + part.length, 0)
     );
@@ -3083,7 +3089,7 @@
     }
     return bytes;
   }
-  __name(getPartBytes, "getPartBytes");
+  __name(joinBytes, "joinBytes");
   function getType(type) {
     type = String(type);
     return /^[\x20-\x7e]*$/.test(type) ? type.toLowerCase() : "";
@@ -6064,13 +6070,7 @@ ${stack}` : ""));
       }
       chunks.push(chunk);
     }
-    const bytes = new Uint8Array(chunks.reduce((size, c2) => size + c2.length, 0));
-    let offset = 0;
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset);
-      offset += chunk.length;
-    }
-    return bytes;
+    return joinBytes(chunks);
   }
   __name(readStream, "readStream");
   function getBody(body) {
@@ -8552,9 +8552,10 @@ ${value}\r
     #request = null;
     #controller = null;
     #timer = null;
-    // What came back: a `Response` without its body, the body's bytes, and what
-    // `response` made of them.
+    // What came back: a `Response` without its body, the parts of the body that
+    // arrived, the body's bytes once it's in, and what `response` made of them.
     #response = null;
+    #parts = null;
     #bytes = null;
     #value;
     constructor() {
@@ -8631,7 +8632,7 @@ ${value}\r
       this.#url = parsed.href;
       this.#headers = new Headers();
       this.#isSent = false;
-      this.#response = this.#bytes = null;
+      this.#response = this.#parts = this.#bytes = null;
       this.#value = void 0;
       if (this.#readyState !== states4.OPENED) {
         this.#readyState = states4.OPENED;
@@ -8679,18 +8680,35 @@ ${value}\r
               }
             }
             this.#response = response;
+            this.#parts = [];
             this.#setState(states4.HEADERS_RECEIVED);
-            const bytes = await response.bytes();
-            if (isCurrent()) {
-              this.#bytes = bytes;
+            const total = Number(response.headers.get("content-length")) || 0;
+            const reader = response.body.getReader();
+            let loaded = 0;
+            let reported = -Infinity;
+            for (; ; ) {
+              const { done, value } = await reader.read();
+              if (!isCurrent()) {
+                reader.cancel();
+                return;
+              } else if (done) {
+                break;
+              }
+              this.#parts.push(value);
+              loaded += value.length;
               this.#setState(states4.LOADING);
-              const { length } = bytes;
-              fireProgress(this, "progress", length, length);
-              this.#finish();
-              this.#setState(states4.DONE);
-              fireProgress(this, "load", length, length);
-              fireProgress(this, "loadend", length, length);
+              const now = performance.now();
+              if (now - reported >= 50) {
+                reported = now;
+                fireProgress(this, "progress", loaded, total);
+              }
             }
+            this.#bytes = joinBytes(this.#parts);
+            fireProgress(this, "progress", loaded, total);
+            this.#finish();
+            this.#setState(states4.DONE);
+            fireProgress(this, "load", loaded, total);
+            fireProgress(this, "loadend", loaded, total);
           }
         },
         () => {
@@ -8707,7 +8725,7 @@ ${value}\r
       }
       if (this.#readyState === states4.DONE) {
         this.#readyState = states4.UNSENT;
-        this.#response = this.#bytes = null;
+        this.#response = this.#parts = this.#bytes = null;
       }
     }
     get status() {
@@ -8740,7 +8758,8 @@ ${value}\r
           "InvalidStateError"
         );
       }
-      return this.#bytes ? new TextDecoder().decode(this.#bytes) : "";
+      const bytes = this.#bytes ?? (this.#parts && joinBytes(this.#parts));
+      return bytes ? new TextDecoder().decode(bytes) : "";
     }
     get response() {
       const type = this.#responseType;
@@ -8828,7 +8847,7 @@ ${value}\r
       const isUploading = this.#isUploading;
       this.#isUploading = false;
       this.#stop();
-      this.#response = this.#bytes = null;
+      this.#response = this.#parts = this.#bytes = null;
       this.#setState(states4.DONE);
       if (isUploading) {
         fireProgress(this.#upload, type);

@@ -1,4 +1,4 @@
-import { Blob } from './blob.js'
+import { Blob, joinBytes } from './blob.js'
 import {
   checkArguments,
   checkInternal,
@@ -16,8 +16,9 @@ import {
 } from './events.js'
 
 // `XMLHttpRequest` for scripts outside a browser, on `fetch()`. Requests are
-// asynchronous only, as scripts can't wait for the network, and as bodies
-// arrive whole, each direction reports its progress once. Text is UTF-8.
+// asynchronous only, as scripts can't wait for the network. A response reports
+// its progress as its body arrives, an upload once, as it's sent whole. Text is
+// UTF-8.
 
 const states = {
   UNSENT: 0,
@@ -62,9 +63,10 @@ export class XMLHttpRequest extends XMLHttpRequestEventTarget {
   #request = null
   #controller = null
   #timer = null
-  // What came back: a `Response` without its body, the body's bytes, and what
-  // `response` made of them.
+  // What came back: a `Response` without its body, the parts of the body that
+  // arrived, the body's bytes once it's in, and what `response` made of them.
   #response = null
+  #parts = null
   #bytes = null
   #value
 
@@ -152,7 +154,7 @@ export class XMLHttpRequest extends XMLHttpRequestEventTarget {
     this.#url = parsed.href
     this.#headers = new Headers()
     this.#isSent = false
-    this.#response = this.#bytes = null
+    this.#response = this.#parts = this.#bytes = null
     this.#value = undefined
     if (this.#readyState !== states.OPENED) {
       this.#readyState = states.OPENED
@@ -202,18 +204,36 @@ export class XMLHttpRequest extends XMLHttpRequestEventTarget {
             }
           }
           this.#response = response
+          this.#parts = []
           this.#setState(states.HEADERS_RECEIVED)
-          const bytes = await response.bytes()
-          if (isCurrent()) {
-            this.#bytes = bytes
+          const total = Number(response.headers.get('content-length')) || 0
+          const reader = response.body.getReader()
+          let loaded = 0
+          let reported = -Infinity
+          // Each part as it arrives, the progress at most every 50 ms:
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (!isCurrent()) {
+              reader.cancel()
+              return
+            } else if (done) {
+              break
+            }
+            this.#parts.push(value)
+            loaded += value.length
             this.#setState(states.LOADING)
-            const { length } = bytes
-            fireProgress(this, 'progress', length, length)
-            this.#finish()
-            this.#setState(states.DONE)
-            fireProgress(this, 'load', length, length)
-            fireProgress(this, 'loadend', length, length)
+            const now = performance.now()
+            if (now - reported >= 50) {
+              reported = now
+              fireProgress(this, 'progress', loaded, total)
+            }
           }
+          this.#bytes = joinBytes(this.#parts)
+          fireProgress(this, 'progress', loaded, total)
+          this.#finish()
+          this.#setState(states.DONE)
+          fireProgress(this, 'load', loaded, total)
+          fireProgress(this, 'loadend', loaded, total)
         }
       },
       () => {
@@ -236,7 +256,7 @@ export class XMLHttpRequest extends XMLHttpRequestEventTarget {
     if (this.#readyState === states.DONE) {
       // Back to the start, without an event:
       this.#readyState = states.UNSENT
-      this.#response = this.#bytes = null
+      this.#response = this.#parts = this.#bytes = null
     }
   }
 
@@ -277,7 +297,8 @@ export class XMLHttpRequest extends XMLHttpRequestEventTarget {
         'InvalidStateError'
       )
     }
-    return this.#bytes ? new TextDecoder().decode(this.#bytes) : ''
+    const bytes = this.#bytes ?? (this.#parts && joinBytes(this.#parts))
+    return bytes ? new TextDecoder().decode(bytes) : ''
   }
 
   get response() {
@@ -398,7 +419,7 @@ export class XMLHttpRequest extends XMLHttpRequestEventTarget {
     const isUploading = this.#isUploading
     this.#isUploading = false
     this.#stop()
-    this.#response = this.#bytes = null
+    this.#response = this.#parts = this.#bytes = null
     this.#setState(states.DONE)
     if (isUploading) {
       fireProgress(this.#upload, type)

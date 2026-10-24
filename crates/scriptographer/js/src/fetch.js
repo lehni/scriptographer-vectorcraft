@@ -1,4 +1,4 @@
-import { Blob, File, getBufferBytes, getBytes } from './blob.js'
+import { Blob, File, getBufferBytes, getBytes, joinBytes } from './blob.js'
 import { checkArguments, inject, setToStringTag } from './define.js'
 import { natives } from './natives.js'
 import { getPairs, pairIterable, setFirst } from './pairs.js'
@@ -383,13 +383,7 @@ async function readStream(stream) {
     }
     chunks.push(chunk)
   }
-  const bytes = new Uint8Array(chunks.reduce((size, c) => size + c.length, 0))
-  let offset = 0
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset)
-    offset += chunk.length
-  }
-  return bytes
+  return joinBytes(chunks)
 }
 
 // A body's bytes and the content type it implies, which the runtime reads too:
