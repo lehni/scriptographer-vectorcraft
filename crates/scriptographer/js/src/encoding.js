@@ -1,6 +1,7 @@
 import { getBufferBytes } from './blob.js'
 import { inject, setToStringTag } from './define.js'
 import { natives } from './natives.js'
+import { TransformStream } from './streams.js'
 
 // `TextEncoder` and `TextDecoder` for scripts outside a browser: UTF-8, as the
 // Encoding standard has it, which the runtime encodes and decodes.
@@ -90,7 +91,91 @@ for (const target of [TextEncoder.prototype, TextDecoder.prototype]) {
     { enumerable: true }
   )
 }
-setToStringTag(TextEncoder, TextDecoder)
+// The same, chunk by chunk, as streams that strings and bytes go through:
+export class TextEncoderStream {
+  #transform
+
+  constructor() {
+    const encoder = new TextEncoder()
+    // A chunk can end in the first half of a surrogate pair:
+    let pending = ''
+    this.#transform = new TransformStream({
+      transform(chunk, controller) {
+        let text = pending + String(chunk)
+        pending = /[\ud800-\udbff]$/.test(text) ? text.slice(-1) : ''
+        if (pending) text = text.slice(0, -1)
+        if (text) controller.enqueue(encoder.encode(text))
+      },
+
+      flush(controller) {
+        if (pending) controller.enqueue(encoder.encode(pending))
+      }
+    })
+  }
+
+  get readable() {
+    return this.#transform.readable
+  }
+
+  get writable() {
+    return this.#transform.writable
+  }
+}
+
+export class TextDecoderStream {
+  #decoder
+  #transform
+
+  constructor(label, options) {
+    const decoder = (this.#decoder = new TextDecoder(label, options))
+    this.#transform = new TransformStream({
+      transform(chunk, controller) {
+        if (!getBufferBytes(chunk)) {
+          throw new TypeError(`Invalid chunk: '${chunk}', not a buffer.`)
+        }
+        const text = decoder.decode(chunk, { stream: true })
+        if (text) controller.enqueue(text)
+      },
+
+      flush(controller) {
+        const text = decoder.decode()
+        if (text) controller.enqueue(text)
+      }
+    })
+  }
+
+  get fatal() {
+    return this.#decoder.fatal
+  }
+
+  get ignoreBOM() {
+    return this.#decoder.ignoreBOM
+  }
+
+  get readable() {
+    return this.#transform.readable
+  }
+
+  get writable() {
+    return this.#transform.writable
+  }
+}
+
+for (const target of [
+  TextEncoderStream.prototype,
+  TextDecoderStream.prototype
+]) {
+  inject(
+    target,
+    {
+      get encoding() {
+        return 'utf-8'
+      }
+    },
+    { enumerable: true }
+  )
+}
+setToStringTag(TextEncoder, TextDecoder, TextEncoderStream, TextDecoderStream)
 
 // How many of the bytes at the end start a character that isn't complete.
 function getIncomplete(bytes) {

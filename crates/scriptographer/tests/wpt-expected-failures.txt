@@ -14,7 +14,35 @@ css/geometry/DOMMatrix-css-string.worker.js: DOMMatrixReadOnly stringifier in wo
 css/geometry/DOMMatrix2DInit-validate-fixup.html: DOMMatrix2DInit-validate-fixup.html
 css/geometry/DOMRectList.html: DOMRectList.html
 css/geometry/WebKitCSSMatrix.worker.js: WebKitCSSMatrix.worker.js
+css/geometry/idlharness.any.js: idl_test setup
 css/geometry/structured-serialization.html: DOMRectList clone
+encoding/streams/decode-attributes.any.js: encoding attribute should have correct value for 'ascii'
+encoding/streams/decode-attributes.any.js: encoding attribute should have correct value for 'iso-8859-2'
+encoding/streams/decode-attributes.any.js: encoding attribute should have correct value for 'utf-16'
+encoding/streams/decode-ignore-bom.any.js: ignoreBOM should work for encoding utf-16be, split at character 0
+encoding/streams/decode-ignore-bom.any.js: ignoreBOM should work for encoding utf-16be, split at character 1
+encoding/streams/decode-ignore-bom.any.js: ignoreBOM should work for encoding utf-16be, split at character 2
+encoding/streams/decode-ignore-bom.any.js: ignoreBOM should work for encoding utf-16be, split at character 3
+encoding/streams/decode-ignore-bom.any.js: ignoreBOM should work for encoding utf-16le, split at character 0
+encoding/streams/decode-ignore-bom.any.js: ignoreBOM should work for encoding utf-16le, split at character 1
+encoding/streams/decode-ignore-bom.any.js: ignoreBOM should work for encoding utf-16le, split at character 2
+encoding/streams/decode-ignore-bom.any.js: ignoreBOM should work for encoding utf-16le, split at character 3
+encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to decode ISO-2022-JP
+encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to decode ISO-8859-14
+encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to decode Shift_JIS
+encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to decode UTF-16BE
+encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to decode UTF-16LE
+encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to decode invalid sequences in ISO-2022-JP
+encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to decode invalid sequences in Shift_JIS
+encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to decode invalid sequences in UTF-16BE
+encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to decode invalid sequences in UTF-16LE
+encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to reject invalid sequences in ISO-2022-JP
+encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to reject invalid sequences in Shift_JIS
+encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to reject invalid sequences in UTF-16BE
+encoding/streams/decode-non-utf8.any.js: TextDecoderStream should be able to reject invalid sequences in UTF-16LE
+encoding/streams/decode-utf8.any.js: decoding a transferred ArrayBuffer chunk should give no output
+encoding/streams/decode-utf8.any.js: decoding a transferred Uint8Array chunk should give no output
+html/canvas/offscreen/canvas-context/2d.getContext.options.any.js: Untitled
 html/canvas/offscreen/color-type/2d.color.type.u8p3.to.u8srgb.to.u8p3.worker.js: test srgb unorm8 canvas storing 8-bit display-p3 data accurately
 html/canvas/offscreen/color-type/2d.color.type.u8srgb.to.u8p3.to.u8srgb.worker.js: test display-p3 unorm8 canvas not storing 8-bit srgb data accurately
 html/canvas/offscreen/fill-and-stroke-styles/2d.fillStyle.toStringFunctionCallback.worker.js: Passing a function in to ctx.fillStyle or ctx.strokeStyle with a toString callback works as specified
@@ -65,3 +93,20 @@ html/canvas/offscreen/wide-gamut-canvas/2d.color.space.getImageData.convert.work
 html/canvas/offscreen/wide-gamut-canvas/2d.color.space.getImageData.convert.worker.js: Test getImageData color conversions from a display-p3-linear canvas
 html/canvas/offscreen/wide-gamut-canvas/2d.color.space.getImageData.convert.worker.js: Test getImageData color conversions from a srgb canvas
 html/canvas/offscreen/wide-gamut-canvas/2d.color.space.getImageData.convert.worker.js: Test getImageData color conversions from a srgb-linear canvas
+streams/idlharness.any.js: idl_test setup
+streams/piping/general-addition.any.js: enqueue() must not synchronously call write algorithm
+streams/readable-streams/async-iterator.any.js: Async iterator instances should have the correct list of properties
+streams/readable-streams/from.any.js: ReadableStream.from throws on invalid iterables; specifically a string
+streams/readable-streams/owning-type-message-port.tentative.any.js: Second branch of owning ReadableStream tee should end up into errors with transfer only values
+streams/readable-streams/owning-type-message-port.tentative.any.js: Transferred MessageChannel works as expected
+streams/readable-streams/owning-type-video-frame.tentative.any.js: ReadableStream of type owning should clone JS Objects with serializables when teeing
+streams/readable-streams/owning-type-video-frame.tentative.any.js: ReadableStream of type owning should clone serializable objects when teeing
+streams/readable-streams/owning-type-video-frame.tentative.any.js: ReadableStream of type owning should close serialized chunks
+streams/readable-streams/owning-type-video-frame.tentative.any.js: ReadableStream of type owning should error when trying to enqueue not serializable values
+streams/readable-streams/owning-type-video-frame.tentative.any.js: ReadableStream of type owning should transfer JS chunks with transferred values
+streams/readable-streams/owning-type.tentative.any.js: ReadableStream can be constructed with owning type
+streams/readable-streams/owning-type.tentative.any.js: ReadableStream of type owning should call start with a ReadableStreamDefaultController
+streams/readable-streams/owning-type.tentative.any.js: ReadableStream of type owning should transfer enqueued chunks
+streams/readable-streams/owning-type.tentative.any.js: ReadableStream should be able to call enqueue with an empty transfer list
+streams/readable-streams/owning-type.tentative.any.js: ReadableStream should check transfer parameter
+streams/writable-streams/general.any.js: WritableStream's strategy.size should not be called as a method

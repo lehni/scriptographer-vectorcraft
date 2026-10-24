@@ -384,6 +384,27 @@ fn scripts_have_the_browsers_everyday_apis<E: Engine>() {
     );
 }
 
+/// Streams, as the Streams standard has them: a blob's bytes, through the encoding streams and a
+/// transform of the script's own.
+fn streams_pipe_through_transforms<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    runtime
+        .execute(
+            &scope,
+            "const upper = new TransformStream({ transform: (chunk, controller) => controller.enqueue(chunk.toUpperCase()) })\n\
+             const stream = new Blob(['hé', 'llo']).stream().pipeThrough(new TextDecoderStream()).pipeThrough(upper)\n\
+             const chunks = []\n\
+             for await (const chunk of stream) chunks.push(chunk)\n\
+             const encoded = ReadableStream.from(['\\ud83d', '\\ude00']).pipeThrough(new TextEncoderStream())\n\
+             const parts = []\n\
+             for await (const part of encoded) parts.push([...part].join())\n\
+             console.log(chunks.join('|'), parts.join('|'))",
+        )
+        .unwrap();
+    assert_eq!(runtime.take_output(), ["HÉLLO 240,159,152,128"], "a surrogate pair split across chunks is one character");
+}
+
 /// Encoding as the Encoding standard has it, and base64 as browsers read it.
 fn text_encodes_as_the_standard_has_it<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
@@ -1922,6 +1943,11 @@ macro_rules! engine_tests {
             #[test]
             fn event_sources_read_streams_and_reconnect() {
                 super::event_sources_read_streams_and_reconnect::<$engine>();
+            }
+
+            #[test]
+            fn streams_pipe_through_transforms() {
+                super::streams_pipe_through_transforms::<$engine>();
             }
 
             #[test]

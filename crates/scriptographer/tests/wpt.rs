@@ -2,18 +2,24 @@
 
 //! The web-platform-tests of the browser APIs Scriptographer has, against them in V8, when `cargo xtask
 //! corpus --wpt` has fetched them; skipped when it hasn't: `OffscreenCanvas` in a worker
-//! (`html/canvas/offscreen`) and the geometry interfaces (`css/geometry`). A test's scripts (its
-//! `importScripts()` or `<script>`s) run as one, after testharness.js, as a shell runs them. The tests that fail are listed in `tests/wpt-expected-failures.txt`: this test
+//! (`html/canvas/offscreen`), the geometry interfaces (`css/geometry`) and streams (`streams`,
+//! `encoding/streams`). A test's scripts (its `importScripts()`, `<script>`s, or an `.any.js`
+//! file's `// META: script=`s) run as one, after testharness.js, as a shell runs them. The tests that fail are listed in `tests/wpt-expected-failures.txt`: this test
 //! fails when another one fails, or when a listed one passes, so the list stays the truth.
 //! `WPT_UPDATE=1` writes the list anew. The pass rate by folder prints with `--nocapture`, the
 //! standard's tests apart from the tentative ones, which test proposals.
 //! `WPT_FILTER=text` runs only the files whose path contains `text` and prints each test's result
 //! and message, without checking the list.
 //!
-//! What fails, by cause (2026-10-22: 1755 of 1821 pass, 1727 of the standard's 1777 and 28 of
-//! the 44 tentative ones), to come back to; most of it rarely matters to a script. `docs/gaps.md`
+//! What fails, by cause (2026-10-24: 3021 of 3131 pass, 2993 of the standard's 3075 and 28 of
+//! the 56 tentative ones), to come back to; most of it rarely matters to a script. `docs/gaps.md`
 //! (G6) sums it up:
 //!
+//! - Streams (about 45): `TextDecoderStream` decodes UTF-8 only, as `TextDecoder` does;
+//!   `postMessage()` transfers ports only, not `ArrayBuffer`s; the IDL test fetches by a relative URL,
+//!   which scripts have no base for; and what web-streams-polyfill doesn't do: the tentative
+//!   `owning` type, a string to `ReadableStream.from()`, the async iterators' prototype, a write
+//!   that `enqueue()` starts at once in a pipe, and `strategy.size` called as a method.
 //! - Text (canvas/text, 9): colour emoji, which VectorCraft's text has no glyphs for (bitmap and
 //!   COLR fonts); fonts whose family, style and version are another's (the `CanvasTest` variants),
 //!   which the app's font database keeps one of; `lang`, which shaping doesn't take.
@@ -54,7 +60,7 @@ const TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The folders of the tests that run, in the corpus, and whether their HTML pages run too: the
 /// canvas's are its tests in a window and its reftests, which compare renderings.
-const SUITES: [(&str, bool); 2] = [("html/canvas/offscreen", false), ("css/geometry", true)];
+const SUITES: [(&str, bool); 4] = [("html/canvas/offscreen", false), ("css/geometry", true), ("streams", false), ("encoding/streams", false)];
 
 struct Harness {
     corpus: PathBuf,
@@ -155,10 +161,18 @@ fn collect(folder: &Path, pages: bool, files: &mut Vec<PathBuf>) {
             if name != "manual" && name != "support" {
                 collect(&path, pages, files);
             }
-        } else if name.ends_with(".worker.js") || pages && name.ends_with(".html") {
+        } else if name.ends_with(".worker.js") || pages && name.ends_with(".html") || name.ends_with(".any.js") && runs_in_worker(&path) {
             files.push(path);
         }
     }
+}
+
+/// Whether the `.any.js` test `file` runs in a worker, as its `// META: global=` says: in a window
+/// and a worker unless it names others.
+fn runs_in_worker(file: &Path) -> bool {
+    let text = std::fs::read_to_string(file).unwrap();
+    let globals = text.lines().find_map(|line| line.strip_prefix("// META: global="));
+    globals.is_none_or(|globals| globals.split(',').any(|global| matches!(global.trim(), "worker" | "dedicatedworker")))
 }
 
 /// The scripts of the test `file` (a worker's, or an HTML page's), what they import included, but
@@ -169,6 +183,8 @@ fn scripts(harness: &Harness, file: &Path) -> String {
         if src.ends_with("/testharness.js") || src.ends_with("/testharnessreport.js") {
             return String::new();
         }
+        // The test server serves the WebIDL parser under this name:
+        let src = if src == "/resources/WebIDLParser.js" { "/resources/webidl2/lib/webidl2.js" } else { src };
         let path = match src.strip_prefix('/') {
             Some(rooted) => harness.corpus.join(rooted),
             None => file.parent().unwrap().join(src),
@@ -188,6 +204,14 @@ fn scripts(harness: &Harness, file: &Path) -> String {
             source.push_str("\n;\n");
             rest = after;
         }
+    } else if file.to_string_lossy().ends_with(".any.js") {
+        for line in text.lines() {
+            if let Some(src) = line.strip_prefix("// META: script=") {
+                source.push_str(&load(src.trim()));
+                source.push_str("\n;\n");
+            }
+        }
+        source.push_str(&text);
     } else {
         for line in text.lines() {
             match line.trim_start().strip_prefix("importScripts(\"").and_then(|l| l.split_once('"')) {
