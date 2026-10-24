@@ -23,6 +23,7 @@ const PATHS: &[&str] = &[
     "html/canvas/offscreen",
     "css/geometry",
     "streams",
+    "compression",
     "encoding/streams",
     "encoding/resources",
     "common/gc.js",

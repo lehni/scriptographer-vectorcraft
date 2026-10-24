@@ -4866,6 +4866,66 @@
   }
   __name(ask, "ask");
 
+  // src/compression.js
+  function createTransform(format2, decompress) {
+    const number = natives.compression.open(String(format2), decompress);
+    return new TransformStream({
+      transform(chunk, controller) {
+        try {
+          const buffer = ArrayBuffer.isView(chunk) ? chunk.buffer : chunk;
+          if (!(buffer instanceof ArrayBuffer)) {
+            throw new TypeError(`Invalid chunk: '${chunk}', not a buffer.`);
+          }
+          const [bytes, failure] = natives.compression.write(number, chunk);
+          if (bytes.length) controller.enqueue(bytes);
+          if (failure) throw new TypeError(failure);
+        } catch (err) {
+          natives.compression.close(number);
+          throw err;
+        }
+      },
+      flush(controller) {
+        const bytes = natives.compression.finish(number);
+        if (bytes.length) controller.enqueue(bytes);
+      },
+      cancel() {
+        natives.compression.close(number);
+      }
+    });
+  }
+  __name(createTransform, "createTransform");
+  var CompressionStream = class {
+    static {
+      __name(this, "CompressionStream");
+    }
+    #transform;
+    constructor(format2) {
+      this.#transform = createTransform(format2, false);
+    }
+    get readable() {
+      return this.#transform.readable;
+    }
+    get writable() {
+      return this.#transform.writable;
+    }
+  };
+  var DecompressionStream = class {
+    static {
+      __name(this, "DecompressionStream");
+    }
+    #transform;
+    constructor(format2) {
+      this.#transform = createTransform(format2, true);
+    }
+    get readable() {
+      return this.#transform.readable;
+    }
+    get writable() {
+      return this.#transform.writable;
+    }
+  };
+  setToStringTag(CompressionStream, DecompressionStream);
+
   // src/console.js
   var maxDepth = 2;
   var maxItems = 100;
@@ -7769,6 +7829,9 @@ ${value}\r
   }
   if (!globalThis.ReadableStream) {
     inject(globalThis, { ...streams_exports });
+  }
+  if (!globalThis.CompressionStream) {
+    inject(globalThis, { CompressionStream, DecompressionStream });
   }
   if (!globalThis.TextEncoderStream) {
     inject(globalThis, { TextEncoderStream, TextDecoderStream });

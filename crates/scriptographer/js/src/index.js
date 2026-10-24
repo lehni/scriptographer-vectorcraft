@@ -8,6 +8,7 @@ import { BroadcastChannel } from './broadcast-channel.js'
 import * as canvas from './canvas.js'
 import { dom } from './dom.js'
 import { Clipboard } from './clipboard.js'
+import { CompressionStream, DecompressionStream } from './compression.js'
 import { createConsole } from './console.js'
 import { Crypto } from './crypto.js'
 import { setupDialog } from './dialog.js'
@@ -64,6 +65,9 @@ if (!globalThis.TextEncoder) {
 }
 if (!globalThis.ReadableStream) {
   inject(globalThis, { ...streams })
+}
+if (!globalThis.CompressionStream) {
+  inject(globalThis, { CompressionStream, DecompressionStream })
 }
 if (!globalThis.TextEncoderStream) {
   inject(globalThis, { TextEncoderStream, TextDecoderStream })

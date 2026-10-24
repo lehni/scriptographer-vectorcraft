@@ -7156,6 +7156,8 @@ name = "vectorcraft-scriptographer"
 version = "0.21.0"
 dependencies = [
  "boa_engine",
+ "brotli",
+ "flate2",
  "getrandom 0.3.4",
  "image",
  "js-sys",

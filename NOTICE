@@ -52,7 +52,8 @@ other builds in the browser's engine or in Boa (Unlicense OR MIT). On desktop, s
 over ureq (MIT OR Apache-2.0) and their WebSockets over tungstenite (MIT OR Apache-2.0), both on
 rustls (Apache-2.0 OR ISC OR MIT), with ring (Apache-2.0 AND ISC)
 and rustls-webpki (ISC), and trusts the root certificates of webpki-roots, Mozilla's CA list
-(CDLA-Permissive-2.0).
+(CDLA-Permissive-2.0). Their compression streams run over flate2 (MIT OR Apache-2.0)
+and brotli (BSD-3-Clause AND MIT).
 
 Builds made with craft-fonts (the CRAFT_FONTS_DIR build option; all official releases) embed the
 fonts listed in https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md (BIZ UDPGothic,
