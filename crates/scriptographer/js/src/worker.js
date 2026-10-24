@@ -32,8 +32,8 @@ export class Worker extends EventTarget {
   }
 
   postMessage(data, transfer) {
-    postWith(transfer, (ports, numbers) =>
-      natives.worker.post(this.#number, data, ports, numbers)
+    postWith(transfer, (ports, numbers, buffers) =>
+      natives.worker.post(this.#number, data, ports, numbers, buffers)
     )
   }
 
@@ -111,8 +111,8 @@ export function setupWorker(name, isShared) {
   } else {
     inject(globalThis, {
       postMessage(data, transfer) {
-        postWith(transfer, (ports, numbers) =>
-          natives.worker.self.postMessage(data, ports, numbers)
+        postWith(transfer, (ports, numbers, buffers) =>
+          natives.worker.self.postMessage(data, ports, numbers, buffers)
         )
       }
     })

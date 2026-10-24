@@ -106,10 +106,11 @@ pub(crate) struct Parent<H> {
 }
 
 /// The natives `js/src/worker.js` talks through: `start(url, name, receive)`, which gives the
-/// worker's number, `post(number, data, ports, numbers)` and `terminate(number)`,
+/// worker's number, `post(number, data, ports, numbers, buffers)` and `terminate(number)`,
 /// `connect(url, name, port, receive)`, which gives a shared worker's number, and in the worker
-/// `self.postMessage(data, ports, numbers)`, `self.close()` and `self.importScripts(...paths)`;
-/// `ports` are the `MessagePort`s the message transfers, and `numbers` theirs.
+/// `self.postMessage(data, ports, numbers, buffers)`, `self.close()` and
+/// `self.importScripts(...paths)`; `ports` are the `MessagePort`s the message transfers,
+/// `numbers` theirs, and `buffers` the `ArrayBuffer`s it transfers.
 pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E::Handle)>, Error> {
     let natives: [(&str, HostFunction<E::Handle>); 4] =
         [("start", start::<E>), ("post", post_to_worker), ("terminate", terminate), ("connect", connect::<E>)];
@@ -325,7 +326,7 @@ fn deliver<E: Engine>(runtime: &mut Runtime<E>, sent: ToWorker) -> Result<(), Er
     })
 }
 
-/// The worker's `postMessage(data, ports, numbers)`.
+/// The worker's `postMessage(data, ports, numbers, buffers)`.
 fn post_to_parent<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let sent = message(call, args)?;
     if let Some(parent) = call.host()?.borrow().parent.as_ref() {
@@ -366,7 +367,7 @@ fn number<H>(call: &mut dyn Call<H>, args: &[Value<H>]) -> Result<f64, Error> {
     call.to_number(args.first().unwrap_or(&Value::Undefined))
 }
 
-/// The parent's `worker.postMessage(data, ports, numbers)`.
+/// The parent's `worker.postMessage(data, ports, numbers, buffers)`.
 fn post_to_worker<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let number = number(call, args)?;
     let sent = message(call, args.get(1..).unwrap_or_default())?;

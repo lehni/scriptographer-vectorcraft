@@ -3063,7 +3063,8 @@
   }
   __name(getBytes, "getBytes");
   function getBufferBytes(value) {
-    return value instanceof ArrayBuffer ? new Uint8Array(value) : ArrayBuffer.isView(value) ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength) : null;
+    const isView = ArrayBuffer.isView(value);
+    return !(isView || value instanceof ArrayBuffer) ? null : (isView ? value.buffer : value).byteLength === 0 ? new Uint8Array() : isView ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength) : new Uint8Array(value);
   }
   __name(getBufferBytes, "getBufferBytes");
   function getPartBytes(parts2) {
@@ -8300,7 +8301,7 @@ ${value}\r
     }
     postMessage(message, transfer) {
       checkArguments(arguments, 1, "postMessage");
-      postWith(transfer, (ports, numbers2) => {
+      postWith(transfer, (ports, numbers2, buffers) => {
         if (this.#number !== null) {
           if (ports.includes(this)) {
             throw new DOMException(
@@ -8308,7 +8309,7 @@ ${value}\r
               "DataCloneError"
             );
           }
-          natives.port.post(this.#number, message, ports, numbers2);
+          natives.port.post(this.#number, message, ports, numbers2, buffers);
         }
       });
     }
@@ -8344,16 +8345,18 @@ ${value}\r
     if (!list) {
       throw new TypeError(`Invalid transfer list: '${transfer}'.`);
     }
-    for (const [index, port] of list.entries()) {
-      if (!(port instanceof MessagePort) || getNumber(port) === null || list.indexOf(port) !== index) {
+    for (const [index, value] of list.entries()) {
+      if (!(value instanceof MessagePort && getNumber(value) !== null || value instanceof ArrayBuffer) || list.indexOf(value) !== index) {
         throw new DOMException(
-          `Invalid transfer list: '${port}' can't be transferred.`,
+          `Invalid transfer list: '${value}' can't be transferred.`,
           "DataCloneError"
         );
       }
     }
-    send(list, list.map(getNumber));
-    list.forEach(detach);
+    const ports = list.filter((value) => value instanceof MessagePort);
+    const buffers = list.filter((value) => value instanceof ArrayBuffer);
+    send(ports, ports.map(getNumber), buffers);
+    ports.forEach(detach);
   }
   __name(postWith, "postWith");
   function takePort(port) {
@@ -8390,7 +8393,7 @@ ${value}\r
     postMessage(data, transfer) {
       postWith(
         transfer,
-        (ports, numbers2) => natives.worker.post(this.#number, data, ports, numbers2)
+        (ports, numbers2, buffers) => natives.worker.post(this.#number, data, ports, numbers2, buffers)
       );
     }
     terminate() {
@@ -8454,7 +8457,7 @@ ${value}\r
         postMessage(data, transfer) {
           postWith(
             transfer,
-            (ports, numbers2) => natives.worker.self.postMessage(data, ports, numbers2)
+            (ports, numbers2, buffers) => natives.worker.self.postMessage(data, ports, numbers2, buffers)
           );
         }
       });
