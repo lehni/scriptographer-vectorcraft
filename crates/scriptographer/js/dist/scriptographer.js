@@ -3072,6 +3072,69 @@ ${stack}` : ""));
   }
   __name(getIncomplete, "getIncomplete");
 
+  // src/event-source.js
+  var states2 = { CONNECTING: 0, OPEN: 1, CLOSED: 2 };
+  var EventSource = class extends EventTarget {
+    static {
+      __name(this, "EventSource");
+    }
+    #url;
+    #withCredentials;
+    #origin = "";
+    #readyState = states2.CONNECTING;
+    // `null` once the connection is closed:
+    #number;
+    constructor(url, { withCredentials = false } = {}) {
+      checkArguments(arguments, 1, "EventSource");
+      super();
+      try {
+        this.#url = new URL(url).href;
+      } catch {
+        throw new DOMException(`Invalid URL: '${url}'.`, "SyntaxError");
+      }
+      this.#withCredentials = !!withCredentials;
+      this.#number = natives.eventSource.open(
+        this.#url,
+        (received) => this.#receive(received)
+      );
+    }
+    get url() {
+      return this.#url;
+    }
+    get withCredentials() {
+      return this.#withCredentials;
+    }
+    get readyState() {
+      return this.#readyState;
+    }
+    close() {
+      if (this.#number !== null) {
+        natives.eventSource.close(this.#number);
+        this.#number = null;
+      }
+      this.#readyState = states2.CLOSED;
+    }
+    // What the runtime read: `{ state, … }`, `state` one of 'open', 'event',
+    // 'reconnecting' and 'failed'.
+    #receive({ state, url, type, data, lastEventId }) {
+      if (state === "open") {
+        this.#readyState = states2.OPEN;
+        this.#origin = new URL(url).origin;
+        fire(this, new Event("open"));
+      } else if (state === "event") {
+        const origin = this.#origin;
+        fire(this, new MessageEvent(type, { data, lastEventId, origin }));
+      } else {
+        this.#readyState = state === "reconnecting" ? states2.CONNECTING : states2.CLOSED;
+        if (state === "failed") this.#number = null;
+        fire(this, new Event("error"));
+      }
+    }
+  };
+  defineConstants(EventSource, states2);
+  defineEventHandlers(EventSource.prototype, "open", "message", "error");
+  setToStringTag(EventSource);
+
   // src/fetch.js
   var fetch_exports = {};
   __export(fetch_exports, {
@@ -4484,7 +4547,7 @@ ${value}\r
   __name(parseQuery, "parseQuery");
 
   // src/websocket.js
-  var states2 = { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 };
+  var states3 = { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 };
   var schemes = {
     "ws:": "ws:",
     "http:": "ws:",
@@ -4497,7 +4560,7 @@ ${value}\r
     }
     #url;
     #number;
-    #readyState = states2.CONNECTING;
+    #readyState = states3.CONNECTING;
     #protocol = "";
     #binaryType = "blob";
     constructor(url, protocols = []) {
@@ -4541,13 +4604,13 @@ ${value}\r
     // socket sends nothing, as in browsers.
     send(data) {
       checkArguments(arguments, 1, "send");
-      if (this.#readyState === states2.CONNECTING) {
+      if (this.#readyState === states3.CONNECTING) {
         throw new DOMException(
           "Unable to send: the WebSocket is not open yet.",
           "InvalidStateError"
         );
       }
-      if (this.#readyState === states2.OPEN) {
+      if (this.#readyState === states3.OPEN) {
         natives.socket.send(
           this.#number,
           getBufferBytes(data) ?? (data instanceof Blob ? getBytes(data) : String(data))
@@ -4569,8 +4632,8 @@ ${value}\r
           "SyntaxError"
         );
       }
-      if (this.#readyState < states2.CLOSING) {
-        this.#readyState = states2.CLOSING;
+      if (this.#readyState < states3.CLOSING) {
+        this.#readyState = states3.CLOSING;
         natives.socket.close(this.#number, code ?? 1e3, reason);
       }
     }
@@ -4578,7 +4641,7 @@ ${value}\r
     #receive({ type, protocol, data, message, code, reason, wasClean }) {
       switch (type) {
         case "open":
-          this.#readyState = states2.OPEN;
+          this.#readyState = states3.OPEN;
           this.#protocol = protocol;
           fire(this, new Event("open"));
           break;
@@ -4596,13 +4659,13 @@ ${value}\r
           fire(this, new Event("error"));
           break;
         case "close":
-          this.#readyState = states2.CLOSED;
+          this.#readyState = states3.CLOSED;
           fire(this, new CloseEvent("close", { code, reason, wasClean }));
           break;
       }
     }
   };
-  defineConstants(WebSocket, states2);
+  defineConstants(WebSocket, states3);
   defineEventHandlers(WebSocket.prototype, "open", "message", "error", "close");
   setToStringTag(WebSocket);
 
@@ -4775,7 +4838,7 @@ ${value}\r
     XMLHttpRequestEventTarget: () => XMLHttpRequestEventTarget,
     XMLHttpRequestUpload: () => XMLHttpRequestUpload
   });
-  var states3 = {
+  var states4 = {
     UNSENT: 0,
     OPENED: 1,
     HEADERS_RECEIVED: 2,
@@ -4808,7 +4871,7 @@ ${value}\r
     static {
       __name(this, "XMLHttpRequest");
     }
-    #readyState = states3.UNSENT;
+    #readyState = states4.UNSENT;
     #method = "GET";
     #url = null;
     #headers = new Headers();
@@ -4849,7 +4912,7 @@ ${value}\r
       return this.#withCredentials;
     }
     set withCredentials(withCredentials) {
-      if (this.#isSent || this.#readyState > states3.OPENED) {
+      if (this.#isSent || this.#readyState > states4.OPENED) {
         throw new DOMException(
           "Unable to set withCredentials: the request was sent.",
           "InvalidStateError"
@@ -4905,8 +4968,8 @@ ${value}\r
       this.#isSent = false;
       this.#response = this.#bytes = null;
       this.#value = void 0;
-      if (this.#readyState !== states3.OPENED) {
-        this.#readyState = states3.OPENED;
+      if (this.#readyState !== states4.OPENED) {
+        this.#readyState = states4.OPENED;
         fire(this, new Event("readystatechange"));
       }
     }
@@ -4951,15 +5014,15 @@ ${value}\r
               }
             }
             this.#response = response;
-            this.#setState(states3.HEADERS_RECEIVED);
+            this.#setState(states4.HEADERS_RECEIVED);
             const bytes = await response.bytes();
             if (isCurrent()) {
               this.#bytes = bytes;
-              this.#setState(states3.LOADING);
+              this.#setState(states4.LOADING);
               const { length } = bytes;
               fireProgress(this, "progress", length, length);
               this.#finish();
-              this.#setState(states3.DONE);
+              this.#setState(states4.DONE);
               fireProgress(this, "load", length, length);
               fireProgress(this, "loadend", length, length);
             }
@@ -4972,13 +5035,13 @@ ${value}\r
     }
     abort() {
       const state = this.#readyState;
-      if (state === states3.OPENED && this.#isSent || state === states3.HEADERS_RECEIVED || state === states3.LOADING) {
+      if (state === states4.OPENED && this.#isSent || state === states4.HEADERS_RECEIVED || state === states4.LOADING) {
         this.#fail("abort");
       } else {
         this.#stop();
       }
-      if (this.#readyState === states3.DONE) {
-        this.#readyState = states3.UNSENT;
+      if (this.#readyState === states4.DONE) {
+        this.#readyState = states4.UNSENT;
         this.#response = this.#bytes = null;
       }
     }
@@ -5016,7 +5079,7 @@ ${value}\r
     }
     get response() {
       const type = this.#responseType;
-      return type === "" || type === "text" ? this.responseText : this.#readyState !== states3.DONE ? null : this.#value === void 0 ? this.#value = this.#getResponse(type) : this.#value;
+      return type === "" || type === "text" ? this.responseText : this.#readyState !== states4.DONE ? null : this.#value === void 0 ? this.#value = this.#getResponse(type) : this.#value;
     }
     get responseXML() {
       const type = this.#responseType;
@@ -5026,7 +5089,7 @@ ${value}\r
           "InvalidStateError"
         );
       }
-      return this.#readyState !== states3.DONE ? null : this.#value === void 0 ? this.#value = this.#getDocument() : this.#value;
+      return this.#readyState !== states4.DONE ? null : this.#value === void 0 ? this.#value = this.#getDocument() : this.#value;
     }
     #getResponse(type) {
       const bytes = this.#bytes ?? new Uint8Array();
@@ -5068,7 +5131,7 @@ ${value}\r
       fire(this, new Event("readystatechange"));
     }
     #checkOpened(name) {
-      if (this.#readyState !== states3.OPENED || this.#isSent) {
+      if (this.#readyState !== states4.OPENED || this.#isSent) {
         throw new DOMException(
           `Unable to ${name}(): the request isn't opened, or was sent.`,
           "InvalidStateError"
@@ -5076,7 +5139,7 @@ ${value}\r
       }
     }
     #checkNotLoading(name) {
-      if (this.#readyState >= states3.LOADING) {
+      if (this.#readyState >= states4.LOADING) {
         throw new DOMException(
           `Unable to set ${name}: the response is loading or loaded.`,
           "InvalidStateError"
@@ -5101,7 +5164,7 @@ ${value}\r
       this.#isUploading = false;
       this.#stop();
       this.#response = this.#bytes = null;
-      this.#setState(states3.DONE);
+      this.#setState(states4.DONE);
       if (isUploading) {
         fireProgress(this.#upload, type);
         fireProgress(this.#upload, "loadend");
@@ -5110,7 +5173,7 @@ ${value}\r
       fireProgress(this, "loadend");
     }
   };
-  defineConstants(XMLHttpRequest, states3);
+  defineConstants(XMLHttpRequest, states4);
   defineEventHandlers(
     XMLHttpRequestEventTarget.prototype,
     "loadstart",
@@ -5190,6 +5253,9 @@ ${value}\r
   }
   if (!globalThis.WebSocket) {
     inject(globalThis, { WebSocket });
+  }
+  if (!globalThis.EventSource) {
+    inject(globalThis, { EventSource });
   }
   if (!globalThis.Worker) {
     inject(globalThis, { Worker });

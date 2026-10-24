@@ -14,6 +14,7 @@ import { setupDialog } from './dialog.js'
 import { DOMException } from './dom-exception.js'
 import { TextDecoder, TextEncoder } from './encoding.js'
 import * as events from './events.js'
+import { EventSource } from './event-source.js'
 import * as fetch from './fetch.js'
 import * as fileSystem from './file-system.js'
 import * as geometry from './geometry.js'
@@ -100,6 +101,9 @@ if (!globalThis.URL) {
 }
 if (!globalThis.WebSocket) {
   inject(globalThis, { WebSocket })
+}
+if (!globalThis.EventSource) {
+  inject(globalThis, { EventSource })
 }
 if (!globalThis.Worker) {
   inject(globalThis, { Worker })

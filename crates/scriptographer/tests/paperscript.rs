@@ -1424,6 +1424,62 @@ fn web_sockets_talk<E: Engine>() {
     assert!(!runtime.is_running(), "a closed socket keeps the script running no more");
 }
 
+/// An `EventSource` reads the events of the stream as the standard parses them, connects again
+/// once it ends, with the last event's id, and fails on an answer that's no event stream.
+fn event_sources_read_streams_and_reconnect<E: Engine>() {
+    use std::io::{BufRead, BufReader, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = format!("http://{}", listener.local_addr().unwrap());
+    let (sent, ids) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for (i, stream) in listener.incoming().take(2).enumerate() {
+            let mut stream = stream.unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut id = None;
+            loop {
+                let mut header = String::new();
+                reader.read_line(&mut header).unwrap();
+                if header.trim().is_empty() {
+                    break;
+                }
+                if let Some(value) = header.strip_prefix("last-event-id:").or_else(|| header.strip_prefix("Last-Event-ID:")) {
+                    id = Some(value.trim().to_owned());
+                }
+            }
+            sent.send(id).unwrap();
+            let answer = if i == 0 {
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nConnection: close\r\n\r\n\u{feff}: a comment\r\nretry: 50\r\nid: 1\r\ndata: one\r\ndata:two\r\n\r\nevent: custom\ndata: three\rid\n\ndata\n\nid: 2\n\n"
+            } else {
+                "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n"
+            };
+            stream.write_all(answer.as_bytes()).unwrap();
+        }
+    });
+    let mut runtime = Runtime::<E>::new().unwrap();
+    runtime
+        .eval(&format!(
+            "const source = new EventSource('{address}/events')\n\
+             const log = event => console.log(event.type, JSON.stringify(event.data), event.lastEventId, event.origin === '{address}', source.readyState)\n\
+             source.onopen = event => console.log('open', source.readyState)\n\
+             source.onmessage = log\n\
+             source.addEventListener('custom', log)\n\
+             source.onerror = event => console.log('error', source.readyState)"
+        ))
+        .unwrap();
+    let started = std::time::Instant::now();
+    while runtime.is_running() && started.elapsed() < std::time::Duration::from_secs(5) {
+        runtime.run_timers(started.elapsed().as_secs_f64() * 1000.0).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(
+        runtime.take_output(),
+        ["open 1", "message \"one\\ntwo\" 1 true 1", "custom \"three\"  true 1", "message \"\"  true 1", "error 0", "error 2"],
+        "an empty id field clears the id, and one without data dispatches nothing"
+    );
+    assert_eq!(ids.try_iter().collect::<Vec<_>>(), [None, Some("2".to_owned())]);
+    assert!(!runtime.is_running(), "a failed connection keeps the script running no more");
+}
+
 fn web_sockets_drop_what_they_send_while_the_server_closes_them<E: Engine>() {
     // A server that says `go` and closes the socket at once, then keeps the connection a while:
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -1856,6 +1912,11 @@ macro_rules! engine_tests {
             #[test]
             fn broadcast_channels_reach_the_others_of_their_name() {
                 super::broadcast_channels_reach_the_others_of_their_name::<$engine>(stringify!($module));
+            }
+
+            #[test]
+            fn event_sources_read_streams_and_reconnect() {
+                super::event_sources_read_streams_and_reconnect::<$engine>();
             }
 
             #[test]
