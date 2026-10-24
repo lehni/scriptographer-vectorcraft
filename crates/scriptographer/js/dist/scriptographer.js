@@ -5733,11 +5733,15 @@ ${stack}` : ""));
     static {
       __name(this, "Body");
     }
-    #bytes;
+    #bytes = null;
+    #stream = null;
     #isUsed = false;
-    // The body's bytes, its type in `headers` unless they have one.
+    // The body's bytes, or the stream it is, its type in `headers` unless they
+    // have one.
     constructor(body, headers) {
-      if (body != null) {
+      if (body instanceof ReadableStream) {
+        this.#stream = body;
+      } else if (body != null) {
         const { bytes, type } = getBody(body);
         if (type && !headers.has("content-type")) {
           headers.set("content-type", type);
@@ -5745,38 +5749,62 @@ ${stack}` : ""));
         this.#bytes = bytes;
       }
     }
+    get body() {
+      if (!this.#stream && this.#bytes) {
+        const bytes = this.#bytes;
+        this.#stream = new ReadableStream({
+          type: "bytes",
+          pull(controller) {
+            if (bytes.length) controller.enqueue(bytes.slice());
+            controller.close();
+          }
+        });
+      }
+      return this.#stream;
+    }
+    // Read once its stream was read from, as web-streams-polyfill marks it:
     get bodyUsed() {
-      return this.#isUsed;
+      return this.#isUsed || !!this.#stream?._disturbed;
     }
     async text() {
-      return new TextDecoder().decode(this.#take());
+      return new TextDecoder().decode(await this.#take());
     }
     async json() {
       return JSON.parse(await this.text());
     }
     async arrayBuffer() {
-      return this.#take().slice().buffer;
+      return (await this.#take()).slice().buffer;
     }
     async bytes() {
-      return this.#take().slice();
+      return (await this.#take()).slice();
     }
     async blob() {
       const type = this.headers.get("content-type") ?? "";
-      return new Blob([this.#take()], { type });
+      return new Blob([await this.#take()], { type });
     }
-    #take() {
-      if (this.#isUsed) {
+    async #take() {
+      if (this.bodyUsed || this.#stream?.locked) {
         throw new TypeError("Unable to read the body: it was read already.");
       }
       this.#isUsed = true;
-      return this.#bytes ?? new Uint8Array();
+      return this.#stream ? readStream(this.#stream) : this.#bytes ?? new Uint8Array();
     }
-    // The body, unread, for a copy.
-    static getBytes(body) {
-      if (body.#isUsed) {
+    // The body, unread, for a copy: its bytes, or a branch of its stream, which
+    // keeps the other.
+    static copy(body) {
+      if (body.bodyUsed || body.#stream?.locked) {
         throw new TypeError("Unable to copy the body: it was read already.");
       }
-      return body.#bytes ?? null;
+      if (body.#stream) {
+        const [kept, copied] = body.#stream.tee();
+        body.#stream = kept;
+        return copied;
+      }
+      return body.#bytes;
+    }
+    // The body's bytes, to send, or `null` without a body.
+    static async read(body) {
+      return body.#stream || body.#bytes ? body.#take() : null;
     }
   };
   var Request = class _Request extends Body {
@@ -5792,7 +5820,7 @@ ${stack}` : ""));
       const from = input instanceof _Request ? input : null;
       const method = String(init.method ?? from?.method ?? "GET").toUpperCase();
       const headers = new Headers2(init.headers ?? from?.headers);
-      const body = init.body ?? (from && Body.getBytes(from));
+      const body = init.body ?? (from && Body.copy(from));
       if (body != null && (method === "GET" || method === "HEAD")) {
         throw new TypeError(`Invalid Request: a ${method} request has no body.`);
       }
@@ -5876,7 +5904,7 @@ ${stack}` : ""));
     clone() {
       const { status, statusText, headers } = this;
       return setResponse(
-        new _Response(Body.getBytes(this), { status, statusText, headers }),
+        new _Response(Body.copy(this), { status, statusText, headers }),
         this
       );
     }
@@ -5885,8 +5913,8 @@ ${stack}` : ""));
   async function fetch2(input, init) {
     const request = new Request(input, init);
     const { method, url, headers, signal, redirect } = request;
+    const body = await Body.read(request);
     signal?.throwIfAborted();
-    const body = Body.getBytes(request);
     return new Promise((resolve, reject) => {
       const abort2 = /* @__PURE__ */ __name(() => reject(signal.reason), "abort");
       signal?.addEventListener("abort", abort2);
@@ -5897,6 +5925,23 @@ ${stack}` : ""));
     });
   }
   __name(fetch2, "fetch");
+  async function readStream(stream) {
+    const chunks = [];
+    for await (const chunk of stream) {
+      if (!(chunk instanceof Uint8Array)) {
+        throw new TypeError(`Invalid body chunk: '${chunk}', not a Uint8Array.`);
+      }
+      chunks.push(chunk);
+    }
+    const bytes = new Uint8Array(chunks.reduce((size, c2) => size + c2.length, 0));
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return bytes;
+  }
+  __name(readStream, "readStream");
   function getBody(body) {
     const bytes = getBufferBytes(body);
     return bytes ? { bytes, type: null } : body instanceof Blob ? { bytes: getBytes(body), type: body.type || null } : body instanceof FormData ? getMultipart(body) : {
