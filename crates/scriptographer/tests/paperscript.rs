@@ -773,6 +773,49 @@ fn fetched_bodies_stream_as_they_arrive<E: Engine>() {
     assert!(!runtime.is_running(), "an aborted body keeps the script running no more");
 }
 
+/// An `XMLHttpRequest`'s response reports its progress as its body arrives, and `responseText` is
+/// what arrived so far.
+fn xml_http_requests_report_progress_as_bodies_arrive<E: Engine>() {
+    use std::io::{BufRead, BufReader, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = format!("http://{}", listener.local_addr().unwrap());
+    let (go, gone) = std::sync::mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        while reader.read_line(&mut line).unwrap() > 2 {
+            line.clear();
+        }
+        stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 6\r\nConnection: close\r\n\r\none").unwrap();
+        stream.flush().unwrap();
+        let _ = gone.recv_timeout(std::time::Duration::from_secs(5));
+        stream.write_all(b"two").unwrap();
+    });
+    let mut runtime = Runtime::<E>::new().unwrap();
+    runtime
+        .eval(&format!(
+            "const xhr = new XMLHttpRequest()\n\
+             xhr.onprogress = event => console.log('progress', event.loaded, event.total, event.lengthComputable, xhr.readyState, xhr.responseText)\n\
+             xhr.onload = () => console.log('load', xhr.responseText)\n\
+             xhr.open('GET', '{address}/')\n\
+             xhr.send()"
+        ))
+        .unwrap();
+    let started = std::time::Instant::now();
+    let mut output = Vec::new();
+    while !output.iter().any(|line: &String| line.starts_with("load")) && started.elapsed() < std::time::Duration::from_secs(10) {
+        runtime.run_timers(started.elapsed().as_secs_f64() * 1000.0).unwrap();
+        let new = runtime.take_output();
+        if new.iter().any(|line| line.ends_with(" one")) {
+            go.send(()).unwrap();
+        }
+        output.extend(new);
+        std::thread::sleep(std::time::Duration::from_millis(60));
+    }
+    assert_eq!(output, ["progress 3 6 true 3 one", "progress 6 6 true 3 onetwo", "progress 6 6 true 3 onetwo", "load onetwo"]);
+}
+
 fn scripts_fetch<E: Engine>() {
     let address = serve(4);
     let mut runtime = Runtime::<E>::new().unwrap();
@@ -848,8 +891,8 @@ fn scripts_send_xml_http_requests<E: Engine>() {
     assert_eq!(
         runtime.take_output(),
         [
-            "1,loadstart,2,3,progress,4,load,loadend 200 [1, 2] one true",
-            "1,loadstart,upload load,2,3,progress,4,load,loadend 201 Created \"POST text/plain\\nhello\"",
+            "1,loadstart,2,3,progress,progress,4,load,loadend 200 [1, 2] one true",
+            "1,loadstart,upload load,2,3,progress,progress,4,load,loadend 201 Created \"POST text/plain\\nhello\"",
             "a true",
             "404 text/plain missing",
             "error 1,loadstart,4,error,loadend 0",
@@ -2223,6 +2266,11 @@ macro_rules! engine_tests {
             #[test]
             fn fetched_bodies_stream_as_they_arrive() {
                 super::fetched_bodies_stream_as_they_arrive::<$engine>();
+            }
+
+            #[test]
+            fn xml_http_requests_report_progress_as_bodies_arrive() {
+                super::xml_http_requests_report_progress_as_bodies_arrive::<$engine>();
             }
 
             #[test]

@@ -100,13 +100,19 @@ export function getBufferBytes(value) {
 // The bytes of a `Blob`'s parts: strings (UTF-8), buffers, views and `Blob`s.
 function getPartBytes(parts) {
   const encoder = new TextEncoder()
-  const list = Array.from(
-    parts,
-    part => (
-      getBufferBytes(part) ??
-      (part instanceof Blob ? getBytes(part) : encoder.encode(String(part)))
+  return joinBytes(
+    Array.from(
+      parts,
+      part => (
+        getBufferBytes(part) ??
+        (part instanceof Blob ? getBytes(part) : encoder.encode(String(part)))
+      )
     )
   )
+}
+
+// A list of `Uint8Array`s as one:
+export function joinBytes(list) {
   const bytes = new Uint8Array(
     list.reduce((size, part) => size + part.length, 0)
   )
