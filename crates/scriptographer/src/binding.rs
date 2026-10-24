@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use serde_json::{Map, Value as Json};
+use serde_json::{Map, Value as Json, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Selection};
 
 use crate::effects;
@@ -55,15 +55,17 @@ impl<E: Engine> Runtime<E> {
                 host.rectangle = Some(rectangle);
                 host.base = Some(base);
             }
-            // The app's geometry effects draw as the app draws them, also those Paper.js has types for:
+            // The app's geometry effects draw as the app draws them, also those Paper.js has its own for:
             let effect = object(call, paper, "Effect")?;
-            for (kind, defaults) in effects::types() {
-                let source = call.new_object()?;
-                call.set(&source, "type", &Value::String(kind.into()))?;
-                let defaults = js_value(call, &Json::Object(defaults))?;
-                call.set(&source, "defaults", &defaults)?;
-                call.set(&source, "apply", &Value::Js(apply_effect.clone()))?;
-                method(call, &effect, "extend", &[Value::Js(source)])?;
+            for (kind, label, defaults) in effects::types() {
+                let parameters = defaults.into_iter().map(|(key, value)| (key, json!({ "value": value }))).collect();
+                let parameters = js_value(call, &Json::Object(parameters))?;
+                let props = call.new_object()?;
+                call.set(&props, "type", &Value::String(kind.into()))?;
+                call.set(&props, "label", &Value::String(label.into()))?;
+                call.set(&props, "parameters", &parameters)?;
+                call.set(&props, "onApply", &Value::Js(apply_effect.clone()))?;
+                call.construct(&effect, &[Value::Js(props)])?;
             }
             let host = call.new_object()?;
             call.set(&host, "getChildren", &Value::Js(get_children))?;
@@ -383,16 +385,19 @@ fn get_definition_keys<H>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Valu
     Ok(Value::Js(call.new_array(&keys)?))
 }
 
-/// `effect.apply(art)` of the app's geometry effects: the art drawn with the effect, as the app
-/// draws it. The art of an object Paper.js has no class for is the document's object the effect
+/// `onApply({ art, item })` of the app's geometry effects, with the effect's instance as `this`:
+/// the art drawn with the effect, as the app draws it. The art of an object Paper.js has no class for is the document's object the effect
 /// is on, which scripts can't change. Art the effect leaves as it is comes back as it is.
 fn apply_effect<H: Clone>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
-    let (Value::Js(effect), Some(Value::Js(art))) = (this, args.first()) else {
-        return Err(Error::Script("apply: no effect or art".into()));
+    let (Value::Js(effect), Some(Value::Js(event))) = (this, args.first()) else {
+        return Err(Error::Script("onApply: no effect or event".into()));
+    };
+    let Value::Js(art) = &call.get(event, "art")? else {
+        return Err(Error::Script("onApply: no art".into()));
     };
     let json = writeback::export(call, art)?;
     let id = match json.get(0).and_then(Json::as_str) {
-        Some("HostItem") => match call.get(effect, "item")? {
+        Some("HostItem") => match call.get(event, "item")? {
             Value::Js(item) => match call.get(&item, "key")? {
                 Value::Number(key) => Some(NodeId(key as u64)),
                 _ => None,
