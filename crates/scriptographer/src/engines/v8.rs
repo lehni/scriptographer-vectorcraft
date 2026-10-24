@@ -15,6 +15,7 @@ use std::pin::pin;
 use std::rc::Rc;
 use std::sync::OnceLock;
 
+use crate::rejections::{self, Rejection};
 use crate::{Call, Engine, Error, Host, HostFunction, Interrupt, Prelude, Value};
 
 type Handle = v8::Global<v8::Value>;
@@ -98,7 +99,9 @@ fn with_isolate<R>(f: impl FnOnce(&mut v8::OwnedIsolate) -> Result<R, Error>) ->
                 Some(Some(snapshot)) => v8::CreateParams::default().snapshot_blob(snapshot.as_slice().into()),
                 _ => v8::CreateParams::default(),
             };
-            v8::Isolate::new(params)
+            let mut isolate = v8::Isolate::new(params);
+            isolate.set_promise_reject_callback(track_rejection);
+            isolate
         }))
     })
 }
@@ -154,11 +157,15 @@ impl Engine for V8 {
 
     fn eval(&mut self, source: &str) -> Result<Value<Handle>, Error> {
         with_isolate(|isolate| {
-            enter!(isolate, &self.context, scope);
-            let source = string(scope, source)?;
-            let result = v8::Script::compile(scope, source, None).and_then(|script| script.run(scope));
-            let result = result.ok_or_else(|| exception(scope))?;
-            Ok(from_v8(scope, result))
+            let result = {
+                enter!(isolate, &self.context, scope);
+                let source = string(scope, source)?;
+                let result = v8::Script::compile(scope, source, None).and_then(|script| script.run(scope));
+                let result = result.ok_or_else(|| exception(scope))?;
+                from_v8(scope, result)
+            };
+            self.settle(isolate)?;
+            Ok(result)
         })
     }
 
@@ -184,7 +191,7 @@ impl Engine for V8 {
                 enter!(isolate, &self.context, scope);
                 f(&mut V8Call { scope })
             };
-            run_tasks(isolate);
+            self.settle(isolate)?;
             result
         })
     }
@@ -212,6 +219,14 @@ impl V8 {
             }
             Ok(Self { context })
         })
+    }
+
+    /// Runs the tasks V8 left for the thread, then tells the script of the Promises its call
+    /// rejected without a handler ([`rejections::notify`]).
+    fn settle(&self, isolate: &mut v8::OwnedIsolate) -> Result<(), Error> {
+        run_tasks(isolate);
+        enter!(isolate, &self.context, scope);
+        rejections::notify(&mut V8Call { scope })
     }
 
     fn host_function(&mut self, name: &str, function: HostFunction<Handle>, constructor: bool) -> Result<Handle, Error> {
@@ -378,6 +393,26 @@ fn call_host<'s>(scope: &mut v8::PinScope<'s, '_>, args: v8::FunctionCallbackArg
                 scope.throw_exception(thrown);
             }
         }
+    }
+}
+
+/// Tracks the Promises rejected without a handler, and the handlers added to them later, for
+/// [`rejections::notify`].
+extern "C" fn track_rejection(message: v8::PromiseRejectMessage) {
+    // SAFETY: V8 calls this in the context of the Promise, which the scope enters, and the scope
+    // ends with the call.
+    v8::callback_scope!(unsafe scope, &message);
+    let promise = handle(scope, message.get_promise().into());
+    let rejection = match message.get_event() {
+        v8::PromiseRejectEvent::PromiseRejectWithNoHandler => {
+            Rejection::Unhandled(promise, message.get_value().map_or(Value::Undefined, |reason| from_v8(scope, reason)))
+        }
+        v8::PromiseRejectEvent::PromiseHandlerAddedAfterReject => Rejection::Handled(promise),
+        // Settling a settled Promise again changes nothing.
+        _ => return,
+    };
+    if let Ok(data) = context_data(scope) {
+        rejections::track(&data.host, rejection);
     }
 }
 

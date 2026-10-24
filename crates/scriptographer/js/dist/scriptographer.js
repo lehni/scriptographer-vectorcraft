@@ -72,6 +72,7 @@
     EventTarget: () => EventTarget,
     MessageEvent: () => MessageEvent,
     ProgressEvent: () => ProgressEvent,
+    PromiseRejectionEvent: () => PromiseRejectionEvent,
     defineEventHandlers: () => defineEventHandlers,
     fire: () => fire
   });
@@ -382,6 +383,18 @@
       });
     }
   };
+  var PromiseRejectionEvent = class extends Event {
+    static {
+      __name(this, "PromiseRejectionEvent");
+    }
+    constructor(type, init) {
+      super(...arguments);
+      if (!init || !("promise" in init)) {
+        throw new TypeError("Invalid event: its promise is missing.");
+      }
+      setMembers(this, init, { promise: null, reason: void 0 });
+    }
+  };
   var fields = {
     [Event.name]: [
       "type",
@@ -399,7 +412,8 @@
     [MessageEvent.name]: ["data", "origin", "lastEventId", "source", "ports"],
     [CloseEvent.name]: ["wasClean", "code", "reason"],
     [ProgressEvent.name]: ["lengthComputable", "loaded", "total"],
-    [ErrorEvent.name]: ["message", "filename", "lineno", "colno", "error"]
+    [ErrorEvent.name]: ["message", "filename", "lineno", "colno", "error"],
+    [PromiseRejectionEvent.name]: ["promise", "reason"]
   };
   for (const Class of [
     Event,
@@ -407,7 +421,8 @@
     MessageEvent,
     CloseEvent,
     ProgressEvent,
-    ErrorEvent
+    ErrorEvent,
+    PromiseRejectionEvent
   ]) {
     for (const name of fields[Class.name]) {
       inject(
@@ -429,7 +444,8 @@
     MessageEvent,
     CloseEvent,
     ProgressEvent,
-    ErrorEvent
+    ErrorEvent,
+    PromiseRejectionEvent
   );
   function defineEventHandlers(target, ...types2) {
     for (const type of types2) {
@@ -3817,6 +3833,46 @@ ${value}\r
   }
   __name(getFilters, "getFilters");
 
+  // src/rejections.js
+  var reasonsByPromise = /* @__PURE__ */ new WeakMap();
+  function notifyRejections(events) {
+    const unhandled = /* @__PURE__ */ new Map();
+    for (const [promise, handled, reason] of events) {
+      if (!handled) {
+        unhandled.set(promise, reason);
+      } else if (!unhandled.delete(promise) && reasonsByPromise.has(promise)) {
+        const reason2 = reasonsByPromise.get(promise);
+        reasonsByPromise.delete(promise);
+        fire(
+          globalThis,
+          new PromiseRejectionEvent("rejectionhandled", { promise, reason: reason2 })
+        );
+      }
+    }
+    for (const [promise, reason] of unhandled) {
+      const event = new PromiseRejectionEvent("unhandledrejection", {
+        promise,
+        reason,
+        cancelable: true
+      });
+      if (fire(globalThis, event)) report(reason);
+      reasonsByPromise.set(promise, reason);
+    }
+  }
+  __name(notifyRejections, "notifyRejections");
+  function reportRejections() {
+    globalThis.addEventListener("unhandledrejection", (event) => {
+      setTimeout(() => {
+        if (!event.defaultPrevented) report(event.reason);
+      });
+    });
+  }
+  __name(reportRejections, "reportRejections");
+  function report(reason) {
+    console.error(`Uncaught (in promise) ${formatError(reason)}`);
+  }
+  __name(report, "report");
+
   // src/font-face.js
   var defaults = {
     style: "normal",
@@ -4655,7 +4711,6 @@ ${value}\r
   defineEventHandlers(Worker.prototype, "message", "messageerror", "error");
   setToStringTag(Worker);
   function setupWorker(name) {
-    const { addEventListener, removeEventListener, dispatchEvent } = EventTarget.prototype;
     const { close, importScripts } = natives.worker.self;
     inject(globalThis, {
       name,
@@ -4666,10 +4721,7 @@ ${value}\r
         );
       },
       close,
-      importScripts,
-      addEventListener,
-      removeEventListener,
-      dispatchEvent
+      importScripts
     });
     defineEventHandlers(globalThis, "message", "messageerror");
     return ({ type, data, ports }) => fire(globalThis, new MessageEvent(type, { data, ports }));
@@ -5064,7 +5116,18 @@ ${value}\r
     inject(globalThis, { DOMException: DOMException2 });
   }
   if (!globalThis.EventTarget) {
-    inject(globalThis, { ...events_exports });
+    const { defineEventHandlers: defineEventHandlers2, fire: fire2, ...classes } = events_exports;
+    const { prototype } = classes.EventTarget;
+    inject(globalThis, {
+      ...classes,
+      addEventListener: prototype.addEventListener.bind(globalThis),
+      removeEventListener: prototype.removeEventListener.bind(globalThis),
+      dispatchEvent: prototype.dispatchEvent.bind(globalThis)
+    });
+    defineEventHandlers2(globalThis, "unhandledrejection", "rejectionhandled");
+    Object.assign(natives, { notifyRejections });
+  } else {
+    reportRejections();
   }
   if (!globalThis.fetch) {
     const { Blob: Blob2, File: File2, getBytes: getBytes2 } = blob_exports;

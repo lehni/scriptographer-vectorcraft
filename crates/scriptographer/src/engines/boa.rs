@@ -4,10 +4,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use boa_engine::builtins::promise::{OperationType, Promise, PromiseState};
+use boa_engine::context::HostHooks;
 use boa_engine::object::FunctionObjectBuilder;
-use boa_engine::object::builtins::{JsArray, JsArrayBuffer, JsDataView, JsFloat64Array, JsTypedArray, JsUint8Array, JsUint16Array};
+use boa_engine::object::builtins::{JsArray, JsArrayBuffer, JsDataView, JsFloat64Array, JsPromise, JsTypedArray, JsUint8Array, JsUint16Array};
 use boa_engine::{Context, JsError, JsNativeError, JsObject, JsResult, JsString, JsValue, NativeFunction, Source};
 
+use crate::rejections::{self, Rejection};
 use crate::{Call, Engine, Error, Host, HostFunction, Prelude, Value};
 
 type BoaHost = Rc<RefCell<Host<JsValue>>>;
@@ -20,7 +23,7 @@ impl Engine for Boa {
     type Handle = JsValue;
 
     fn new(host: BoaHost, prelude: Prelude<Self>) -> Result<Self, Error> {
-        let mut context = Context::default();
+        let mut context = Context::builder().host_hooks(Rc::new(Hooks)).build().map_err(script_error)?;
         context.insert_data(host);
         let mut engine = Self { context };
         prelude(&mut engine)?;
@@ -54,8 +57,11 @@ impl Engine for Boa {
 
 impl Boa {
     /// Runs the Promise jobs the script queued, as V8 does by itself when the host's call returns:
-    /// Boa leaves it to the host.
+    /// Boa leaves it to the host. Then tells the script of the Promises its call rejected without a
+    /// handler ([`rejections::notify`]), and runs the jobs its listeners queued.
     fn run_jobs(&mut self) -> Result<(), Error> {
+        self.context.run_jobs().map_err(script_error)?;
+        rejections::notify(&mut BoaCall { context: &mut self.context })?;
         self.context.run_jobs().map_err(script_error)
     }
 
@@ -79,6 +85,30 @@ impl Boa {
         });
         let function = FunctionObjectBuilder::new(self.context.realm(), native).name(JsString::from(name)).constructor(constructor).build();
         JsObject::from(function).into()
+    }
+}
+
+/// Tracks the Promises rejected without a handler, and the handlers added to them later, for
+/// [`rejections::notify`].
+struct Hooks;
+
+impl HostHooks for Hooks {
+    fn promise_rejection_tracker(&self, promise: &JsObject<Promise>, operation: OperationType, context: &mut Context) {
+        let Some(host) = context.get_data::<BoaHost>() else {
+            return;
+        };
+        let promise = promise.clone().upcast();
+        let rejection = match operation {
+            OperationType::Reject => {
+                let reason = match JsPromise::from_object(promise.clone()).map(|promise| promise.state()) {
+                    Ok(PromiseState::Rejected(reason)) => from_js(reason),
+                    _ => Value::Undefined,
+                };
+                Rejection::Unhandled(promise.into(), reason)
+            }
+            OperationType::Handle => Rejection::Handled(promise.into()),
+        };
+        rejections::track(host, rejection);
     }
 }
 
