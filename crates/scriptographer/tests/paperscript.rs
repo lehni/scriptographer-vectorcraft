@@ -470,10 +470,34 @@ fn scripts_keep_their_own_files<E: Engine>(name: &str) {
     );
     assert_eq!(written, ["true true true"]);
     let read = run(
-        setup,
+        setup.clone(),
         "const root = await navigator.storage.getDirectory()\nconsole.log(await (await (await root.getFileHandle('notes.txt')).getFile()).text())",
     );
     assert_eq!(read, ["hello"], "the next time it runs");
+    // Its workers share it, a shared worker has none:
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(
+        folder.join("reader.js"),
+        "const read = async () => { const root = await navigator.storage.getDirectory(); return (await (await root.getFileHandle('notes.txt')).getFile()).text() }\n\
+         onmessage = async () => postMessage(await read())\n\
+         onconnect = async event => event.ports[0].postMessage(await read().catch(e => e.name))",
+    )
+    .unwrap();
+    let mut runtime = Runtime::<E>::new().unwrap();
+    runtime.set_script(&setup).unwrap();
+    runtime
+        .eval(
+            "const worker = new Worker('reader.js')\n\
+             worker.onmessage = event => { console.log('worker', event.data); worker.terminate() }\n\
+             worker.postMessage('read')\n\
+             const shared = new SharedWorker('reader.js')\n\
+             shared.port.onmessage = event => { console.log('shared', event.data); shared.port.close() }",
+        )
+        .unwrap();
+    run_until_done(&mut runtime);
+    let mut heard = runtime.take_output();
+    heard.sort();
+    assert_eq!(heard, ["shared SecurityError", "worker hello"]);
     let typed = run(Setup::default(), "console.log(await navigator.storage.getDirectory().catch(e => e.name))");
     assert_eq!(typed, ["SecurityError"]);
 }
