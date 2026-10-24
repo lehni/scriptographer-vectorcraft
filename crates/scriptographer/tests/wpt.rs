@@ -2,8 +2,8 @@
 
 //! The web-platform-tests of the browser APIs Scriptographer has, against them in V8, when `cargo xtask
 //! corpus --wpt` has fetched them; skipped when it hasn't: `OffscreenCanvas` in a worker
-//! (`html/canvas/offscreen`), the geometry interfaces (`css/geometry`) and streams (`streams`,
-//! `encoding/streams`). A test's scripts (its `importScripts()`, `<script>`s, or an `.any.js`
+//! (`html/canvas/offscreen`), the geometry interfaces (`css/geometry`), streams (`streams`,
+//! `encoding/streams`) and compression (`compression`). A test's scripts (its `importScripts()`, `<script>`s, or an `.any.js`
 //! file's `// META: script=`s) run as one, after testharness.js, as a shell runs them. The tests that fail are listed in `tests/wpt-expected-failures.txt`: this test
 //! fails when another one fails, or when a listed one passes, so the list stays the truth.
 //! `WPT_UPDATE=1` writes the list anew. The pass rate by folder prints with `--nocapture`, the
@@ -11,13 +11,13 @@
 //! `WPT_FILTER=text` runs only the files whose path contains `text` and prints each test's result
 //! and message, without checking the list.
 //!
-//! What fails, by cause (2026-10-24: 3021 of 3131 pass, 2993 of the standard's 3075 and 28 of
-//! the 56 tentative ones), to come back to; most of it rarely matters to a script. `docs/gaps.md`
+//! What fails, by cause (2026-10-24: 3328 of 3451 pass, 3299 of the standard's 3394 and 29 of
+//! the 57 tentative ones), to come back to; most of it rarely matters to a script. `docs/gaps.md`
 //! (G6) sums it up:
 //!
 //! - Streams (about 45): `TextDecoderStream` decodes UTF-8 only, as `TextDecoder` does;
-//!   `postMessage()` transfers ports only, not `ArrayBuffer`s; the IDL test fetches by a relative URL,
-//!   which scripts have no base for; and what web-streams-polyfill doesn't do: the tentative
+//!   `postMessage()` transfers ports only, not `ArrayBuffer`s; the IDL tests, and compression's
+//!   that compress media files, fetch by a relative URL, which scripts have no base for; and what web-streams-polyfill doesn't do: the tentative
 //!   `owning` type, a string to `ReadableStream.from()`, the async iterators' prototype, a write
 //!   that `enqueue()` starts at once in a pipe, and `strategy.size` called as a method.
 //! - Text (canvas/text, 9): colour emoji, which VectorCraft's text has no glyphs for (bitmap and
@@ -60,7 +60,8 @@ const TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The folders of the tests that run, in the corpus, and whether their HTML pages run too: the
 /// canvas's are its tests in a window and its reftests, which compare renderings.
-const SUITES: [(&str, bool); 4] = [("html/canvas/offscreen", false), ("css/geometry", true), ("streams", false), ("encoding/streams", false)];
+const SUITES: [(&str, bool); 5] =
+    [("html/canvas/offscreen", false), ("css/geometry", true), ("streams", false), ("encoding/streams", false), ("compression", false)];
 
 struct Harness {
     corpus: PathBuf,

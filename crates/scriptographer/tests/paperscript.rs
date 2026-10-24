@@ -405,6 +405,30 @@ fn streams_pipe_through_transforms<E: Engine>() {
     assert_eq!(runtime.take_output(), ["HÉLLO 240,159,152,128"], "a surrogate pair split across chunks is one character");
 }
 
+/// Compression streams round-trip each format, and a decoder fails on data that ended early.
+fn compression_streams_round_trip<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    runtime
+        .execute(
+            &scope,
+            "const text = 'Scriptographer '.repeat(100)\n\
+             const through = (bytes, stream) => new Response(new Blob([bytes]).stream().pipeThrough(stream)).bytes()\n\
+             for (const format of ['gzip', 'deflate', 'deflate-raw', 'brotli']) {\n\
+               const packed = await through(new TextEncoder().encode(text), new CompressionStream(format))\n\
+               const unpacked = new TextDecoder().decode(await through(packed, new DecompressionStream(format)))\n\
+               const cut = await through(packed.slice(0, -4), new DecompressionStream(format)).catch(e => e.name)\n\
+               console.log(format, packed.length < text.length, unpacked === text, cut)\n\
+             }\n\
+             console.log((() => { try { new CompressionStream('zip') } catch (e) { return e.name } })())",
+        )
+        .unwrap();
+    assert_eq!(
+        runtime.take_output(),
+        ["gzip true true TypeError", "deflate true true TypeError", "deflate-raw true true TypeError", "brotli true true TypeError", "TypeError"]
+    );
+}
+
 /// Encoding as the Encoding standard has it, and base64 as browsers read it.
 fn text_encodes_as_the_standard_has_it<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
@@ -2028,6 +2052,11 @@ macro_rules! engine_tests {
             #[test]
             fn bodies_are_streams() {
                 super::bodies_are_streams::<$engine>();
+            }
+
+            #[test]
+            fn compression_streams_round_trip() {
+                super::compression_streams_round_trip::<$engine>();
             }
 
             #[test]

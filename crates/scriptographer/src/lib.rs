@@ -16,6 +16,8 @@ mod blob;
 mod broadcast_channel;
 mod canvas;
 mod clone;
+#[cfg(not(target_arch = "wasm32"))]
+mod compression;
 mod css_color;
 mod dialog;
 #[cfg(not(target_arch = "wasm32"))]
@@ -188,6 +190,11 @@ pub struct Host<H> {
     channels: Vec<broadcast_channel::Channel<H>>,
     #[cfg(not(target_arch = "wasm32"))]
     next_channel: u32,
+    /// The codecs of the open compression streams, and the number the next one gets.
+    #[cfg(not(target_arch = "wasm32"))]
+    coders: Vec<compression::Coder>,
+    #[cfg(not(target_arch = "wasm32"))]
+    next_coder: u32,
     /// The open `EventSource`s, and the number the next one gets.
     #[cfg(not(target_arch = "wasm32"))]
     event_sources: Vec<event_source::Connection<H>>,
@@ -274,6 +281,10 @@ impl<H> Default for Host<H> {
             #[cfg(not(target_arch = "wasm32"))]
             next_channel: 0,
             #[cfg(not(target_arch = "wasm32"))]
+            coders: Vec::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            next_coder: 0,
+            #[cfg(not(target_arch = "wasm32"))]
             event_sources: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
             next_event_source: 0,
@@ -357,6 +368,8 @@ impl<E: Engine> Runtime<E> {
             ("broadcast", broadcast_channel::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
             ("eventSource", event_source::natives(&mut engine)?),
+            #[cfg(not(target_arch = "wasm32"))]
+            ("compression", compression::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
             ("url", urls::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
