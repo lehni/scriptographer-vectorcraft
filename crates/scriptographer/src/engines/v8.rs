@@ -323,6 +323,16 @@ impl Call<Handle> for V8Call<'_, '_, '_> {
         Ok(handle(self.scope, array.into()))
     }
 
+    fn detach(&mut self, buffer: &Handle) -> Result<(), Error> {
+        let buffer =
+            v8::Local::<v8::ArrayBuffer>::try_from(v8::Local::new(self.scope, buffer)).map_err(|_| Error::Type("not an ArrayBuffer".into()))?;
+        // WebAssembly's memory can't be detached.
+        match buffer.detach(None) {
+            Some(true) => Ok(()),
+            _ => Err(Error::Dom("DataCloneError", "the ArrayBuffer can't be detached".into())),
+        }
+    }
+
     fn get(&mut self, object: &Handle, key: &str) -> Result<Value<Handle>, Error> {
         let scope = pin!(v8::TryCatch::new(self.scope));
         let scope = &mut scope.init();

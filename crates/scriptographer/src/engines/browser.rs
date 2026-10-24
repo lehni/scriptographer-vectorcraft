@@ -151,6 +151,13 @@ impl Call<JsValue> for BrowserCall {
         Ok(js_sys::Uint16Array::from(elements).into())
     }
 
+    fn detach(&mut self, buffer: &JsValue) -> Result<(), Error> {
+        // Browsers detach a buffer they transfer to itself:
+        let transfer = Reflect::get(buffer, &"transfer".into()).map_err(js_error)?;
+        let transfer = transfer.dyn_into::<Function>().map_err(|_| Error::Type("not an ArrayBuffer".into()))?;
+        transfer.call0(buffer).map(|_| ()).map_err(js_error)
+    }
+
     fn get(&mut self, object: &JsValue, key: &str) -> Result<Value<JsValue>, Error> {
         Ok(from_js(Reflect::get(object, &key.into()).map_err(js_error)?))
     }

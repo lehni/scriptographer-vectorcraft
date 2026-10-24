@@ -172,6 +172,12 @@ impl Call<JsValue> for BoaCall<'_> {
         Ok(JsUint16Array::from_iter(elements.iter().copied(), self.context).map_err(script_error)?.into())
     }
 
+    fn detach(&mut self, buffer: &JsValue) -> Result<(), Error> {
+        let not = || Error::Type("not an ArrayBuffer".into());
+        let buffer = JsArrayBuffer::from_object(buffer.as_object().ok_or_else(not)?.clone()).map_err(|_| not())?;
+        buffer.detach(&JsValue::undefined()).map(|_| ()).map_err(script_error)
+    }
+
     fn get(&mut self, object: &JsValue, key: &str) -> Result<Value<JsValue>, Error> {
         let object = object.to_object(self.context).map_err(script_error)?;
         Ok(from_js(object.get(JsString::from(key), self.context).map_err(script_error)?))

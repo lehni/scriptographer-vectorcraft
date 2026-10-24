@@ -7,7 +7,8 @@
 //! as themselves. Functions, symbols and other objects throw a `DataCloneError`.
 //!
 //! `structuredClone(value)` is both in one realm. Of what can be transferred, a message transfers
-//! `MessagePort`s ([`crate::message_port`]); `structuredClone()` transfers nothing.
+//! `MessagePort`s ([`crate::message_port`]), and `structuredClone()` `ArrayBuffer`s, which it
+//! copies and detaches.
 
 use crate::{Call, Engine, Error, Value, method, object};
 
@@ -97,13 +98,24 @@ fn data_clone_error(what: &str) -> Error {
 }
 
 fn structured_clone<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
+    let mut buffers = Vec::new();
     if let Some(Value::Js(options)) = args.get(1)
         && let Value::Js(transfer) = call.get(options, "transfer")?
-        && !matches!(call.get(&transfer, "length")?, Value::Number(n) if n == 0.0)
     {
-        return Err(data_clone_error("a transfer list"));
+        let (_, to_string) = classes(call)?;
+        for i in 0..length(call, &transfer)? {
+            let buffer = call.get(&transfer, &i.to_string())?;
+            let class = call.call(&to_string, &buffer, &[])?;
+            match buffer {
+                Value::Js(buffer) if call.to_string(&class)? == "[object ArrayBuffer]" => buffers.push(buffer),
+                _ => return Err(data_clone_error("a transfer list of more than ArrayBuffers")),
+            }
+        }
     }
     let data = serialize(call, args.first().unwrap_or(&Value::Undefined))?;
+    for buffer in &buffers {
+        call.detach(buffer)?;
+    }
     deserialize(call, &data)
 }
 
