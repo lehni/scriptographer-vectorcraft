@@ -12,6 +12,8 @@ mod binding;
 mod bitmap;
 #[cfg(not(target_arch = "wasm32"))]
 mod blob;
+#[cfg(not(target_arch = "wasm32"))]
+mod broadcast_channel;
 mod canvas;
 mod clone;
 mod css_color;
@@ -177,6 +179,11 @@ pub struct Host<H> {
     ports: Vec<message_port::Port<H>>,
     #[cfg(not(target_arch = "wasm32"))]
     next_port: u32,
+    /// The runtime's open `BroadcastChannel`s, and the number the next one gets.
+    #[cfg(not(target_arch = "wasm32"))]
+    channels: Vec<broadcast_channel::Channel<H>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    next_channel: u32,
     /// The realm's error classes, for the exceptions host functions throw.
     exceptions: Option<exception::Classes<H>>,
     /// The realm's global object, for its classes ([`global_class`]).
@@ -252,6 +259,10 @@ impl<H> Default for Host<H> {
             ports: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
             next_port: 0,
+            #[cfg(not(target_arch = "wasm32"))]
+            channels: Vec::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            next_channel: 0,
             exceptions: None,
             global: None,
             shared: None,
@@ -326,6 +337,8 @@ impl<E: Engine> Runtime<E> {
             ("worker", web_worker::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
             ("port", message_port::natives(&mut engine)?),
+            #[cfg(not(target_arch = "wasm32"))]
+            ("broadcast", broadcast_channel::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
             ("url", urls::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
@@ -491,6 +504,8 @@ impl<E: Engine> Runtime<E> {
             web_worker::poll(call)?;
             #[cfg(not(target_arch = "wasm32"))]
             message_port::poll(call)?;
+            #[cfg(not(target_arch = "wasm32"))]
+            broadcast_channel::poll(call)?;
             for callback in due {
                 call.call(&callback, &Value::Undefined, &[])?;
             }
@@ -508,11 +523,16 @@ impl<E: Engine> Runtime<E> {
     }
 
     /// Whether the scripts have something left to run: a timer, which `onFrame` uses too, a frame
-    /// callback, or a request out.
+    /// callback, a request out, or a connection or channel open.
     pub fn is_running(&self) -> bool {
         let host = self.host.borrow();
         #[cfg(not(target_arch = "wasm32"))]
-        if !host.fetches.is_empty() || !host.sockets.is_empty() || !host.children.is_empty() || host.ports.iter().any(|p| p.is_open()) {
+        if !host.fetches.is_empty()
+            || !host.sockets.is_empty()
+            || !host.children.is_empty()
+            || host.ports.iter().any(|p| p.is_open())
+            || !host.channels.is_empty()
+        {
             return true;
         }
         !host.intervals.is_empty() || !host.frames.is_empty()
