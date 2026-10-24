@@ -5916,12 +5916,51 @@ ${stack}` : ""));
     const body = await Body.read(request);
     signal?.throwIfAborted();
     return new Promise((resolve, reject) => {
-      const abort2 = /* @__PURE__ */ __name(() => reject(signal.reason), "abort");
+      let controller;
+      const stream = new ReadableStream({
+        type: "bytes",
+        start(c2) {
+          controller = c2;
+        },
+        cancel() {
+          finish();
+        }
+      });
+      const receive = /* @__PURE__ */ __name((value) => {
+        if (typeof value === "string") {
+          const err = new TypeError(`fetch failed: ${value}`);
+          reject(err);
+          controller.error(err);
+          finish();
+        } else if (value instanceof Uint8Array) {
+          controller.enqueue(value);
+        } else if (value) {
+          const { status, statusText, url: url2, redirected, headers: headers2 } = value;
+          const response = new Response(stream, { status, statusText, headers: headers2 });
+          resolve(setResponse(response, { url: url2, redirected, type: "basic" }));
+        } else {
+          controller.close();
+          finish();
+        }
+      }, "receive");
+      const number = natives.fetch.request(
+        method,
+        url,
+        [...headers],
+        body,
+        redirect === "follow",
+        receive
+      );
+      const finish = /* @__PURE__ */ __name(() => {
+        natives.fetch.cancel(number);
+        signal?.removeEventListener("abort", abort2);
+      }, "finish");
+      const abort2 = /* @__PURE__ */ __name(() => {
+        reject(signal.reason);
+        controller.error(signal.reason);
+        finish();
+      }, "abort");
       signal?.addEventListener("abort", abort2);
-      natives.request(method, url, [...headers], body, redirect === "follow").then(({ status, statusText, url: url2, redirected, headers: headers2, body: body2 }) => {
-        const response = new Response(body2, { status, statusText, headers: headers2 });
-        resolve(setResponse(response, { url: url2, redirected, type: "basic" }));
-      }, reject).finally(() => signal?.removeEventListener("abort", abort2));
     });
   }
   __name(fetch2, "fetch");

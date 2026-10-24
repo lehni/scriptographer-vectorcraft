@@ -575,6 +575,59 @@ fn bodies_are_streams<E: Engine>() {
     assert_eq!(runtime.take_output(), ["6 true null TypeError", "abcd abcd true", "TypeError", "POST \nhi"]);
 }
 
+/// A response's body streams as it arrives: its first part reads before the server sends the
+/// rest, and an abort errors what's still to come.
+fn fetched_bodies_stream_as_they_arrive<E: Engine>() {
+    use std::io::{BufRead, BufReader, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = format!("http://{}", listener.local_addr().unwrap());
+    let (go, gone) = std::sync::mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        for stream in listener.incoming().take(2) {
+            let mut stream = stream.unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap() > 2 {
+                line.clear();
+            }
+            stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\none").unwrap();
+            stream.flush().unwrap();
+            // The rest once the script read the first part, or let the request go:
+            let _ = gone.recv_timeout(std::time::Duration::from_secs(5));
+            let _ = stream.write_all(b"two");
+        }
+    });
+    let mut runtime = Runtime::<E>::new().unwrap();
+    runtime
+        .eval(&format!(
+            "const read = async reader => {{ const {{ value, done }} = await reader.read(); return done ? 'done' : new TextDecoder().decode(value) }}\n\
+             ;(async () => {{\n\
+               const reader = (await fetch('{address}/')).body.getReader()\n\
+               console.log('part', await read(reader))\n\
+               console.log('part', await read(reader), await read(reader))\n\
+               const controller = new AbortController()\n\
+               const aborted = (await fetch('{address}/', {{ signal: controller.signal }})).body.getReader()\n\
+               console.log('part', await read(aborted))\n\
+               controller.abort()\n\
+               console.log(await read(aborted).catch(e => e.name))\n\
+             }})()"
+        ))
+        .unwrap();
+    let started = std::time::Instant::now();
+    let mut output = Vec::new();
+    while output.len() < 4 && started.elapsed() < std::time::Duration::from_secs(10) {
+        runtime.run_timers(started.elapsed().as_secs_f64() * 1000.0).unwrap();
+        let new = runtime.take_output();
+        if new.iter().any(|line| line == "part one") {
+            go.send(()).unwrap();
+        }
+        output.extend(new);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(output, ["part one", "part two done", "part one", "AbortError"]);
+    assert!(!runtime.is_running(), "an aborted body keeps the script running no more");
+}
+
 fn scripts_fetch<E: Engine>() {
     let address = serve(4);
     let mut runtime = Runtime::<E>::new().unwrap();
@@ -1965,6 +2018,11 @@ macro_rules! engine_tests {
             #[test]
             fn event_sources_read_streams_and_reconnect() {
                 super::event_sources_read_streams_and_reconnect::<$engine>();
+            }
+
+            #[test]
+            fn fetched_bodies_stream_as_they_arrive() {
+                super::fetched_bodies_stream_as_they_arrive::<$engine>();
             }
 
             #[test]

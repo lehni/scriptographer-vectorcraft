@@ -164,6 +164,8 @@ pub struct Host<H> {
     /// The requests of `fetch()` outside a browser, out.
     #[cfg(not(target_arch = "wasm32"))]
     fetches: Vec<fetch::Pending<H>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    next_fetch: u32,
     /// The open `WebSocket`s, and the number the next one gets.
     #[cfg(not(target_arch = "wasm32"))]
     sockets: Vec<websocket::Socket<H>>,
@@ -250,8 +252,9 @@ impl<H> Default for Host<H> {
             #[cfg(not(target_arch = "wasm32"))]
             started: None,
             #[cfg(not(target_arch = "wasm32"))]
-            #[cfg(not(target_arch = "wasm32"))]
             fetches: Vec::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            next_fetch: 0,
             #[cfg(not(target_arch = "wasm32"))]
             sockets: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -334,7 +337,7 @@ impl<E: Engine> Runtime<E> {
         let natives = [
             vec![("print", engine.function("print", print)?), ("ask", engine.function("ask", dialog::ask_native)?)],
             #[cfg(not(target_arch = "wasm32"))]
-            vec![("request", engine.function("request", fetch::request)?), ("dom", engine.function("dom", dom::load)?)],
+            vec![("dom", engine.function("dom", dom::load)?)],
             #[cfg(not(target_arch = "wasm32"))]
             web::natives(&mut engine)?,
         ]
@@ -342,6 +345,8 @@ impl<E: Engine> Runtime<E> {
         let groups = [
             ("storage", storage::natives(&mut engine)?),
             ("canvas", canvas::natives(&mut engine)?),
+            #[cfg(not(target_arch = "wasm32"))]
+            ("fetch", fetch::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
             ("socket", websocket::natives(&mut engine)?),
             #[cfg(not(target_arch = "wasm32"))]
