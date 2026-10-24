@@ -1,11 +1,11 @@
-use super::catalog::{catalog_index, plugin_info};
-use super::{CROP_MARKS, Effect, Map, Node, PIXEL_EFFECTS, RASTERIZE, Value, is_adjustment, is_pathfinder, is_three_d, json, util};
+use super::catalog::{catalog_index, effect_manifest, plugin_info, script_info};
+use super::{CROP_MARKS, Effect, Map, Node, PIXEL_EFFECTS, RASTERIZE, Value, is_adjustment, is_pathfinder, is_three_d, json, script, util};
 
 /// Dialog defaults for `id` (`None` for unknown effects).
 pub fn default_params(id: &str) -> Option<Value> {
     match catalog_index().get(id) {
         Some(e) => Some(e.defaults.clone()),
-        None => plugin_info(id).map(|e| e.defaults),
+        None => plugin_info(id).or_else(|| script_info(id)).map(|e| e.defaults),
     }
 }
 
@@ -16,7 +16,7 @@ pub fn merged_params(id: &str, params: &Value) -> Value {
     let mut out = match catalog_index().get(id).map(|e| &e.defaults) {
         Some(Value::Object(m)) => m.clone(),
         Some(_) => Map::new(),
-        None => vectorcraft_plugins::effect::installed(id).map(|p| p.manifest().defaults()).unwrap_or_default(),
+        None => effect_manifest(id).map(|m| m.defaults()).unwrap_or_default(),
     };
     // Upgraded before the defaults are under it: a default angle is no angle given.
     if let Value::Object(p) = upgrade_params(id, params) {
@@ -89,7 +89,7 @@ fn upgrade_scribble(id: &str, m: &mut Map<String, Value>) {
 /// A new effect record with default parameters (overridden by `params`).
 pub fn new_effect(id: &str, params: &Value) -> Option<Effect> {
     if !catalog_index().contains_key(id) {
-        vectorcraft_plugins::effect::installed(id)?;
+        effect_manifest(id)?;
     }
     Some(Effect { id: id.to_string(), params: merged_params(id, params), visible: true })
 }
@@ -120,14 +120,14 @@ pub fn is_raster(id: &str) -> bool {
 
 /// Does `id` change geometry? (Crop Marks adds art of its own instead, [`crop_marks_art`]; colour
 /// adjustments recolour, [`adjust`].) Plug-in effects do, installed or not (a missing plug-in
-/// leaves the geometry as it is).
+/// leaves the geometry as it is), and so do script effects, running or not.
 pub fn is_geometry(id: &str) -> bool {
     !is_raster(id)
         && !is_pathfinder(id)
         && !is_adjustment(id)
         && id != CROP_MARKS
         && !is_three_d(id)
-        && (catalog_index().contains_key(id) || vectorcraft_plugins::effect::plugin_id(id).is_some())
+        && (catalog_index().contains_key(id) || vectorcraft_plugins::effect::plugin_id(id).is_some() || script::script_type(id).is_some())
 }
 
 /// Any visible geometry effect in the list?

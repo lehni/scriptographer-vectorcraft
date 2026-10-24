@@ -66,7 +66,7 @@ pub use entries::{MenuEntry, Row, context_entries, entry, menu_entries, pretty_s
 pub(crate) use invoke::graph_dialog;
 pub use invoke::{click_target, invoke, invoke_from_system_menu};
 #[cfg(test)]
-pub(crate) use labels::lists_plugin;
+pub(crate) use labels::lists_plugin_or_script;
 #[cfg(test)]
 use labels::shows_a_name;
 pub use labels::{CONTEXT_LABELS, DYNAMIC_LABELS, display_label, dynamic_label, item_shortcut, menu_strings};

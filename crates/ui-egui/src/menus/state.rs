@@ -130,10 +130,11 @@ pub fn shown_state(app: &VectorcraftApp, id: &str, p: &Value) -> Option<(bool, O
     Some((en, checked(app, id, p)))
 }
 
-/// Changes whenever a plug-in is installed or removed: Object › Plug-ins and Effect › Plug-ins
-/// list them (the command palette's cache follows it).
+/// Changes whenever a plug-in is installed or removed, or a script defines or removes an effect:
+/// Object › Plug-ins, Effect › Plug-ins and Effect › Scriptographer list them (the command
+/// palette's cache follows it).
 pub fn plugin_revision() -> u64 {
-    vectorcraft_plugins::registry::revision()
+    vectorcraft_plugins::registry::revision().wrapping_add(vectorcraft_effects::script::revision())
 }
 
 /// Effective shortcut of a command: the user's override (Edit → Keyboard Shortcuts) or the default.

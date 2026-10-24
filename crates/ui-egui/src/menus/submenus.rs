@@ -186,8 +186,9 @@ pub(super) fn effect_menu() -> Vec<Item> {
             out.push(sub(sub_name, items));
         }
     }
-    // Live-effect plug-ins close the vector effects.
+    // Live-effect plug-ins and the effects of running scripts close the vector effects.
     out.extend(crate::dialogs::plugin::effect_menu());
+    out.extend(crate::dialogs::plugin::script_effect_menu());
     let raster: Vec<Item> = RASTER_MENUS
         .iter()
         .filter_map(|(name, path)| {

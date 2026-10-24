@@ -167,6 +167,31 @@ fn a_plug_in_choice_lists_the_plug_ins_values() {
     assert!(texts.iter().any(|s| s == "screen") && !texts.iter().any(|s| s == "Screen"), "{texts:?}");
 }
 
+/// A running script's effect is in Effect › Scriptographer, and its editor follows its manifest
+/// as a plug-in's does. What the script keeps in it isn't shown, also once the script ended.
+#[test]
+fn a_script_effect_s_editor_follows_its_manifest() {
+    use vectorcraft_effects::script;
+    let manifest = json!({"id": "uiwobble", "name": "Wobble", "kind": "effect",
+        "params": {"amount": {"type": "number", "min": 0, "max": 100, "default": 5, "label": "Amount", "unit": "pt"}}});
+    script::register(vectorcraft_plugins::Manifest::parse(manifest.to_string().as_bytes()).unwrap());
+    let entries = crate::menus::menu_entries(&VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+    let entry = entries.iter().find(|e| e.path == ["Effect", "Scriptographer"] && e.label == "Wobble…").expect("effect listed");
+    assert_eq!((entry.command.as_deref(), &entry.params), (Some("effect.dialog"), &json!({"effect": "script.uiwobble"})));
+    let (mut app, ctx, id) = editing("script.uiwobble");
+    // As Scriptographer keeps its output:
+    let mut node = app.run("document.node", json!({"id": id.0})).unwrap();
+    node["appearance"]["effects"][0]["params"]["_output"] = json!({"subpaths": []});
+    app.run("document.patch", json!({"replace": [node]})).unwrap();
+    let texts = shown_texts(&mut app, &ctx);
+    assert!(texts.iter().any(|s| s == "Amount") && texts.iter().any(|s| s == "5 pt"), "{texts:?}");
+    script::unregister("uiwobble");
+    let texts = shown_texts(&mut app, &ctx);
+    assert!(texts.iter().any(|s| s == "Amount"), "{texts:?}");
+    assert!(!texts.iter().any(|s| s.starts_with('_') || s.contains("Output") || s.contains("Input")), "{texts:?}");
+    assert!(!crate::menus::menu_entries(&app).iter().any(|e| e.path == ["Effect", "Scriptographer"]));
+}
+
 /// A plug-in effect's editor labels its parameters, shows their units and leaves out those whose
 /// `visibleWhen` isn't met, as the effect's dialog does, and reads a typed number list the same
 /// way.

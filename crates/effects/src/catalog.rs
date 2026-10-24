@@ -1,4 +1,4 @@
-use super::{CROP_MARKS, EXTRUDE, INFLATE, PATHFINDER_EFFECTS, RASTERIZE, REVOLVE, ROTATE, TRAP, Value, json, trap};
+use super::{CROP_MARKS, EXTRUDE, INFLATE, PATHFINDER_EFFECTS, RASTERIZE, REVOLVE, ROTATE, TRAP, Value, json, script, trap};
 
 /// Catalogue entry for one effect.
 #[derive(Clone, Debug, PartialEq)]
@@ -119,6 +119,7 @@ const PATHFINDER: &[&str] = &["Effect", "Pathfinder"];
 
 const PLUGINS: &[&str] = &["Effect", "Plug-ins"];
 
+const SCRIPTS: &[&str] = &["Effect", "Scriptographer"];
 const ADJUST: &[&str] = &["Effect", "Color Adjustments"];
 
 /// The warp styles in Illustrator's Style menu order: (id suffix, label).
@@ -801,29 +802,53 @@ pub(crate) fn catalog_index() -> &'static std::collections::HashMap<&'static str
     INDEX.get_or_init(|| effect_catalog().into_iter().map(|e| (e.id, e)).collect())
 }
 
-/// Catalogue entry for `id` (built-in, or an installed plug-in effect).
+/// Catalogue entry for `id` (built-in, an installed plug-in effect, or a running script's).
 pub fn effect_info(id: &str) -> Option<EffectInfo> {
-    catalog_index().get(id).cloned().or_else(|| plugin_info(id))
+    catalog_index().get(id).cloned().or_else(|| plugin_info(id)).or_else(|| script_info(id))
+}
+
+/// The parameter schema of the plug-in or script effect `id`, which its dialog and the Appearance
+/// panel show its parameters by.
+pub fn effect_manifest(id: &str) -> Option<std::sync::Arc<vectorcraft_plugins::Manifest>> {
+    match vectorcraft_plugins::effect::installed(id) {
+        Some(plugin) => Some(std::sync::Arc::new(plugin.manifest().clone())),
+        None => script::manifest(id),
+    }
 }
 
 /// The catalogue entry of the installed effect plug-in with effect id `id` (`plugin.<id>`).
 pub(crate) fn plugin_info(id: &str) -> Option<EffectInfo> {
-    use vectorcraft_plugins::registry::intern;
     let p = vectorcraft_plugins::effect::installed(id)?;
-    let m = p.manifest();
+    Some(manifest_info(id, p.manifest(), PLUGINS))
+}
+
+/// The catalogue entry of the effect `id` that `m` describes, in the menu at `menu`.
+fn manifest_info(id: &str, m: &vectorcraft_plugins::Manifest, menu: &'static [&'static str]) -> EffectInfo {
+    use vectorcraft_plugins::registry::intern;
     let dots = if m.params.is_empty() || m.name.ends_with('…') { "" } else { "…" };
-    Some(EffectInfo {
+    EffectInfo {
         id: intern(id),
         label: intern(&format!("{}{dots}", m.name)),
-        menu: PLUGINS,
+        menu,
         params: intern(&m.params_doc()),
         defaults: Value::Object(m.defaults()),
         raster: false,
         lengths: Lengths::default(),
-    })
+    }
 }
 
 /// The installed effect plug-ins as catalogue entries (Effect › Plug-ins), by plug-in id.
 pub fn plugin_effects() -> Vec<EffectInfo> {
     vectorcraft_plugins::registry::list().iter().filter_map(|p| plugin_info(&vectorcraft_plugins::effect::effect_id(p.id()))).collect()
+}
+
+/// The catalogue entry of the script effect `id`, while its script runs.
+pub(crate) fn script_info(id: &str) -> Option<EffectInfo> {
+    let m = script::manifest(id)?;
+    Some(manifest_info(id, &m, SCRIPTS))
+}
+
+/// The effects running scripts define as catalogue entries (Effect › Scriptographer).
+pub fn script_effects() -> Vec<EffectInfo> {
+    script::list().iter().map(|m| manifest_info(&script::effect_id(&m.id), m, SCRIPTS)).collect()
 }

@@ -25,6 +25,8 @@
 //! - **Plug-in effects** (`plugin.<plug-in id>`, Effect › Plug-ins) are geometry effects run by an
 //!   installed WebAssembly plug-in (`vectorcraft-plugins`); [`effect_info`] describes them like
 //!   built-in ones, and an effect whose plug-in isn't installed leaves the geometry as it is.
+//! - **Script effects** (`script.<type>`, Effect › Scriptographer) draw what their script kept in
+//!   them ([`script`]).
 //! - **Colour adjustments** (Brightness/Contrast, Curves, Levels, Hue/Saturation, Shift to Color,
 //!   Temperature/Tint) recolour what an object paints with: [`adjust`] evaluates them for the
 //!   renderer and the exporters.
@@ -48,6 +50,7 @@ pub mod preview;
 mod raster;
 mod reshape;
 mod revolve;
+pub mod script;
 mod solids;
 pub mod stroke;
 mod stylize;
@@ -94,7 +97,7 @@ mod catalog;
 mod geometry;
 mod params;
 
-pub use catalog::{EffectInfo, Lengths, WARP_STYLES, effect_catalog, effect_info, is_length, plugin_effects};
+pub use catalog::{EffectInfo, Lengths, WARP_STYLES, effect_catalog, effect_info, effect_manifest, is_length, plugin_effects, script_effects};
 pub(crate) use geometry::{Budget, apply_one};
 pub use geometry::{GeomContext, apply_geometry, apply_geometry_bez, apply_geometry_with};
 #[cfg(test)]
