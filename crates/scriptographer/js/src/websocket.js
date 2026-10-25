@@ -28,6 +28,7 @@ export class WebSocket extends EventTarget {
   #readyState = states.CONNECTING
   #protocol = ''
   #binaryType = 'blob'
+  #hasFailed = false
 
   constructor(url, protocols = []) {
     super()
@@ -115,6 +116,8 @@ export class WebSocket extends EventTarget {
       )
     }
     if (this.#readyState < states.CLOSING) {
+      // Closed before it opened, the connection fails:
+      this.#hasFailed = this.#readyState === states.CONNECTING
       this.#readyState = states.CLOSING
       natives.socket.close(this.#number, code ?? 1000, reason)
     }
@@ -124,22 +127,27 @@ export class WebSocket extends EventTarget {
   #receive({ type, protocol, data, message, code, reason, wasClean }) {
     switch (type) {
       case 'open':
-        this.#readyState = states.OPEN
-        this.#protocol = protocol
-        this.dispatchEvent(new Event('open'))
+        if (this.#readyState === states.CONNECTING) {
+          this.#readyState = states.OPEN
+          this.#protocol = protocol
+          this.dispatchEvent(new Event('open'))
+        }
         break
       case 'message':
-        this.dispatchEvent(
-          new MessageEvent('message', {
-            data:
-              typeof data === 'string'
-                ? data
-                : this.#binaryType === 'arraybuffer'
-                  ? data.buffer
-                  : new Blob([data]),
-            origin: new URL(this.#url).origin
-          })
-        )
+        // Only an open socket receives messages:
+        if (this.#readyState === states.OPEN) {
+          this.dispatchEvent(
+            new MessageEvent('message', {
+              data:
+                typeof data === 'string'
+                  ? data
+                  : this.#binaryType === 'arraybuffer'
+                    ? data.buffer
+                    : new Blob([data]),
+              origin: new URL(this.#url).origin
+            })
+          )
+        }
         break
       case 'error':
         // As in browsers, the event says nothing of why; the console does.
@@ -148,7 +156,14 @@ export class WebSocket extends EventTarget {
         break
       case 'close':
         this.#readyState = states.CLOSED
-        this.dispatchEvent(new CloseEvent('close', { code, reason, wasClean }))
+        if (this.#hasFailed) {
+          this.dispatchEvent(new Event('error'))
+          this.dispatchEvent(new CloseEvent('close', { code: 1006 }))
+        } else {
+          this.dispatchEvent(
+            new CloseEvent('close', { code, reason, wasClean })
+          )
+        }
         break
     }
   }

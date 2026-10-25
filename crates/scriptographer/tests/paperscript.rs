@@ -1977,6 +1977,31 @@ fn web_sockets_drop_what_they_send_while_the_server_closes_them<E: Engine>() {
     assert_eq!(runtime.take_output(), ["close 1000 bye true"]);
 }
 
+/// A WebSocket closed before it opened fails, with no `open`; one that's closing receives no more
+/// messages, as the WebSocket standard has it.
+fn web_sockets_closed_early_get_no_more_events<E: Engine>() {
+    let (early, closing) = (echo_server(), echo_server());
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    let source = format!(
+        "const early = new WebSocket('{early}')\n\
+         early.onopen = () => console.log('early open')\n\
+         early.onerror = () => console.log('early error')\n\
+         early.onclose = event => console.log('early close', event.code, event.wasClean)\n\
+         early.close()\n\
+         const closing = new WebSocket('{closing}')\n\
+         closing.onopen = () => {{ closing.send('echo'); closing.close() }}\n\
+         closing.onmessage = event => console.log('message', event.data)\n\
+         closing.onclose = event => console.log('closing close', event.code)"
+    );
+    runtime.execute(&scope, &source).unwrap();
+    run_until_done(&mut runtime);
+    let output = runtime.take_output();
+    let lines = |prefix: &str| output.iter().filter(|line| !line.starts_with(prefix)).cloned().collect::<Vec<_>>();
+    assert_eq!(lines("closing"), ["early error", "early close 1006 false"]);
+    assert_eq!(lines("early"), ["closing close 1000"]);
+}
+
 fn web_sockets_that_cant_connect_close<E: Engine>() {
     // A port nothing listens on.
     let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
@@ -2710,6 +2735,11 @@ macro_rules! engine_tests {
             #[test]
             fn web_sockets_drop_what_they_send_while_the_server_closes_them() {
                 super::web_sockets_drop_what_they_send_while_the_server_closes_them::<$engine>();
+            }
+
+            #[test]
+            fn web_sockets_closed_early_get_no_more_events() {
+                super::web_sockets_closed_early_get_no_more_events::<$engine>();
             }
 
             #[test]
