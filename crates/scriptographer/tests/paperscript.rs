@@ -971,6 +971,22 @@ fn xml_http_requests_end_when_their_bodies_fail<E: Engine>() {
     assert_eq!(output, ["abort", "aborted loadend", "error 4 0", "dropped loadend"]);
 }
 
+/// A request's URL is the parsed one, so a fetch of a URL that isn't written as parsed isn't
+/// redirected, and one that doesn't parse fails, as in browsers.
+fn requests_parse_their_urls<E: Engine>() {
+    let address = serve(1);
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    let script = format!(
+        "const response = await fetch('{address}')\n\
+         console.log(response.url === '{address}/', response.redirected, new Request('HTTP://Example.COM').url)\n\
+         try {{ new Request('nowhere') }} catch (e) {{ console.log(e.name) }}"
+    );
+    runtime.execute(&scope, &format!("(async () => {{ try {{ {script} }} catch (e) {{ console.log('error', e.name, e.message) }} }})()")).unwrap();
+    settle(&mut runtime);
+    assert_eq!(runtime.take_output(), ["true false http://example.com/", "TypeError"]);
+}
+
 fn scripts_fetch<E: Engine>() {
     let address = serve(4);
     let mut runtime = Runtime::<E>::new().unwrap();
@@ -2575,6 +2591,11 @@ macro_rules! engine_tests {
             #[test]
             fn scripts_import_modules() {
                 super::scripts_import_modules::<$engine>(stringify!($module));
+            }
+
+            #[test]
+            fn requests_parse_their_urls() {
+                super::requests_parse_their_urls::<$engine>();
             }
 
             #[test]
