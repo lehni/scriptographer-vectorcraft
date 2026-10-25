@@ -884,6 +884,34 @@ fn each_document_is_a_project<E: Engine>() {
     assert_eq!(moved.x0, 20.0, "the rectangle moved in the first");
 }
 
+/// Switching documents tells their projects, and a turn in the same document doesn't.
+fn a_switch_tells_the_projects<E: Engine>() {
+    let (mut s, _, _) = document();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let [first, second] = [0, 1].map(|i| s.documents()[i].uid);
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    let bind = |runtime: &mut Runtime<E>, s: &Session, uid| {
+        let st = s.documents().iter().find(|d| d.uid == uid).unwrap();
+        runtime.bind(&scope, uid, st.doc.clone(), st.selection.clone()).unwrap();
+    };
+    bind(&mut runtime, &s, first);
+    bind(&mut runtime, &s, second);
+    runtime
+        .execute(
+            &scope,
+            "paper.projects.forEach(function(project, i) {\n\
+             project.onActivate = function(previous) { console.log('activate', i, paper.projects.indexOf(previous)) }\n\
+             project.onDeactivate = function() { console.log('deactivate', i) }\n\
+             })",
+        )
+        .unwrap();
+    bind(&mut runtime, &s, second);
+    assert!(runtime.take_output().is_empty(), "the active document's next turn switches nothing");
+    bind(&mut runtime, &s, first);
+    assert_eq!(runtime.take_output(), ["deactivate 1", "activate 0 1"]);
+}
+
 /// A document that closes takes its project with it; the script goes on with the others.
 fn a_closed_documents_project_goes<E: Engine>() {
     let (mut s, _, _) = document();
@@ -1111,6 +1139,11 @@ macro_rules! engine_tests {
             #[test]
             fn each_document_is_a_project() {
                 super::each_document_is_a_project::<$engine>();
+            }
+
+            #[test]
+            fn a_switch_tells_the_projects() {
+                super::a_switch_tells_the_projects::<$engine>();
             }
 
             #[test]
