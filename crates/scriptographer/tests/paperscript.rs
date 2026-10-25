@@ -104,6 +104,22 @@ fn timeouts_run_once<E: Engine>() {
     assert!(!runtime.is_running(), "nothing is left once the timeouts ran");
 }
 
+/// A timer that throws fails the turn, but the others due then still run, as in browsers.
+fn a_throwing_timer_keeps_the_others<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    runtime
+        .execute(
+            &scope,
+            "setTimeout(function() { throw new Error('first') }, 10)\n\
+             setTimeout(function() { print('second') }, 10)\n\
+             requestAnimationFrame(function() { print('frame') })",
+        )
+        .unwrap();
+    assert!(runtime.run_timers(10.0).is_err(), "the turn fails");
+    assert_eq!(runtime.take_output(), ["second", "frame"]);
+}
+
 fn animation_frames_run_once_a_frame<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
@@ -2756,6 +2772,11 @@ macro_rules! engine_tests {
             #[test]
             fn timeouts_run_once() {
                 super::timeouts_run_once::<$engine>();
+            }
+
+            #[test]
+            fn a_throwing_timer_keeps_the_others() {
+                super::a_throwing_timer_keeps_the_others::<$engine>();
             }
 
             #[test]
