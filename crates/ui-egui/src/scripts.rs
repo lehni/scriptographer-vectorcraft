@@ -30,7 +30,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, NodeId};
 use vectorcraft_scriptographer::worker::{Pointer, Reply, Request, Work, Worker};
-use vectorcraft_scriptographer::{Modifiers, MouseEvent, PaletteEvent, Setup};
+use vectorcraft_scriptographer::{Key, Modifiers, MouseEvent, PaletteEvent, Setup};
 use vectorcraft_tools::Cursor;
 
 use crate::state::ScriptFolder;
@@ -144,6 +144,8 @@ struct Running {
     palettes: Vec<PaletteView>,
     /// Whether it has palettes open, as its last work said: it then keeps running.
     open: bool,
+    /// Whether it listens for keys on its `document` or `window`: it then keeps running too.
+    listening: bool,
     /// Whether it set `script.keepAlive`: it then goes on when another script runs.
     keep_alive: bool,
 }
@@ -449,6 +451,7 @@ fn start(app: &VectorcraftApp, name: String, path: Option<PathBuf>, source: Stri
         asking: None,
         palettes: Vec::new(),
         open: false,
+        listening: false,
         keep_alive: false,
     })
 }
@@ -543,7 +546,7 @@ fn pump(app: &mut VectorcraftApp, script: &mut Running, mut frame: Option<f64>, 
                 None => match frame.take() {
                     // On the web, its Promise continuations change its project after its work.
                     Some(now) if script.timers || script.worker.has_changes() => Work::Frame(now),
-                    _ => return Ok(script.timers || script.tool || script.open),
+                    _ => return Ok(script.timers || script.tool || script.open || script.listening),
                 },
             };
             send(app, script, work)?;
@@ -583,7 +586,7 @@ fn send(app: &mut VectorcraftApp, script: &mut Running, work: Work) -> Result<()
     script.busy = Some(match &work {
         Work::Execute(_) => Kind::Execute,
         Work::Frame(_) => Kind::Frame,
-        Work::Key(..) => Kind::Key,
+        Work::Key(..) | Work::DocumentKey(_) => Kind::Key,
         Work::Palette(..) => Kind::Palette,
         Work::Activate(_) => Kind::Activate,
         Work::Handler(_) => Kind::Handler,
@@ -628,11 +631,12 @@ fn settle(app: &mut VectorcraftApp, script: &mut Running, wait: Duration) -> Opt
                 #[cfg(not(target_arch = "wasm32"))]
                 return None;
             }
-            Reply::Done { output, error, running, tool, keys, palettes, open, keep_alive } => {
+            Reply::Done { output, error, running, tool, keys, palettes, open, listening, keep_alive } => {
                 show_output(app, output);
                 script.busy = None;
                 script.timers = running;
                 script.open = open;
+                script.listening = listening;
                 script.keep_alive = keep_alive;
                 show_palettes(script, palettes);
                 return Some(Done { error: error.or(failed), tool, keys });
@@ -999,6 +1003,64 @@ pub(crate) fn keys(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if !work.is_empty() {
         to_tool(app, work);
     }
+}
+
+/// Sends the keys typed on the canvas to every running script's `document`, as `KeyboardEvent`s.
+/// They stay in the frame's input, for the tool script and the shortcuts.
+pub(crate) fn document_keys(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let keys: Vec<Key> = ctx.input(|i| {
+        i.events
+            .iter()
+            .filter_map(|e| match e {
+                egui::Event::Key { key, physical_key, pressed, repeat, modifiers } => {
+                    let (name, code) = dom_key(*key, physical_key.unwrap_or(*key), modifiers.shift);
+                    let modifiers = Modifiers { shift: modifiers.shift, control: modifiers.ctrl, alt: modifiers.alt, meta: modifiers.mac_cmd };
+                    Some(Key { down: *pressed, key: name, code, repeat: *repeat, modifiers })
+                }
+                _ => None,
+            })
+            .collect()
+    });
+    if !keys.is_empty() {
+        for script in app.scripts.running.iter_mut().chain(&mut app.scripts.console) {
+            script.queued.extend(keys.iter().cloned().map(Work::DocumentKey));
+        }
+    }
+}
+
+/// A key's `key` and the `code` of the `physical` key, as the UI Events standard names them: `a`
+/// or `A` and `KeyA`, `1` and `Digit1`, `ArrowLeft`, `Enter`, ` ` and `Space`.
+fn dom_key(key: egui::Key, physical: egui::Key, shift: bool) -> (String, String) {
+    use egui::Key as K;
+    let arrow = |key: K| matches!(key, K::ArrowDown | K::ArrowLeft | K::ArrowRight | K::ArrowUp).then(|| format!("Arrow{}", key.name()));
+    let name = match key {
+        K::Space => " ".to_owned(),
+        K::Minus => "-".to_owned(),
+        key => arrow(key).unwrap_or_else(|| match key.symbol_or_name() {
+            symbol if symbol.chars().count() == 1 => {
+                if shift {
+                    symbol.to_uppercase()
+                } else {
+                    symbol.to_lowercase()
+                }
+            }
+            name => name.to_owned(),
+        }),
+    };
+    let code = match physical {
+        K::Equals => "Equal".to_owned(),
+        K::OpenBracket => "BracketLeft".to_owned(),
+        K::CloseBracket => "BracketRight".to_owned(),
+        K::Backtick => "Backquote".to_owned(),
+        K::SuperLeft => "MetaLeft".to_owned(),
+        K::SuperRight => "MetaRight".to_owned(),
+        physical => arrow(physical).unwrap_or_else(|| match physical.name() {
+            letter if letter.len() == 1 && letter.chars().all(|c| c.is_ascii_alphabetic()) => format!("Key{letter}"),
+            digit if digit.len() == 1 && digit.chars().all(|c| c.is_ascii_digit()) => format!("Digit{digit}"),
+            name => name.to_owned(),
+        }),
+    };
+    (name, code)
 }
 
 /// A key's name as Paper.js has it, as browsers name keys (`a`, `5`, `-`, `enter`, `left`,

@@ -6,7 +6,7 @@ import * as abort from './abort.js'
 import * as blob from './blob.js'
 import { BroadcastChannel } from './broadcast-channel.js'
 import * as canvas from './canvas.js'
-import { dom } from './dom.js'
+import { dispatchKey, dom, hasKeyListeners, setupKeys } from './dom.js'
 import { Clipboard } from './clipboard.js'
 import { CompressionStream, DecompressionStream } from './compression.js'
 import { createConsole } from './console.js'
@@ -93,7 +93,13 @@ if (!globalThis.EventTarget) {
     removeEventListener: prototype.removeEventListener.bind(globalThis),
     dispatchEvent: prototype.dispatchEvent.bind(globalThis)
   })
-  defineEventHandlers(globalThis, 'unhandledrejection', 'rejectionhandled')
+  defineEventHandlers(
+    globalThis,
+    'unhandledrejection',
+    'rejectionhandled',
+    'keydown',
+    'keyup'
+  )
   // What the runtime hands the rejections of its calls to:
   Object.assign(natives, { notifyRejections })
 } else {
@@ -183,3 +189,7 @@ inject(globalThis, { Palette })
 Object.assign(natives, { takePalettes, hasPalettes, handlePaletteEvent })
 // What it watches the scripts' effects with, and draws them with:
 Object.assign(natives, { watchEffects, applyEffect })
+// What it fires the keys typed on the canvas with, and asks whether a script
+// waits for them:
+setupKeys()
+Object.assign(natives, { dispatchKey, hasKeyListeners })

@@ -728,6 +728,18 @@ pub struct Modifiers {
     pub meta: bool,
 }
 
+/// A key going down or up as scripts' `document` gets it, a `KeyboardEvent`: its `key` and `code`
+/// as the UI Events standard names them (`a`, `A`, `Enter`, `ArrowLeft`; `KeyA`, `Digit1`), and
+/// whether it repeats.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Key {
+    pub down: bool,
+    pub key: String,
+    pub code: String,
+    pub repeat: bool,
+    pub modifiers: Modifiers,
+}
+
 impl<E: Engine> Runtime<E> {
     /// Whether the script in `scope` made a tool: it defines mouse or key handlers, or uses `tool`.
     pub fn has_tool(&mut self, scope: &Scope<E::Handle>) -> Result<bool, Error> {
@@ -809,6 +821,27 @@ impl<E: Engine> Runtime<E> {
             method(call, &view, "dispatchKeyEvent", &[Value::String(kind.into()), Value::String(key.into()), Value::Js(options)])?;
             Ok(())
         })
+    }
+
+    /// Fires `key` at the script's `document`, from where it bubbles up to its `window`, as in a
+    /// browser: `keydown` or `keyup`.
+    pub fn document_key(&mut self, key: &Key) -> Result<(), Error> {
+        self.engine.with_call(|call| {
+            let init = call.new_object()?;
+            call.set(&init, "key", &Value::String(key.key.clone()))?;
+            call.set(&init, "code", &Value::String(key.code.clone()))?;
+            let Modifiers { shift, control, alt, meta } = key.modifiers;
+            for (name, value) in [("repeat", key.repeat), ("shiftKey", shift), ("ctrlKey", control), ("altKey", alt), ("metaKey", meta)] {
+                call.set(&init, name, &Value::Bool(value))?;
+            }
+            let kind = if key.down { "keydown" } else { "keyup" };
+            call_bundle(call, "dispatchKey", &[Value::String(kind.into()), Value::Js(init)]).map(|_| ())
+        })
+    }
+
+    /// Whether the script listens for keys on its `document` or `window`, which keeps it running.
+    pub fn has_key_listeners(&mut self) -> Result<bool, Error> {
+        self.engine.with_call(|call| Ok(matches!(call_bundle(call, "hasKeyListeners", &[])?, Value::Bool(true))))
     }
 }
 

@@ -246,6 +246,34 @@ export class PromiseRejectionEvent extends Event {
   }
 }
 
+export class KeyboardEvent extends Event {
+  constructor(type, init) {
+    super(...arguments)
+    setMembers(this, init, keyboardDefaults)
+  }
+
+  getModifierState(key) {
+    const { ctrlKey, shiftKey, altKey, metaKey } = getState(this)
+    return (
+      { Control: ctrlKey, Shift: shiftKey, Alt: altKey, Meta: metaKey }[key] ??
+      false
+    )
+  }
+}
+
+// What a `KeyboardEvent` is without its init dictionary's members:
+const keyboardDefaults = {
+  key: '',
+  code: '',
+  location: 0,
+  repeat: false,
+  isComposing: false,
+  ctrlKey: false,
+  shiftKey: false,
+  altKey: false,
+  metaKey: false
+}
+
 // What every event has, and the subclasses' own, read-only:
 const fields = {
   [Event.name]: [
@@ -265,7 +293,8 @@ const fields = {
   [CloseEvent.name]: ['wasClean', 'code', 'reason'],
   [ProgressEvent.name]: ['lengthComputable', 'loaded', 'total'],
   [ErrorEvent.name]: ['message', 'filename', 'lineno', 'colno', 'error'],
-  [PromiseRejectionEvent.name]: ['promise', 'reason']
+  [PromiseRejectionEvent.name]: ['promise', 'reason'],
+  [KeyboardEvent.name]: Object.keys(keyboardDefaults)
 }
 
 for (const Class of [
@@ -275,7 +304,8 @@ for (const Class of [
   CloseEvent,
   ProgressEvent,
   ErrorEvent,
-  PromiseRejectionEvent
+  PromiseRejectionEvent,
+  KeyboardEvent
 ]) {
   for (const name of fields[Class.name]) {
     inject(
@@ -291,6 +321,12 @@ for (const Class of [
 }
 
 defineConstants(Event, phases)
+defineConstants(KeyboardEvent, {
+  DOM_KEY_LOCATION_STANDARD: 0,
+  DOM_KEY_LOCATION_LEFT: 1,
+  DOM_KEY_LOCATION_RIGHT: 2,
+  DOM_KEY_LOCATION_NUMPAD: 3
+})
 
 setToStringTag(
   EventTarget,
@@ -300,7 +336,8 @@ setToStringTag(
   CloseEvent,
   ProgressEvent,
   ErrorEvent,
-  PromiseRejectionEvent
+  PromiseRejectionEvent,
+  KeyboardEvent
 )
 
 // The `on…` event handlers of `target`, a prototype or the global object, for

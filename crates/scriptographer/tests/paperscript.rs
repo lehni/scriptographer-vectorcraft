@@ -268,6 +268,43 @@ fn scripts_have_a_dom<E: Engine>() {
     assert_eq!(runtime.take_output(), ["true http://www.w3.org/2000/svg 1 <svg width=\"20\" />", "hé hi"]);
 }
 
+/// A key typed on the canvas goes to the script's `document` and bubbles up to its `window`, which
+/// is the global object's events, with `onkeydown` too, as in a browser.
+fn keys_reach_the_document_and_the_window<E: Engine>() {
+    use vectorcraft_scriptographer::{Key, Modifiers};
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    let key = |down| Key { down, key: "A".into(), code: "KeyA".into(), repeat: false, modifiers: Modifiers { shift: true, ..Default::default() } };
+    assert!(!runtime.has_key_listeners().unwrap());
+    // Before a script reads `document`, the window gets the key:
+    runtime
+        .execute(
+            &scope,
+            "globalThis.up = e => console.log('up', e instanceof KeyboardEvent, e.key, e.code, e.shiftKey, e.getModifierState('Shift'))\n\
+             addEventListener('keyup', up)",
+        )
+        .unwrap();
+    assert!(runtime.has_key_listeners().unwrap(), "a listener keeps the script running");
+    runtime.document_key(&key(false)).unwrap();
+    assert_eq!(runtime.take_output(), ["up true A KeyA true true"]);
+    runtime.execute(&scope, "removeEventListener('keyup', up)").unwrap();
+    assert!(!runtime.has_key_listeners().unwrap(), "without it, the script ends");
+    runtime
+        .execute(
+            &scope,
+            "console.log(window.addEventListener === addEventListener)\n\
+             document.addEventListener('keydown', e => console.log('document', e.key, e.code, e.shiftKey, e.getModifierState('Shift')))\n\
+             window.addEventListener('keydown', e => console.log('window', e.key))\n\
+             window.onkeydown = e => console.log('onkeydown', e.repeat)",
+        )
+        .unwrap();
+    runtime.document_key(&key(true)).unwrap();
+    assert_eq!(runtime.take_output(), ["true", "document A KeyA true true", "onkeydown false", "window A"]);
+    runtime.execute(&scope, "document.addEventListener('keydown', e => e.stopPropagation())").unwrap();
+    runtime.document_key(&key(true)).unwrap();
+    assert_eq!(runtime.take_output(), ["document A KeyA true true"], "stopped on the document");
+}
+
 fn scripts_use_todays_javascript<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
@@ -2236,6 +2273,11 @@ macro_rules! engine_tests {
             #[test]
             fn files_are_blobs_with_a_name() {
                 super::files_are_blobs_with_a_name::<$engine>();
+            }
+
+            #[test]
+            fn keys_reach_the_document_and_the_window() {
+                super::keys_reach_the_document_and_the_window::<$engine>();
             }
 
             #[test]
