@@ -375,10 +375,10 @@ pub(crate) fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
     };
     let source = std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))?;
     let path = PathBuf::from(&path);
+    let before = app.session.doc().map_err(|e| e.to_string())?.doc.clone();
     // As in Scriptographer, a script stops the ones that run, unless they set `script.keepAlive`,
     // and the tool script; run again, it replaces the one that runs from the same file.
     app.scripts.running.retain(|s| s.path.as_deref() != Some(&path) && (s.keep_alive || s.tool));
-    let before = app.session.doc().map_err(|e| e.to_string())?.doc.clone();
     let mut script = start(app, file_name(&path), Some(path), source)?;
     let result = execute(app, &mut script, RUN_WAIT);
     let changed = !Arc::ptr_eq(&before, &app.session.doc().map_err(|e| e.to_string())?.doc);
