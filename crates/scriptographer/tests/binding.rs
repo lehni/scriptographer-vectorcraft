@@ -857,7 +857,9 @@ fn each_document_is_a_project<E: Engine>() {
         runtime.bind(&scope, uid, st.doc.clone(), st.selection.clone()).unwrap();
     };
     bind(&mut runtime, &s, first);
-    runtime.execute(&scope, "globalThis.layer = paper.project.activeLayer").unwrap();
+    runtime
+        .execute(&scope, "globalThis.layer = paper.project.activeLayer\nglobalThis.current = function() { return [project === paper.project, view === paper.view] }")
+        .unwrap();
     bind(&mut runtime, &s, second);
     runtime
         .execute(
@@ -868,6 +870,8 @@ fn each_document_is_a_project<E: Engine>() {
         )
         .unwrap();
     assert_eq!(runtime.take_output(), ["2 false 1 2"], "the first document's layer reads the first document");
+    runtime.execute(&scope, "console.log(current().join(' '))").unwrap();
+    assert_eq!(runtime.take_output(), ["true true"], "the script's `project` and `view` are the active ones, also in code it ran before");
     let patches = runtime.take_patches().unwrap();
     assert_eq!(patches.iter().map(|p| p.uid).collect::<Vec<_>>(), [second, first], "the active document's patch comes first");
     for patch in patches {

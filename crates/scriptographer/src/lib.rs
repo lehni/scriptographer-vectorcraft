@@ -427,6 +427,7 @@ impl<E: Engine> Runtime<E> {
 
     /// Creates a scope whose view has the given size.
     pub fn create_scope(&mut self, width: f64, height: f64) -> Result<Scope<E::Handle>, Error> {
+        let global = self.engine.global()?;
         let paper = &self.paper;
         self.engine.with_call(|call| {
             let constructor = object(call, paper, "PaperScope")?;
@@ -434,6 +435,8 @@ impl<E: Engine> Runtime<E> {
             let size = object(call, paper, "Size")?;
             let size = call.construct(&size, &[Value::Number(width), Value::Number(height)])?;
             method(call, &scope, "setup", &[size])?;
+            // Scripts' `project` and `view` follow the active project:
+            method(call, &scope, "install", &[Value::Js(global)])?;
             Ok(Scope(scope))
         })
     }
