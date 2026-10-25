@@ -1085,6 +1085,54 @@ fn items_move_between_documents<E: Engine>() {
     assert_eq!((bounds.x0, bounds.y0, bounds.width(), bounds.height()), (50.0, 10.0, 30.0, 20.0), "where it was: {b:?}");
 }
 
+/// A symbol instance a script moves to another document takes a copy of its symbol along, a new
+/// symbol there; its own document keeps the symbol and its other instances as they were.
+fn moved_items_take_their_symbols_along<E: Engine>() {
+    let (mut s, a, _) = document();
+    let (first, second) = symbols(&mut s, a);
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let [one, two] = [0, 1].map(|i| s.documents()[i].uid);
+    let symbol_before = s.documents()[0].doc.symbol("Box").unwrap().clone();
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    let bind = |runtime: &mut Runtime<E>, s: &Session, uid| {
+        let st = s.documents().iter().find(|d| d.uid == uid).unwrap();
+        runtime.bind(&scope, uid, st.doc.clone(), st.selection.clone()).unwrap();
+    };
+    bind(&mut runtime, &s, one);
+    runtime.execute(&scope, &format!("globalThis.instance = paper.project.getItemByKey({})", first.0)).unwrap();
+    bind(&mut runtime, &s, two);
+    runtime.execute(&scope, "paper.project.activeLayer.addChild(instance)").unwrap();
+    for patch in runtime.take_patches().unwrap() {
+        let index = s.documents().iter().position(|d| d.uid == patch.uid).unwrap();
+        s.set_active(index);
+        s.execute("document.patch", &patch.params).unwrap();
+    }
+    let (from, to) = (&s.documents()[0].doc, &s.documents()[1].doc);
+    assert!(from.node(first).is_none(), "the instance left its document");
+    assert!(from.node(second).is_some(), "the other one stayed");
+    assert_eq!(from.symbols, std::slice::from_ref(&symbol_before), "with the symbol as it was");
+    assert_eq!(to.symbols.len(), 1, "a copy of the symbol: {:?}", to.symbols.iter().map(|s| &s.name).collect::<Vec<_>>());
+    assert_eq!(to.symbols[0].name, "Box", "named after its symbol");
+    let moved = to.layers[0].children().unwrap();
+    let [moved] = moved.as_slice() else { panic!("one instance: {moved:?}") };
+    let NodeKind::SymbolInstance { symbol, .. } = &moved.kind else { panic!("an instance") };
+    assert_eq!(symbol, &to.symbols[0].name, "of the copy");
+    let (copy, original) = (to.symbols[0].art.geometric_bounds().unwrap(), symbol_before.art.geometric_bounds().unwrap());
+    let corners = |r: Rect| [r.x0, r.y0, r.x1, r.y1];
+    assert!(corners(copy).iter().zip(corners(original)).all(|(a, b)| (a - b).abs() < 1e-9), "the same art: {copy:?} {original:?}");
+    // The symbol stays its document's own: a change of it is that document's, not the copy's.
+    bind(&mut runtime, &s, one);
+    runtime.execute(&scope, "paper.project.symbolDefinitions[0].item.scale(2)").unwrap();
+    for patch in runtime.take_patches().unwrap() {
+        let index = s.documents().iter().position(|d| d.uid == patch.uid).unwrap();
+        s.set_active(index);
+        s.execute("document.patch", &patch.params).unwrap();
+    }
+    let width = |i: usize| s.documents()[i].doc.symbols[0].art.geometric_bounds().unwrap().width();
+    assert_eq!((width(0), width(1)), (40.0, 20.0), "scaled in its own document only");
+}
+
 /// A document that closes takes its project with it; the script goes on with the others.
 fn a_closed_documents_project_goes<E: Engine>() {
     let (mut s, _, _) = document();
@@ -1352,6 +1400,11 @@ macro_rules! engine_tests {
             #[test]
             fn items_move_between_documents() {
                 super::items_move_between_documents::<$engine>();
+            }
+
+            #[test]
+            fn moved_items_take_their_symbols_along() {
+                super::moved_items_take_their_symbols_along::<$engine>();
             }
 
             #[test]
