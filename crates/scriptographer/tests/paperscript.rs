@@ -1297,6 +1297,21 @@ fn canvases_have_pixels<E: Engine>() {
     );
 }
 
+/// A canvas path with many points builds in time proportional to them.
+fn long_canvas_paths_build_quickly<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    let start = std::time::Instant::now();
+    runtime
+        .execute(
+            &scope,
+            "const ctx = new OffscreenCanvas(100, 100).getContext('2d')\n\
+             for (let i = 0; i < 200000; i++) ctx.lineTo(i % 100, i % 7)",
+        )
+        .unwrap();
+    assert!(start.elapsed() < std::time::Duration::from_secs(5), "{:?}", start.elapsed());
+}
+
 fn canvases_draw<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
@@ -2799,6 +2814,11 @@ macro_rules! engine_tests {
             #[test]
             fn text_takes_letter_and_word_spacing() {
                 super::text_takes_letter_and_word_spacing::<$engine>();
+            }
+
+            #[test]
+            fn long_canvas_paths_build_quickly() {
+                super::long_canvas_paths_build_quickly::<$engine>();
             }
 
             #[test]
