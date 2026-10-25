@@ -6121,7 +6121,7 @@ ${stack}` : ""));
         throw new TypeError(`Invalid Request: a ${method} request has no body.`);
       }
       super(body, headers);
-      this.#url = from ? from.url : String(input);
+      this.#url = from ? from.url : new URL(input, globalThis.location?.href).href;
       this.#method = method;
       this.#headers = headers;
       this.#signal = init.signal ?? from?.signal ?? null;

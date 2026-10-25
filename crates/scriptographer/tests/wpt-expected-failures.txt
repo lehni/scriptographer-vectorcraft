@@ -4,14 +4,6 @@ compression/compression-output-length.any.js: the length of brotli data should b
 compression/compression-output-length.any.js: the length of deflate data should be shorter than that of the original data
 compression/compression-output-length.any.js: the length of deflate-raw data should be shorter than that of the original data
 compression/compression-output-length.any.js: the length of gzip data should be shorter than that of the original data
-compression/compression-stream.any.js: brotli large amount data should be reinflated back to its origin
-compression/compression-stream.any.js: brotli small amount data should be reinflated back to its origin
-compression/compression-stream.any.js: deflate large amount data should be reinflated back to its origin
-compression/compression-stream.any.js: deflate small amount data should be reinflated back to its origin
-compression/compression-stream.any.js: deflate-raw large amount data should be reinflated back to its origin
-compression/compression-stream.any.js: deflate-raw small amount data should be reinflated back to its origin
-compression/compression-stream.any.js: gzip large amount data should be reinflated back to its origin
-compression/compression-stream.any.js: gzip small amount data should be reinflated back to its origin
 compression/idlharness.https.any.js: idl_test setup
 css/geometry/DOMMatrix-css-string.worker.js: DOMMatrix constructor with empty string argument in worker
 css/geometry/DOMMatrix-css-string.worker.js: DOMMatrix constructor with string argument in worker
