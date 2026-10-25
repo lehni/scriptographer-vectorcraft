@@ -91,6 +91,25 @@ struct Shared {
 /// The shared workers that run.
 static SHARED: Mutex<Vec<Shared>> = Mutex::new(Vec::new());
 
+/// What stops a worker's script: nothing while it starts, then its runtime's interrupt; or that it
+/// was stopped before it ran.
+enum Stop {
+    Starting,
+    Running(Interrupt),
+    Stopped,
+}
+
+impl Stop {
+    /// Stops the script, or keeps it from running when it hasn't started yet.
+    fn stop(slot: &Mutex<Self>) {
+        let mut slot = slot.lock().unwrap_or_else(|e| e.into_inner());
+        if let Self::Running(interrupt) = &*slot {
+            interrupt();
+        }
+        *slot = Self::Stopped;
+    }
+}
+
 /// A worker its parent started, or a shared worker the script connected to: its number, the
 /// function its `Worker` or `SharedWorker` receives with, its thread's channels, what stops its
 /// script, and the link that keeps the worker telling the script what it does.
@@ -99,10 +118,20 @@ pub(crate) struct Child<H> {
     receive: H,
     to: Sender<ToWorker>,
     from: Receiver<FromWorker>,
-    interrupt: Arc<Mutex<Option<Interrupt>>>,
+    interrupt: Arc<Mutex<Stop>>,
     _link: Arc<()>,
     /// A shared worker, which doesn't keep the script running.
     pub(crate) shared: bool,
+}
+
+impl<H> Drop for Child<H> {
+    /// A dedicated worker ends with its `Worker`: when it's terminated, and when its script stops
+    /// (a worker that never yields would run on). A shared one goes on for the other scripts.
+    fn drop(&mut self) {
+        if !self.shared {
+            Stop::stop(&self.interrupt);
+        }
+    }
 }
 
 /// What a worker's runtime keeps of whom it tells what it does, the function its global object
@@ -155,7 +184,7 @@ fn start<E: Engine>(call: &mut dyn Call<E::Handle>, _this: &Value<E::Handle>, ar
     let (sent, from) = channel();
     let link = Arc::new(());
     let outbox = Outbox::new(sent, &link);
-    let interrupt = Arc::new(Mutex::new(None));
+    let interrupt = Arc::new(Mutex::new(Stop::Starting));
     let kind = Kind::Dedicated(private_directory);
     spawn::<E>(key, name, Setup { language, cache, ..Setup::default() }, inbox, outbox, interrupt.clone(), kind)?;
     add_child(call, Child { number: 0, receive: receive.clone(), to, from, interrupt, _link: link, shared: false })
@@ -179,7 +208,7 @@ fn spawn<E: Engine>(
     setup: Setup,
     inbox: Receiver<ToWorker>,
     outbox: Arc<Outbox>,
-    interrupt: Arc<Mutex<Option<Interrupt>>>,
+    interrupt: Arc<Mutex<Stop>>,
     kind: Kind,
 ) -> Result<(), Error> {
     std::thread::Builder::new()
@@ -227,7 +256,7 @@ fn connect<E: Engine>(call: &mut dyn Call<E::Handle>, _this: &Value<E::Handle>, 
             }
         }
     }
-    let interrupt = Arc::new(Mutex::new(None));
+    let interrupt = Arc::new(Mutex::new(Stop::Starting));
     let to = match (to, ends) {
         (Some(to), _) => to,
         (None, Some(ends)) => {
@@ -255,7 +284,7 @@ fn run<E: Engine>(
     setup: Setup,
     inbox: &Receiver<ToWorker>,
     outbox: &Arc<Outbox>,
-    interrupt: &Arc<Mutex<Option<Interrupt>>>,
+    interrupt: &Arc<Mutex<Stop>>,
     kind: Kind,
 ) {
     // Those it tells may be gone: then nobody listens.
@@ -268,8 +297,14 @@ fn run<E: Engine>(
         let mut runtime = Runtime::<E>::new().map_err(|e| e.to_string())?;
         let file = url::Url::parse(&key).is_err().then(|| key.clone());
         runtime.set_script(&Setup { file, ..setup }).map_err(|e| e.to_string())?;
-        if let (Some(stop), Ok(mut slot)) = (runtime.interrupt(), interrupt.lock()) {
-            *slot = Some(stop);
+        {
+            let mut slot = interrupt.lock().unwrap_or_else(|e| e.into_inner());
+            if matches!(*slot, Stop::Stopped) {
+                return Err("the worker was terminated".into());
+            }
+            if let Some(stop) = runtime.interrupt() {
+                *slot = Stop::Running(stop);
+            }
         }
         if let Kind::Dedicated(directory) = &kind {
             runtime.host.borrow_mut().private_directory.clone_from(directory);
@@ -400,12 +435,8 @@ fn terminate<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H
         let at = host.children.iter().position(|c| f64::from(c.number) == number);
         at.map(|at| host.children.swap_remove(at))
     };
-    if let Some(child) = child
-        && let Ok(slot) = child.interrupt.lock()
-        && let Some(stop) = slot.as_ref()
-    {
-        stop();
-    }
+    // Dropping it stops its script.
+    drop(child);
     Ok(Value::Undefined)
 }
 
