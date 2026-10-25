@@ -41,9 +41,7 @@ pub fn close_all(app: &mut VectorcraftApp, then: &str) -> Result<Value, String> 
         return ask(app, i, then);
     }
     if then == "quit" {
-        crate::scripts::notify(app, "onShutdown");
-        // Nothing unsaved is left: no recovery copies either.
-        vectorcraft_engine::cmd::recovery::forget_all(&mut app.session);
+        quit(app);
         // The host closes the window.
         app.ui.status = "quit".into();
         return Ok(Value::Null);
@@ -54,6 +52,12 @@ pub fn close_all(app: &mut VectorcraftApp, then: &str) -> Result<Value, String> 
     let r = app.session.execute("file.closeAll", &json!({})).map_err(|e| e.to_string());
     app.sync_views();
     r
+}
+
+/// Quits with nothing unsaved: the scripts' `onShutdown` runs, and no recovery copies are left.
+pub fn quit(app: &mut VectorcraftApp) {
+    crate::scripts::notify(app, "onShutdown");
+    vectorcraft_engine::cmd::recovery::forget_all(&mut app.session);
 }
 
 /// Is any open document modified (the window's close button must ask first)?
