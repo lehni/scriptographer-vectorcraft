@@ -299,7 +299,7 @@ fn keys_reach_the_document_and_the_window<E: Engine>() {
         )
         .unwrap();
     runtime.document_key(&key(true)).unwrap();
-    assert_eq!(runtime.take_output(), ["true", "document A KeyA true true", "onkeydown false", "window A"]);
+    assert_eq!(runtime.take_output(), ["true", "document A KeyA true true", "window A", "onkeydown false"]);
     runtime.execute(&scope, "document.addEventListener('keydown', e => e.stopPropagation())").unwrap();
     assert!(!runtime.document_key(&key(true)).unwrap());
     assert_eq!(runtime.take_output(), ["document A KeyA true true"], "stopped on the document");
@@ -332,6 +332,29 @@ fn key_listeners_keep_a_script_running_as_long_as_they_listen<E: Engine>() {
     assert!(runtime.has_key_listeners().unwrap(), "removing the one without capture left the one with it");
     runtime.execute(&scope, "removeEventListener('keydown', down, { capture: true })").unwrap();
     assert!(!runtime.has_key_listeners().unwrap());
+}
+
+/// An `on…` handler is a listener, as the HTML standard has it: it sees the event's target, runs in
+/// the order it was first set, gets the events a script dispatches, and `false` cancels.
+fn event_handlers_are_listeners<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    runtime
+        .execute(
+            &scope,
+            "var controller = new AbortController(), signal = controller.signal, log = []\n\
+             signal.addEventListener('abort', () => log.push('first'))\n\
+             signal.onabort = () => log.push('replaced')\n\
+             signal.addEventListener('abort', () => log.push('last'))\n\
+             signal.onabort = e => log.push('handler ' + (e.target === signal) + ' ' + (e.currentTarget === signal))\n\
+             controller.abort()\n\
+             signal.onabort = () => false\n\
+             console.log(log.join(', '), signal.dispatchEvent(new Event('abort', { cancelable: true })))\n\
+             signal.onabort = null\n\
+             console.log(signal.onabort, signal.dispatchEvent(new Event('abort', { cancelable: true })))",
+        )
+        .unwrap();
+    assert_eq!(runtime.take_output(), ["first, handler true true, last false", "null true"]);
 }
 
 fn scripts_use_todays_javascript<E: Engine>() {
@@ -2307,6 +2330,11 @@ macro_rules! engine_tests {
             #[test]
             fn key_listeners_keep_a_script_running_as_long_as_they_listen() {
                 super::key_listeners_keep_a_script_running_as_long_as_they_listen::<$engine>();
+            }
+
+            #[test]
+            fn event_handlers_are_listeners() {
+                super::event_handlers_are_listeners::<$engine>();
             }
 
             #[test]

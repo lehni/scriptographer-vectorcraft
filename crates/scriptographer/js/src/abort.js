@@ -1,5 +1,5 @@
 import { checkInternal, internal, setToStringTag } from './define.js'
-import { Event, EventTarget, defineEventHandlers, fire } from './events.js'
+import { Event, EventTarget, defineEventHandlers } from './events.js'
 
 // `AbortController` and `AbortSignal`, for scripts outside a browser.
 
@@ -31,7 +31,7 @@ export class AbortSignal extends EventTarget {
                 'AbortError'
               )
             : reason
-        fire(signal, new Event('abort'))
+        signal.dispatchEvent(new Event('abort'))
       }
     }
   }

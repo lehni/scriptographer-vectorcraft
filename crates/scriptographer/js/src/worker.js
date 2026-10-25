@@ -3,8 +3,7 @@ import {
   ErrorEvent,
   EventTarget,
   MessageEvent,
-  defineEventHandlers,
-  fire
+  defineEventHandlers
 } from './events.js'
 import { MessageChannel, postWith, takePort } from './message-port.js'
 import { natives } from './natives.js'
@@ -47,11 +46,11 @@ export class Worker extends EventTarget {
       // Unless a handler prevents it, the error shows in the console too, as in
       // browsers.
       const event = new ErrorEvent('error', { message, cancelable: true })
-      if (fire(this, event)) {
+      if (this.dispatchEvent(event)) {
         console.error(`Uncaught (in worker) ${message}`)
       }
     } else {
-      fire(this, new MessageEvent(type, { data, ports }))
+      this.dispatchEvent(new MessageEvent(type, { data, ports }))
     }
   }
 }
@@ -82,7 +81,7 @@ export class SharedWorker extends EventTarget {
       ({ message }) => {
         // Unless a handler prevents it, the error shows in the console too.
         const event = new ErrorEvent('error', { message, cancelable: true })
-        if (fire(this, event)) {
+        if (this.dispatchEvent(event)) {
           console.error(`Uncaught (in shared worker) ${message}`)
         }
       }
@@ -107,7 +106,9 @@ export function setupWorker(name, isShared) {
   if (isShared) {
     defineEventHandlers(globalThis, 'connect')
     return port =>
-      fire(globalThis, new MessageEvent('connect', { data: '', ports: [port] }))
+      globalThis.dispatchEvent(
+        new MessageEvent('connect', { data: '', ports: [port] })
+      )
   } else {
     inject(globalThis, {
       postMessage(data, transfer) {
@@ -118,6 +119,6 @@ export function setupWorker(name, isShared) {
     })
     defineEventHandlers(globalThis, 'message', 'messageerror')
     return ({ type, data, ports }) =>
-      fire(globalThis, new MessageEvent(type, { data, ports }))
+      globalThis.dispatchEvent(new MessageEvent(type, { data, ports }))
   }
 }

@@ -74,8 +74,7 @@
     MessageEvent: () => MessageEvent,
     ProgressEvent: () => ProgressEvent,
     PromiseRejectionEvent: () => PromiseRejectionEvent,
-    defineEventHandlers: () => defineEventHandlers,
-    fire: () => fire
+    defineEventHandlers: () => defineEventHandlers
   });
 
   // src/global-scope.js
@@ -489,7 +488,7 @@
         target,
         {
           get [`on${type}`]() {
-            return handlersByTarget.get(this)?.[type] ?? null;
+            return handlersByTarget.get(this)?.[type]?.handler ?? null;
           },
           set [`on${type}`](handler2) {
             let handlers = handlersByTarget.get(this);
@@ -497,7 +496,23 @@
               handlers = {};
               handlersByTarget.set(this, handlers);
             }
-            handlers[type] = typeof handler2 === "function" ? handler2 : null;
+            const entry = handlers[type];
+            if (typeof handler2 !== "function") {
+              if (entry) {
+                this.removeEventListener(type, entry.listener);
+                delete handlers[type];
+              }
+            } else if (entry) {
+              entry.handler = handler2;
+            } else {
+              const entry2 = handlers[type] = { handler: handler2 };
+              entry2.listener = function(event) {
+                if (entry2.handler.call(this, event) === false) {
+                  event.preventDefault();
+                }
+              };
+              this.addEventListener(type, entry2.listener);
+            }
           }
         },
         { enumerable: true }
@@ -505,18 +520,6 @@
     }
   }
   __name(defineEventHandlers, "defineEventHandlers");
-  function fire(target, event) {
-    const handler2 = handlersByTarget.get(target)?.[event.type];
-    if (handler2) {
-      try {
-        handler2.call(target, event);
-      } catch (err) {
-        reportError(err);
-      }
-    }
-    return target.dispatchEvent(event);
-  }
-  __name(fire, "fire");
   function getState(event) {
     const state = states.get(event);
     if (!state) {
@@ -580,7 +583,7 @@
             "signal is aborted without reason",
             "AbortError"
           ) : reason;
-          fire(signal, new Event("abort"));
+          signal.dispatchEvent(new Event("abort"));
         }
       }, "abort");
     }
@@ -3144,7 +3147,7 @@
       this.#name = String(name);
       this.#number = natives.broadcast.open(
         this.#name,
-        ({ type, data }) => fire(this, new MessageEvent(type, { data }))
+        ({ type, data }) => this.dispatchEvent(new MessageEvent(type, { data }))
       );
     }
     get name() {
@@ -4920,7 +4923,7 @@
         stopped = documentEvent.cancelBubble;
       }
       if (!stopped) {
-        fire(globalThis, event);
+        globalThis.dispatchEvent(event);
         reached.push(globalThis);
       }
       prevented = event.defaultPrevented;
@@ -5825,14 +5828,14 @@ ${stack}` : ""));
       if (state === "open") {
         this.#readyState = states2.OPEN;
         this.#origin = new URL(url).origin;
-        fire(this, new Event("open"));
+        this.dispatchEvent(new Event("open"));
       } else if (state === "event") {
         const origin = this.#origin;
-        fire(this, new MessageEvent(type, { data, lastEventId, origin }));
+        this.dispatchEvent(new MessageEvent(type, { data, lastEventId, origin }));
       } else {
         this.#readyState = state === "reconnecting" ? states2.CONNECTING : states2.CLOSED;
         if (state === "failed") this.#number = null;
-        fire(this, new Event("error"));
+        this.dispatchEvent(new Event("error"));
       }
     }
   };
@@ -6734,8 +6737,7 @@ ${value}\r
       } else if (!unhandled.delete(promise) && reasonsByPromise.has(promise)) {
         const reason2 = reasonsByPromise.get(promise);
         reasonsByPromise.delete(promise);
-        fire(
-          globalThis,
+        globalThis.dispatchEvent(
           new PromiseRejectionEvent("rejectionhandled", { promise, reason: reason2 })
         );
       }
@@ -6746,7 +6748,7 @@ ${value}\r
         reason,
         cancelable: true
       });
-      if (fire(globalThis, event)) report(reason);
+      if (globalThis.dispatchEvent(event)) report(reason);
       reasonsByPromise.set(promise, reason);
     }
   }
@@ -8400,11 +8402,10 @@ ${value}\r
         case "open":
           this.#readyState = states3.OPEN;
           this.#protocol = protocol;
-          fire(this, new Event("open"));
+          this.dispatchEvent(new Event("open"));
           break;
         case "message":
-          fire(
-            this,
+          this.dispatchEvent(
             new MessageEvent("message", {
               data: typeof data === "string" ? data : this.#binaryType === "arraybuffer" ? data.buffer : new Blob([data]),
               origin: new URL(this.#url).origin
@@ -8413,11 +8414,11 @@ ${value}\r
           break;
         case "error":
           console.error(`WebSocket ${this.#url}: ${message}`);
-          fire(this, new Event("error"));
+          this.dispatchEvent(new Event("error"));
           break;
         case "close":
           this.#readyState = states3.CLOSED;
-          fire(this, new CloseEvent("close", { code, reason, wasClean }));
+          this.dispatchEvent(new CloseEvent("close", { code, reason, wasClean }));
           break;
       }
     }
@@ -8482,7 +8483,7 @@ ${value}\r
       if (this.#number !== null) {
         natives.port.start(
           this.#number,
-          ({ type, data, ports }) => fire(this, new MessageEvent(type, { data, ports }))
+          ({ type, data, ports }) => this.dispatchEvent(new MessageEvent(type, { data, ports }))
         );
       }
     }
@@ -8568,11 +8569,11 @@ ${value}\r
     #receive({ type, data, ports, message }) {
       if (type === "error") {
         const event = new ErrorEvent("error", { message, cancelable: true });
-        if (fire(this, event)) {
+        if (this.dispatchEvent(event)) {
           console.error(`Uncaught (in worker) ${message}`);
         }
       } else {
-        fire(this, new MessageEvent(type, { data, ports }));
+        this.dispatchEvent(new MessageEvent(type, { data, ports }));
       }
     }
   };
@@ -8599,7 +8600,7 @@ ${value}\r
         takePort(port2),
         ({ message }) => {
           const event = new ErrorEvent("error", { message, cancelable: true });
-          if (fire(this, event)) {
+          if (this.dispatchEvent(event)) {
             console.error(`Uncaught (in shared worker) ${message}`);
           }
         }
@@ -8616,7 +8617,9 @@ ${value}\r
     inject(globalThis, { name, close, importScripts });
     if (isShared) {
       defineEventHandlers(globalThis, "connect");
-      return (port) => fire(globalThis, new MessageEvent("connect", { data: "", ports: [port] }));
+      return (port) => globalThis.dispatchEvent(
+        new MessageEvent("connect", { data: "", ports: [port] })
+      );
     } else {
       inject(globalThis, {
         postMessage(data, transfer) {
@@ -8627,7 +8630,7 @@ ${value}\r
         }
       });
       defineEventHandlers(globalThis, "message", "messageerror");
-      return ({ type, data, ports }) => fire(globalThis, new MessageEvent(type, { data, ports }));
+      return ({ type, data, ports }) => globalThis.dispatchEvent(new MessageEvent(type, { data, ports }));
     }
   }
   __name(setupWorker, "setupWorker");
@@ -8772,7 +8775,7 @@ ${value}\r
       this.#value = void 0;
       if (this.#readyState !== states4.OPENED) {
         this.#readyState = states4.OPENED;
-        fire(this, new Event("readystatechange"));
+        this.dispatchEvent(new Event("readystatechange"));
       }
     }
     setRequestHeader(name, value) {
@@ -8948,7 +8951,7 @@ ${value}\r
     }
     #setState(state) {
       this.#readyState = state;
-      fire(this, new Event("readystatechange"));
+      this.dispatchEvent(new Event("readystatechange"));
     }
     #checkOpened(name) {
       if (this.#readyState !== states4.OPENED || this.#isSent) {
@@ -9007,8 +9010,7 @@ ${value}\r
   defineEventHandlers(XMLHttpRequest.prototype, "readystatechange");
   setToStringTag(XMLHttpRequestEventTarget, XMLHttpRequestUpload, XMLHttpRequest);
   function fireProgress(target, type, loaded = 0, total = 0) {
-    fire(
-      target,
+    target.dispatchEvent(
       new ProgressEvent(type, { lengthComputable: total > 0, loaded, total })
     );
   }
@@ -9048,7 +9050,7 @@ ${value}\r
     inject(globalThis, { DOMException: DOMException2 });
   }
   if (!globalThis.EventTarget) {
-    const { defineEventHandlers: defineEventHandlers2, fire: fire2, ...classes } = events_exports;
+    const { defineEventHandlers: defineEventHandlers2, ...classes } = events_exports;
     const { prototype } = classes.EventTarget;
     inject(globalThis, {
       ...classes,

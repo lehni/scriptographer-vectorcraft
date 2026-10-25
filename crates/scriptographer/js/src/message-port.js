@@ -7,8 +7,7 @@ import {
 import {
   EventTarget,
   MessageEvent,
-  defineEventHandlers,
-  fire
+  defineEventHandlers
 } from './events.js'
 import { natives } from './natives.js'
 
@@ -74,7 +73,7 @@ export class MessagePort extends EventTarget {
   start() {
     if (this.#number !== null) {
       natives.port.start(this.#number, ({ type, data, ports }) =>
-        fire(this, new MessageEvent(type, { data, ports }))
+        this.dispatchEvent(new MessageEvent(type, { data, ports }))
       )
     }
   }

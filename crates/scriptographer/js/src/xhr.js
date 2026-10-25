@@ -11,8 +11,7 @@ import {
   Event,
   EventTarget,
   ProgressEvent,
-  defineEventHandlers,
-  fire
+  defineEventHandlers
 } from './events.js'
 
 // `XMLHttpRequest` for scripts outside a browser, on `fetch()`. Requests are
@@ -158,7 +157,7 @@ export class XMLHttpRequest extends XMLHttpRequestEventTarget {
     this.#value = undefined
     if (this.#readyState !== states.OPENED) {
       this.#readyState = states.OPENED
-      fire(this, new Event('readystatechange'))
+      this.dispatchEvent(new Event('readystatechange'))
     }
   }
 
@@ -379,7 +378,7 @@ export class XMLHttpRequest extends XMLHttpRequestEventTarget {
 
   #setState(state) {
     this.#readyState = state
-    fire(this, new Event('readystatechange'))
+    this.dispatchEvent(new Event('readystatechange'))
   }
 
   #checkOpened(name) {
@@ -445,8 +444,7 @@ defineEventHandlers(XMLHttpRequest.prototype, 'readystatechange')
 setToStringTag(XMLHttpRequestEventTarget, XMLHttpRequestUpload, XMLHttpRequest)
 
 function fireProgress(target, type, loaded = 0, total = 0) {
-  fire(
-    target,
+  target.dispatchEvent(
     new ProgressEvent(type, { lengthComputable: total > 0, loaded, total })
   )
 }
