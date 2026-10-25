@@ -5,11 +5,17 @@
 
 use std::io::Read;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::time::Duration;
 
 use crate::{Call, Engine, Error, HostFunction, Value, handle};
 
 /// The largest response body read, in bytes.
 const MOST: u64 = 512 * 1024 * 1024;
+
+/// How long a request waits to reach its server.
+const CONNECT: Duration = Duration::from_secs(30);
+/// How long a request waits for the server's answer, as browsers do, and an import for its body.
+const WAIT: Duration = Duration::from_secs(300);
 
 /// A request on its thread: its number, and what the script receives its response with.
 pub(crate) struct Pending<H> {
@@ -67,7 +73,11 @@ fn request<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]
     };
     let (send, events) = std::sync::mpsc::channel();
     if url.starts_with("https://") || url.starts_with("http://") {
-        std::thread::spawn(move || stream_on_thread(&method_name, &url, &headers, body, follow, &send));
+        let failed = send.clone();
+        let thread = std::thread::Builder::new().name("scriptographer fetch".into());
+        if let Err(e) = thread.spawn(move || stream_on_thread(&method_name, &url, &headers, body, follow, &send)) {
+            let _ = failed.send(Event::Failed(format!("the request couldn't start: {e}")));
+        }
     } else {
         // The script hears of it on its next turn, as of any failure.
         let _ = send.send(Event::Failed(format!("only http: and https: URLs, not '{url}'")));
@@ -106,9 +116,9 @@ pub(crate) fn get(url: &str, headers: &[(String, String)]) -> Result<Answer, Str
     request_on_thread("GET", url, headers, None, true)
 }
 
-/// The request, on this thread, its body read whole.
+/// The request, on this thread, its body read whole within [`WAIT`].
 fn request_on_thread(method: &str, url: &str, headers: &[(String, String)], body: Option<Vec<u8>>, follow: bool) -> Result<Answer, String> {
-    let (mut answer, mut response) = send(method, url, headers, body, follow)?;
+    let (mut answer, mut response) = send(method, url, headers, body, Some(WAIT), follow)?;
     answer.body = response.body_mut().with_config().limit(MOST).read_to_vec().map_err(|e| e.to_string())?;
     Ok(answer)
 }
@@ -117,7 +127,7 @@ fn request_on_thread(method: &str, url: &str, headers: &[(String, String)], body
 /// it arrives, until the script no longer listens.
 fn stream_on_thread(method: &str, url: &str, headers: &[(String, String)], body: Option<Vec<u8>>, follow: bool, events: &Sender<Event>) {
     // Nobody to tell once the script is gone.
-    let (answer, response) = match send(method, url, headers, body, follow) {
+    let (answer, response) = match send(method, url, headers, body, None, follow) {
         Ok(sent) => sent,
         Err(message) => {
             let _ = events.send(Event::Failed(message));
@@ -142,15 +152,25 @@ fn stream_on_thread(method: &str, url: &str, headers: &[(String, String)], body:
     }
 }
 
-/// Sends the request: the response's head, as an [`Answer`] without a body, and the response.
+/// Sends the request: the response's head, as an [`Answer`] without a body, and the response. It
+/// fails when the server can't be reached within [`CONNECT`], or doesn't answer within [`WAIT`]; its
+/// body may take as long as it takes (a stream of events), or up to `body_within`.
 fn send(
     method: &str,
     url: &str,
     headers: &[(String, String)],
     body: Option<Vec<u8>>,
+    body_within: Option<Duration>,
     follow: bool,
 ) -> Result<(Answer, ureq::http::Response<ureq::Body>), String> {
-    let agent: ureq::Agent = ureq::Agent::config_builder().http_status_as_error(false).max_redirects(if follow { 10 } else { 0 }).build().into();
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .http_status_as_error(false)
+        .max_redirects(if follow { 10 } else { 0 })
+        .timeout_connect(Some(CONNECT))
+        .timeout_recv_response(Some(WAIT))
+        .timeout_recv_body(body_within)
+        .build()
+        .into();
     let mut builder = ureq::http::Request::builder().method(method).uri(url);
     for (name, value) in headers {
         builder = builder.header(name, value);
