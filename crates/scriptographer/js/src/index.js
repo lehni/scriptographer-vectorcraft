@@ -83,7 +83,7 @@ if (!globalThis.DOMException) {
   inject(globalThis, { DOMException })
 }
 if (!globalThis.EventTarget) {
-  const { defineEventHandlers, fire, ...classes } = events
+  const { defineEventHandlers, ...classes } = events
   // The global object is an `EventTarget` too, as a browser's is, whose methods
   // work called bare:
   const { prototype } = classes.EventTarget

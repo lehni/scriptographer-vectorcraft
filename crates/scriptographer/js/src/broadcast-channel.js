@@ -2,8 +2,7 @@ import { checkArguments, setToStringTag } from './define.js'
 import {
   EventTarget,
   MessageEvent,
-  defineEventHandlers,
-  fire
+  defineEventHandlers
 } from './events.js'
 import { natives } from './natives.js'
 
@@ -22,7 +21,7 @@ export class BroadcastChannel extends EventTarget {
     super()
     this.#name = String(name)
     this.#number = natives.broadcast.open(this.#name, ({ type, data }) =>
-      fire(this, new MessageEvent(type, { data }))
+      this.dispatchEvent(new MessageEvent(type, { data }))
     )
   }
 

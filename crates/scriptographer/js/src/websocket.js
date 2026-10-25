@@ -5,8 +5,7 @@ import {
   Event,
   EventTarget,
   MessageEvent,
-  defineEventHandlers,
-  fire
+  defineEventHandlers
 } from './events.js'
 import { natives } from './natives.js'
 
@@ -127,11 +126,10 @@ export class WebSocket extends EventTarget {
       case 'open':
         this.#readyState = states.OPEN
         this.#protocol = protocol
-        fire(this, new Event('open'))
+        this.dispatchEvent(new Event('open'))
         break
       case 'message':
-        fire(
-          this,
+        this.dispatchEvent(
           new MessageEvent('message', {
             data:
               typeof data === 'string'
@@ -146,11 +144,11 @@ export class WebSocket extends EventTarget {
       case 'error':
         // As in browsers, the event says nothing of why; the console does.
         console.error(`WebSocket ${this.#url}: ${message}`)
-        fire(this, new Event('error'))
+        this.dispatchEvent(new Event('error'))
         break
       case 'close':
         this.#readyState = states.CLOSED
-        fire(this, new CloseEvent('close', { code, reason, wasClean }))
+        this.dispatchEvent(new CloseEvent('close', { code, reason, wasClean }))
         break
     }
   }

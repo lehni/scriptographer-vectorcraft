@@ -1,6 +1,6 @@
 import { natives } from './natives.js'
 import { inject } from './define.js'
-import { KeyboardEvent, fire } from './events.js'
+import { KeyboardEvent } from './events.js'
 
 // `window` and `document` for scripts outside a browser: linkedom's, which the
 // runtime loads the first time a script reads either one.
@@ -66,7 +66,7 @@ export function dispatchKey(type, init) {
       stopped = documentEvent.cancelBubble
     }
     if (!stopped) {
-      fire(globalThis, event)
+      globalThis.dispatchEvent(event)
       reached.push(globalThis)
     }
     prevented = event.defaultPrevented

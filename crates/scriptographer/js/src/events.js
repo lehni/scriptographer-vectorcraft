@@ -341,14 +341,16 @@ setToStringTag(
 )
 
 // The `on…` event handlers of `target`, a prototype or the global object, for
-// the event `types`.
+// the event `types`. As the HTML standard has them, a handler is a listener
+// added when it's first set, where it then stays while it's replaced, and one
+// that returns `false` cancels the event.
 export function defineEventHandlers(target, ...types) {
   for (const type of types) {
     inject(
       target,
       {
         get [`on${type}`]() {
-          return handlersByTarget.get(this)?.[type] ?? null
+          return handlersByTarget.get(this)?.[type]?.handler ?? null
         },
 
         set [`on${type}`](handler) {
@@ -357,26 +359,28 @@ export function defineEventHandlers(target, ...types) {
             handlers = {}
             handlersByTarget.set(this, handlers)
           }
-          handlers[type] = typeof handler === 'function' ? handler : null
+          const entry = handlers[type]
+          if (typeof handler !== 'function') {
+            if (entry) {
+              this.removeEventListener(type, entry.listener)
+              delete handlers[type]
+            }
+          } else if (entry) {
+            entry.handler = handler
+          } else {
+            const entry = (handlers[type] = { handler })
+            entry.listener = function (event) {
+              if (entry.handler.call(this, event) === false) {
+                event.preventDefault()
+              }
+            }
+            this.addEventListener(type, entry.listener)
+          }
         }
       },
       { enumerable: true }
     )
   }
-}
-
-// Fire `event` at `target`: to its `on…` handler for the event's type, then to
-// its listeners. Whether nothing prevented its default.
-export function fire(target, event) {
-  const handler = handlersByTarget.get(target)?.[event.type]
-  if (handler) {
-    try {
-      handler.call(target, event)
-    } catch (err) {
-      reportError(err)
-    }
-  }
-  return target.dispatchEvent(event)
 }
 
 function getState(event) {

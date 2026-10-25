@@ -3,8 +3,7 @@ import {
   Event,
   EventTarget,
   MessageEvent,
-  defineEventHandlers,
-  fire
+  defineEventHandlers
 } from './events.js'
 import { natives } from './natives.js'
 
@@ -62,15 +61,15 @@ export class EventSource extends EventTarget {
     if (state === 'open') {
       this.#readyState = states.OPEN
       this.#origin = new URL(url).origin
-      fire(this, new Event('open'))
+      this.dispatchEvent(new Event('open'))
     } else if (state === 'event') {
       const origin = this.#origin
-      fire(this, new MessageEvent(type, { data, lastEventId, origin }))
+      this.dispatchEvent(new MessageEvent(type, { data, lastEventId, origin }))
     } else {
       this.#readyState =
         state === 'reconnecting' ? states.CONNECTING : states.CLOSED
       if (state === 'failed') this.#number = null
-      fire(this, new Event('error'))
+      this.dispatchEvent(new Event('error'))
     }
   }
 }

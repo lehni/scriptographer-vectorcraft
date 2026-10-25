@@ -1,4 +1,4 @@
-import { PromiseRejectionEvent, fire } from './events.js'
+import { PromiseRejectionEvent } from './events.js'
 import { formatError } from './format-error.js'
 
 // `unhandledrejection` and `rejectionhandled` at the global object, as browsers
@@ -19,8 +19,7 @@ export function notifyRejections(events) {
     } else if (!unhandled.delete(promise) && reasonsByPromise.has(promise)) {
       const reason = reasonsByPromise.get(promise)
       reasonsByPromise.delete(promise)
-      fire(
-        globalThis,
+      globalThis.dispatchEvent(
         new PromiseRejectionEvent('rejectionhandled', { promise, reason })
       )
     }
@@ -31,7 +30,7 @@ export function notifyRejections(events) {
       reason,
       cancelable: true
     })
-    if (fire(globalThis, event)) report(reason)
+    if (globalThis.dispatchEvent(event)) report(reason)
     reasonsByPromise.set(promise, reason)
   }
 }
