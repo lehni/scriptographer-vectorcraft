@@ -5571,5 +5571,8 @@ axis	Y Axis	Y 轴
 	The script asks for a file to open.	脚本请求打开一个文件。
 	The script asks where to save a file.	脚本询问文件的保存位置。
 	The script asks for a folder.	脚本请求一个文件夹。
+	“{name}” isn't responding	“{name}”没有响应
+	The script hasn't finished its work. You can wait for it, or stop it.	脚本尚未完成工作。你可以等待它，或停止它。
+	Wait	等待
 	Examples	示例
 	My Scripts	我的脚本

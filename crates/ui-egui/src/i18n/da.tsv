@@ -5637,5 +5637,8 @@ axis	Y Axis	Y-akse
 	The script asks for a file to open.	Scriptet beder om en fil, der skal åbnes.
 	The script asks where to save a file.	Scriptet spørger, hvor en fil skal gemmes.
 	The script asks for a folder.	Scriptet beder om en mappe.
+	“{name}” isn't responding	»{name}« svarer ikke
+	The script hasn't finished its work. You can wait for it, or stop it.	Scriptet er ikke færdigt med sit arbejde. Du kan vente på det eller stoppe det.
+	Wait	Vent
 	Examples	Eksempler
 	My Scripts	Mine scripter

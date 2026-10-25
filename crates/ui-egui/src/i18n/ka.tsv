@@ -5721,5 +5721,8 @@ swatch	Bright Violet	კაშკაშა იისფერი
 	The script asks for a file to open.	სკრიპტი ითხოვს გასახსნელ ფაილს.
 	The script asks where to save a file.	სკრიპტი გეკითხებათ, სად შეინახოს ფაილი.
 	The script asks for a folder.	სკრიპტი ითხოვს საქაღალდეს.
+	“{name}” isn't responding	„{name}“ არ პასუხობს
+	The script hasn't finished its work. You can wait for it, or stop it.	სკრიპტს სამუშაო ჯერ არ დაუსრულებია. შეგიძლიათ დაელოდოთ ან შეაჩეროთ.
+	Wait	ლოდინი
 	Examples	მაგალითები
 	My Scripts	ჩემი სკრიპტები

@@ -5367,5 +5367,8 @@ axis	Y Axis	Y 軸
 	The script asks for a file to open.	指令碼要求開啟一個檔案。
 	The script asks where to save a file.	指令碼詢問檔案的儲存位置。
 	The script asks for a folder.	指令碼要求一個資料夾。
+	“{name}” isn't responding	「{name}」沒有回應
+	The script hasn't finished its work. You can wait for it, or stop it.	指令碼尚未完成工作。你可以等待它，或停止它。
+	Wait	等待
 	Examples	範例
 	My Scripts	我的指令碼

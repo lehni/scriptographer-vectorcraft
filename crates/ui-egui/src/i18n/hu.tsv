@@ -5718,5 +5718,8 @@ axis	Y Axis	Y tengely
 	The script asks for a file to open.	A szkript egy megnyitandó fájlt kér.
 	The script asks where to save a file.	A szkript azt kérdezi, hová mentsen egy fájlt.
 	The script asks for a folder.	A szkript egy mappát kér.
+	“{name}” isn't responding	„{name}” nem válaszol
+	The script hasn't finished its work. You can wait for it, or stop it.	A szkript még nem fejezte be a munkáját. Megvárhatod, vagy leállíthatod.
+	Wait	Várakozás
 	Examples	Példák
 	My Scripts	Saját szkriptek

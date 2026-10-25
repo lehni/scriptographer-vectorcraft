@@ -5763,5 +5763,8 @@ axis	Y Axis	Y-akseli
 	The script asks for a file to open.	Komentosarja pyytää avattavaa tiedostoa.
 	The script asks where to save a file.	Komentosarja kysyy, minne tiedosto tallennetaan.
 	The script asks for a folder.	Komentosarja pyytää kansiota.
+	“{name}” isn't responding	”{name}” ei vastaa
+	The script hasn't finished its work. You can wait for it, or stop it.	Komentosarja ei ole saanut työtään valmiiksi. Voit odottaa sitä tai pysäyttää sen.
+	Wait	Odota
 	Examples	Esimerkit
 	My Scripts	Omat komentosarjat

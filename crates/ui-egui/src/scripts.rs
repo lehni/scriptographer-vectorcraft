@@ -45,6 +45,8 @@ const RUN_WAIT: Duration = Duration::from_secs(2);
 /// How long a frame waits for each of a script's replies: an animation's changes show in the
 /// frame that asked for them, unless the script takes longer, when they show in a later one.
 const FRAME_WAIT: Duration = Duration::from_millis(100);
+/// How long a script works on before the app asks whether to wait for it, in seconds.
+const NOT_RESPONDING: f64 = 5.0;
 
 /// How many log lines are kept.
 const LOG_LINES: usize = 1000;
@@ -136,6 +138,11 @@ struct Running {
     timers: bool,
     /// The work it was sent and hasn't finished.
     busy: Option<Kind>,
+    /// Since when, on the app's clock, it has been working without a break, or since the user
+    /// last chose to wait for it.
+    busy_since: Option<f64>,
+    /// Whether the app asks whether to wait for it, or stop it.
+    unresponsive: bool,
     /// The work waiting to be sent: pointer events while it works.
     queued: VecDeque<Work>,
     /// The dialog it waits on (`Dialog.alert`, `confirm`, `prompt`).
@@ -404,6 +411,45 @@ pub(crate) fn stop(app: &mut VectorcraftApp) -> Result<Value, String> {
     Ok(json!({ "stopped": stopped }))
 }
 
+/// Stops the script with id `id`, which may be stuck: unlike [`stop`], its `onStop` isn't called.
+pub(crate) fn stop_script(app: &mut VectorcraftApp, id: u64) {
+    app.scripts.running.retain(|s| s.id != id);
+    if app.scripts.console.as_ref().is_some_and(|s| s.id == id) {
+        app.scripts.console = None;
+    }
+    app.scripts.tidy();
+}
+
+/// Asks whether to wait for a script that has been working for [`NOT_RESPONDING`] seconds, or to
+/// stop it, as browsers ask about a page that hangs, one at a time while no other dialog is open.
+/// The question goes once the script is done; Wait asks again after as long.
+fn not_responding(app: &mut VectorcraftApp, now: f64) {
+    let open = app.ui.dialog.as_ref().filter(|d| d.kind == crate::dialogs::script::NOT_RESPONDING).and_then(|d| d.fields.get("script")?.as_u64());
+    let mut ask = None;
+    for script in app.scripts.running.iter_mut().chain(&mut app.scripts.console) {
+        if script.busy.is_none() || script.asking.is_some() {
+            script.busy_since = None;
+            script.unresponsive = false;
+        } else if script.unresponsive {
+            // Once the question closed, the user chose to wait:
+            if open != Some(script.id) {
+                script.busy_since = Some(now);
+                script.unresponsive = false;
+            }
+        } else if now - *script.busy_since.get_or_insert(now) >= NOT_RESPONDING && ask.is_none() && app.ui.dialog.is_none() {
+            script.unresponsive = true;
+            ask = Some((script.id, script.name.clone()));
+        }
+    }
+    // The script finished, or stopped:
+    if open.is_some_and(|id| !app.scripts.running.iter().chain(&app.scripts.console).any(|s| s.id == id && s.unresponsive)) {
+        app.ui.dialog = None;
+    }
+    if let Some((id, name)) = ask {
+        crate::dialogs::script::open_not_responding(app, id, &name);
+    }
+}
+
 /// Calls the scripts' `handler` ([`vectorcraft_scriptographer::HANDLERS`]), where they define it.
 pub(crate) fn notify(app: &mut VectorcraftApp, handler: &'static str) {
     let mut scripts = std::mem::take(&mut app.scripts.running);
@@ -449,6 +495,8 @@ fn start(app: &VectorcraftApp, name: String, path: Option<PathBuf>, source: Stri
         busy: None,
         queued,
         asking: None,
+        busy_since: None,
+        unresponsive: false,
         palettes: Vec::new(),
         open: false,
         listening: false,
@@ -525,6 +573,7 @@ pub(crate) fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
         }
         app.scripts.console = Some(console);
     }
+    not_responding(app, now);
     if app.scripts.is_running() {
         ctx.request_repaint();
     }

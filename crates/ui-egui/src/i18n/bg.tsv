@@ -5622,5 +5622,8 @@ axis	Y Axis	Y ос
 	The script asks for a file to open.	Скриптът иска файл за отваряне.
 	The script asks where to save a file.	Скриптът пита къде да запише файл.
 	The script asks for a folder.	Скриптът иска папка.
+	“{name}” isn't responding	„{name}“ не отговаря
+	The script hasn't finished its work. You can wait for it, or stop it.	Скриптът не е завършил работата си. Можете да го изчакате или да го спрете.
+	Wait	Изчакване
 	Examples	Примери
 	My Scripts	Моите скриптове

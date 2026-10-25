@@ -5328,5 +5328,8 @@ axis	Y Axis	Вісь Y
 	The script asks for a file to open.	Сценарій просить файл для відкриття.
 	The script asks where to save a file.	Сценарій питає, куди зберегти файл.
 	The script asks for a folder.	Сценарій просить папку.
+	“{name}” isn't responding	«{name}» не відповідає
+	The script hasn't finished its work. You can wait for it, or stop it.	Сценарій ще не завершив роботу. Можна зачекати або зупинити його.
+	Wait	Зачекати
 	Examples	Приклади
 	My Scripts	Мої сценарії

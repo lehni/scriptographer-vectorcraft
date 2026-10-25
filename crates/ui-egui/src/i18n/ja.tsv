@@ -5410,5 +5410,8 @@ axis	Y Axis	Y 軸
 	The script asks for a file to open.	スクリプトが開くファイルを求めています。
 	The script asks where to save a file.	スクリプトがファイルの保存先を尋ねています。
 	The script asks for a folder.	スクリプトがフォルダーを求めています。
+	“{name}” isn't responding	「{name}」が応答していません
+	The script hasn't finished its work. You can wait for it, or stop it.	スクリプトの処理がまだ終わっていません。待つか、停止することができます。
+	Wait	待つ
 	Examples	サンプル
 	My Scripts	マイスクリプト

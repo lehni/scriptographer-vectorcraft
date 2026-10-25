@@ -186,6 +186,8 @@ pub(crate) struct DialogSpec {
     /// button of a dialog with an `ok` reads Reset; Reset (or `ui.dialogReset`) runs this and the
     /// dialog stays open.
     pub reset: Option<fn(&VectorcraftApp, &mut Dialog)>,
+    /// The Cancel button's label. None: "Cancel", or "Close" without an OK button.
+    pub cancel: Option<&'static str>,
     pub min_width: f32,
     pub max_width: Option<f32>,
     /// The body runs a live preview interaction that Cancel rolls back.
@@ -222,6 +224,7 @@ impl DialogSpec {
         discard: None,
         alternate: None,
         reset: None,
+        cancel: None,
         min_width: 320.0,
         max_width: None,
         preview: false,
@@ -294,6 +297,7 @@ registry! {
     Message: [confirm::MESSAGE] => confirm::MESSAGE_SPEC,
     ScriptDialog: [script::KIND] => script::SPEC,
     ScriptFileDialog: [script::FILE_KIND] => script::FILE_SPEC,
+    ScriptNotResponding: [script::NOT_RESPONDING] => script::NOT_RESPONDING_SPEC,
     ScriptographerAbout: [scriptographer_about::KIND] => scriptographer_about::SPEC,
     ScriptFolders: [script_folders::KIND] => script_folders::SPEC,
     NewScriptFolder: [script_folders::NEW_FOLDER] => script_folders::NEW_FOLDER_SPEC,
@@ -396,8 +400,8 @@ registry! {
     ShortcutImport: [shortcut_import::KIND] => DialogSpec::window(shortcut_import::show, shortcut_import::confirm),
 }
 
-/// The button labels the shared dialog frame can show (OK, discard, the fixed Cancel/Close and
-/// Reset), so the catalog tests can insist they are translated.
+/// The button labels the shared dialog frame can show (OK, discard, Cancel, Close and Reset), so
+/// the catalog tests can insist they are translated.
 pub fn button_labels() -> Vec<&'static str> {
     let mut v = vec!["Cancel", "Close"];
     for spec in std::iter::once(&DialogSpec::FORM).chain(DialogKind::ALL.iter().map(|k| k.spec())) {
@@ -405,6 +409,7 @@ pub fn button_labels() -> Vec<&'static str> {
         v.extend(spec.discard);
         v.extend(spec.alternate.map(|(label, _)| label));
         v.extend(spec.reset.map(|_| "Reset"));
+        v.extend(spec.cancel);
     }
     v.sort_unstable();
     v.dedup();
@@ -639,13 +644,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.add_space(8.0);
             // While Alt (Option) is held, Cancel reads Reset on a dialog that has one.
             let resets = spec.ok.is_some() && spec.reset.is_some() && ui.input(|i| i.modifiers.alt);
-            let label = if resets {
-                "Reset"
-            } else if spec.ok.is_some() {
-                "Cancel"
-            } else {
-                "Close"
-            };
+            let label = if resets { "Reset" } else { spec.cancel.unwrap_or(if spec.ok.is_some() { "Cancel" } else { "Close" }) };
             if widgets::secondary_button(ui, label).clicked() {
                 if resets {
                     reset = true;

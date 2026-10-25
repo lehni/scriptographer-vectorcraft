@@ -5314,5 +5314,8 @@ axis	Y Axis	Y-Achse
 	The script asks for a file to open.	Das Skript fragt nach einer Datei zum Öffnen.
 	The script asks where to save a file.	Das Skript fragt, wo es eine Datei sichern soll.
 	The script asks for a folder.	Das Skript fragt nach einem Ordner.
+	“{name}” isn't responding	„{name}“ reagiert nicht
+	The script hasn't finished its work. You can wait for it, or stop it.	Das Skript hat seine Arbeit noch nicht beendet. Sie können darauf warten oder es stoppen.
+	Wait	Warten
 	Examples	Beispiele
 	My Scripts	Meine Skripte

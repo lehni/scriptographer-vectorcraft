@@ -5710,5 +5710,8 @@ theme	Appearance	Оформление
 	The script asks for a file to open.	Сценарий запрашивает файл для открытия.
 	The script asks where to save a file.	Сценарий спрашивает, куда сохранить файл.
 	The script asks for a folder.	Сценарий запрашивает папку.
+	“{name}” isn't responding	«{name}» не отвечает
+	The script hasn't finished its work. You can wait for it, or stop it.	Сценарий ещё не завершил работу. Можно подождать или остановить его.
+	Wait	Подождать
 	Examples	Примеры
 	My Scripts	Мои сценарии

@@ -314,6 +314,46 @@ fn a_script_gets_the_keys_on_its_document() {
     assert_eq!(log(&app).len(), 2, "the panel's keys aren't the document's");
 }
 
+/// A script that works for a while is asked about, as browsers ask about a page that hangs: Wait
+/// asks again later, the question goes once the script is done, and Stop stops a stuck one.
+#[test]
+fn the_app_asks_about_a_script_that_isnt_responding() {
+    use crate::dialogs::script::NOT_RESPONDING;
+    let (mut app, _) = app();
+    let ctx = egui::Context::default();
+    let asks = |app: &VectorcraftApp| app.ui.dialog.as_ref().is_some_and(|d| d.kind == NOT_RESPONDING);
+    // A frame that works for a second, once:
+    let slow = tempfile_path::Path::new(
+        "script.keepAlive = true\nvar done = false\nfunction onFrame() { if (!done) { done = true; var end = Date.now() + 1000; while (Date.now() < end) {} } }",
+    );
+    app.run("ui.runScript", json!({ "path": slow.0.to_string_lossy() })).unwrap();
+    crate::scripts::frame(&mut app, &ctx, 1.0);
+    crate::scripts::frame(&mut app, &ctx, 5.5);
+    assert!(!asks(&app), "not yet");
+    crate::scripts::frame(&mut app, &ctx, 6.5);
+    assert!(asks(&app), "after five seconds");
+    crate::dialogs::cancel(&mut app);
+    crate::scripts::frame(&mut app, &ctx, 7.0);
+    crate::scripts::frame(&mut app, &ctx, 11.0);
+    assert!(!asks(&app), "Wait waits five seconds more");
+    crate::scripts::frame(&mut app, &ctx, 12.5);
+    assert!(asks(&app), "and asks again");
+    for i in 0..30 {
+        crate::scripts::frame(&mut app, &ctx, 13.0 + f64::from(i) * 0.1);
+    }
+    assert!(!asks(&app), "once the script is done, the question goes");
+    assert!(app.scripts.is_running(), "and the script goes on");
+    // A stuck one:
+    let stuck = tempfile_path::Path::new("function onFrame() { for (;;) {} }");
+    app.run("ui.runScript", json!({ "path": stuck.0.to_string_lossy() })).unwrap();
+    crate::scripts::frame(&mut app, &ctx, 20.0);
+    crate::scripts::frame(&mut app, &ctx, 26.0);
+    assert!(asks(&app));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(!asks(&app));
+    assert_eq!(app.scripts.running_paths().len(), 1, "Stop stopped the stuck script only");
+}
+
 /// A script that asks with `Dialog.prompt` waits for the answer while the app goes on, then works
 /// with the values given.
 #[test]

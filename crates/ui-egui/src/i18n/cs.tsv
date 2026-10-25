@@ -5758,5 +5758,8 @@ axis	Y Axis	osa Y
 	The script asks for a file to open.	Skript žádá soubor k otevření.
 	The script asks where to save a file.	Skript se ptá, kam uložit soubor.
 	The script asks for a folder.	Skript žádá složku.
+	“{name}” isn't responding	„{name}“ nereaguje
+	The script hasn't finished its work. You can wait for it, or stop it.	Skript nedokončil svou práci. Můžete na něj počkat, nebo ho zastavit.
+	Wait	Počkat
 	Examples	Příklady
 	My Scripts	Moje skripty

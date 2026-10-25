@@ -5586,5 +5586,8 @@ axis	Y Axis	Oś Y
 	The script asks for a file to open.	Skrypt prosi o plik do otwarcia.
 	The script asks where to save a file.	Skrypt pyta, gdzie zapisać plik.
 	The script asks for a folder.	Skrypt prosi o folder.
+	“{name}” isn't responding	„{name}” nie odpowiada
+	The script hasn't finished its work. You can wait for it, or stop it.	Skrypt nie zakończył pracy. Możesz na niego poczekać albo go zatrzymać.
+	Wait	Czekaj
 	Examples	Przykłady
 	My Scripts	Moje skrypty
