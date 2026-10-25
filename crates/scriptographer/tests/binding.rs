@@ -1178,6 +1178,31 @@ fn copies_take_their_symbols_along_and_host_items_stay<E: Engine>() {
     assert!(matches!(copies.as_slice(), [copy] if matches!(&copy.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Box")), "{copies:?}");
 }
 
+/// A class handler hears every project's switch, the first `activate` of a document's new project
+/// too, which comes before a script can know that project.
+fn every_switch_reaches_the_project_class<E: Engine>() {
+    let (mut s, _, _) = document();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let [first, second] = [0, 1].map(|i| s.documents()[i].uid);
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    let bind = |runtime: &mut Runtime<E>, s: &Session, uid| {
+        let st = s.documents().iter().find(|d| d.uid == uid).unwrap();
+        runtime.bind(&scope, uid, st.doc.clone(), st.selection.clone()).unwrap();
+    };
+    bind(&mut runtime, &s, first);
+    runtime
+        .execute(
+            &scope,
+            "Project.onActivate = function(previous) { console.log('activate', this.index, previous && previous.index) }\n\
+             Project.onDeactivate = function() { console.log('deactivate', this.index) }",
+        )
+        .unwrap();
+    bind(&mut runtime, &s, second);
+    bind(&mut runtime, &s, first);
+    assert_eq!(runtime.take_output(), ["deactivate 0", "activate 1 0", "deactivate 1", "activate 0 1"]);
+}
+
 /// A document that closes takes its project with it; the script goes on with the others.
 fn a_closed_documents_project_goes<E: Engine>() {
     let (mut s, _, _) = document();
@@ -1455,6 +1480,11 @@ macro_rules! engine_tests {
             #[test]
             fn copies_take_their_symbols_along_and_host_items_stay() {
                 super::copies_take_their_symbols_along_and_host_items_stay::<$engine>();
+            }
+
+            #[test]
+            fn every_switch_reaches_the_project_class() {
+                super::every_switch_reaches_the_project_class::<$engine>();
             }
 
             #[test]
