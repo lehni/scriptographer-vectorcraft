@@ -284,6 +284,31 @@ fn writes_text_back_as_one_undo_step<E: Engine>() {
     assert_eq!(s.execute("document.json", &json!({})).unwrap(), before, "one undo step undoes the script");
 }
 
+/// A change to text with a run per character costs in proportion to its runs: eight times the runs
+/// take about eight times as long to write back, not sixty-four. Timed against each other, as the
+/// machine's load varies, with V8, as Boa's own costs would hide it.
+#[cfg(all(feature = "v8", not(target_arch = "wasm32")))]
+#[test]
+fn many_runs_write_back_in_proportion() {
+    type E = vectorcraft_scriptographer::V8;
+    let time = |runs: usize| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "x".repeat(runs), "size": 12})).unwrap()["id"].clone();
+        run::<E>(&mut s, &format!("var t = project.getItemByKey({id})\nfor (var i = 0; i < {runs}; i += 2) t.range(i, i + 1).fillColor = 'red'"));
+        let st = s.active().unwrap();
+        let mut runtime = Runtime::<E>::new().unwrap();
+        let scope = runtime.create_scope(400.0, 300.0).unwrap();
+        runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
+        runtime.execute(&scope, &format!("project.getItemByKey({id}).range(1, 2).fillColor = 'blue'")).unwrap();
+        let start = std::time::Instant::now();
+        assert_eq!(runtime.take_patches().unwrap().len(), 1);
+        start.elapsed().as_secs_f64()
+    };
+    let (few, many) = (time(1000), time(8000));
+    assert!(many < few * 20.0, "{few} s, then {many} s");
+}
+
 fn ranges_style_runs<E: Engine>() {
     let (mut s, _, point, _) = document();
     run::<E>(&mut s, &format!("var range = project.getItemByKey({}).range(0, 5)\n range.fontSize = 40\n range.fillColor = 'red'", point.0));
