@@ -318,3 +318,41 @@ fn the_in_window_edit_menu_acts_on_the_field_it_was_opened_from() {
     menu(&mut a, select, "All");
     assert_eq!(a.selected(), 2);
 }
+
+/// One panel has the keyboard at a time: a click into the Scriptographer panel's tree takes it from
+/// the Artboards panel, a click on an artboard's row takes it back, and Escape gives it to the
+/// canvas, where it also leaves the Artboard tool.
+#[test]
+fn one_panel_has_the_keyboard_at_a_time() {
+    let mut a = App::new();
+    let folder = std::env::temp_dir().join(format!("vectorcraft-keyboard-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    a.app.ui.scriptographer_folders = vec![crate::state::ScriptFolder::new("Keyboard Scripts", folder.to_string_lossy())];
+    a.app.run("artboard.new", json!({"x": 500, "y": 0, "width": 400, "height": 300})).unwrap();
+    for panel in [crate::panels::artboards::ID, crate::panels::scriptographer::ID] {
+        a.app.run("window.panel", json!({ "panel": panel })).unwrap();
+    }
+    // Floating, as two panels of the icon column don't show at once:
+    for (panel, x) in [(crate::panels::artboards::ID, 300), (crate::panels::scriptographer::ID, 700)] {
+        a.app.run("window.panel.float", json!({ "panel": panel, "x": x, "y": 200 })).unwrap();
+    }
+    a.app.select_tool("artboard");
+    a.frame(vec![]);
+    let out = a.frame(vec![]);
+    let (board, scripts) = (text_at(&out, "Artboard 2", false), text_at(&out, "Keyboard Scripts", false));
+    let picked = |a: &App| crate::panels::artboards::picked(&a.app, 2);
+    click_at(&mut a, board);
+    click_at(&mut a, scripts);
+    a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
+    assert_eq!(picked(&a), vec![1], "the Scriptographer panel took the keys from the Artboards panel");
+    assert_eq!(a.selected(), 2);
+    a.app.run("select.none", json!({})).unwrap();
+    click_at(&mut a, board);
+    a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
+    assert_eq!(picked(&a), vec![0, 1], "and the Artboards panel took them back");
+    a.app.run("select.none", json!({})).unwrap();
+    a.frame(vec![press(Key::Escape, Modifiers::NONE)]);
+    assert_eq!(crate::panels::key_panel(&a.app), None, "after Escape, the canvas has them");
+    assert_eq!(a.app.session.tool_id(), "selection", "and Escape left the Artboard tool, as on the canvas");
+    std::fs::remove_dir_all(&folder).unwrap();
+}

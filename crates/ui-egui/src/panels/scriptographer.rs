@@ -95,23 +95,23 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
         });
+        let mut clicked = false;
         let tree = ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
             egui::ScrollArea::vertical().id_salt("scriptographer-tree").auto_shrink([false, false]).show(ui, |ui| {
+                let focused = super::key_panel(app) == Some(ID);
                 let entries = app.scripts.tree(&folders, false);
                 let mut rows = Vec::new();
                 flatten(entries, 0, &open, &mut rows);
                 for (depth, entry) in rows {
                     let state = Row {
                         selected: selected.as_deref() == Some(&entry.path),
-                        focused: app.key_panel == Some(ID),
+                        focused,
                         open: open.contains(&entry.path),
                         running: running.contains(&entry.path),
                         active: active.as_deref() == Some(&entry.path),
                     };
                     let action = row(ui, depth, entry, state);
-                    if action.is_some() {
-                        app.key_panel = Some(ID);
-                    }
+                    clicked |= action.is_some();
                     match action {
                         Some(Action::Select) => selected = Some(entry.path.clone()),
                         Some(Action::Toggle) => {
@@ -125,12 +125,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
         });
-        // A press anywhere else gives the keys back.
-        let rect = tree.response.rect;
-        let pressed_elsewhere = ui.input(|i| i.pointer.any_pressed() && i.pointer.press_origin().is_some_and(|p| !rect.contains(p)));
-        if pressed_elsewhere && app.key_panel == Some(ID) {
-            app.key_panel = None;
-        }
+        super::keyboard_area(app, ui, ID, tree.response.rect, clicked);
     });
     // A script or folder just made is selected, its folders open.
     if let Some(created) = app.scripts.take_created() {
@@ -177,15 +172,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The panel's keys while it has them, since a click into its tree, as the original Scriptographer's: ↑ and ↓
 /// select the row above or below, ← and → close and open the selected folder, Return opens the
 /// selected script in its editor (a folder: opens or closes it) and ⌘E runs it, its own while the
-/// panel has the keys. Escape, or the panel closing, gives them back.
+/// panel has the keys.
 pub(crate) fn keys(app: &mut VectorcraftApp, ctx: &egui::Context) {
     use egui::{Key, Modifiers};
-    if crate::menus::checked(app, "window.panel", &json!({ "panel": ID })) != Some(true)
-        || ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape))
-    {
-        app.key_panel = None;
-        return;
-    }
     let folders = app.ui.scriptographer_folders.clone();
     let mut selected: Option<PathBuf> = pstate(ctx, SELECTED);
     let mut open: BTreeSet<PathBuf> = pstate(ctx, OPEN);

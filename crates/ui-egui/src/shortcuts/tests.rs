@@ -53,10 +53,9 @@ fn rebound_layers_chord_toggles_and_plain_panel_command_reveals() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("window.panel", json!({"panel": "layers"})).unwrap();
-    let ctx = egui::Context::default();
-    run_hit(&mut app, &ctx, &hit);
+    run_hit(&mut app, &hit);
     assert_eq!(crate::menus::checked(&app, "window.panel", &json!({"panel": "layers"})), Some(false));
-    run_hit(&mut app, &ctx, &hit);
+    run_hit(&mut app, &hit);
     assert_eq!(crate::menus::checked(&app, "window.panel", &json!({"panel": "layers"})), Some(true));
     app.run("window.panel", json!({"panel": "layers"})).unwrap();
     assert_eq!(crate::menus::checked(&app, "window.panel", &json!({"panel": "layers"})), Some(true), "a plain command still reveals");
