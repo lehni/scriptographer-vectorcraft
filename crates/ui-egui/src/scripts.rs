@@ -4,9 +4,10 @@
 //! Scripts stops it; the whole run is one undo step while nothing else edits the document in
 //! between. Each script runs on a thread of its own (`vectorcraft_scriptographer::worker`): the app
 //! sends it its work with the document as it is, waits a moment for what it changed, and goes on
-//! when it takes longer. Edits made in the meantime win over the script's. A script runs on the document it started on: it waits while another one is active, and stops
-//! when its document closes. One tool script at a time is the Scriptographer Tool, which works in
-//! every document. A script's dialogs (`Dialog.prompt`…) show as app dialogs while it waits, its
+//! when it takes longer. Edits made in the meantime win over the script's. A script works in every
+//! open document, each one a project of its own and the active one its `project`: it goes on when
+//! another document is active, and when one of its documents closes. One tool script at a time is
+//! the Scriptographer Tool. A script's dialogs (`Dialog.prompt`…) show as app dialogs while it waits, its
 //! palettes (`new Palette`) as floating panels while it runs.
 //!
 //! `ui.runScript {path?}` runs a script (without a path it asks for the file),
@@ -68,6 +69,8 @@ pub struct Scripts {
     focused: bool,
     /// The pointer events for the tool script this frame, and the document they're on.
     pointer: Option<(u64, Vec<Pointer>)>,
+    /// The open documents as of the last frame (`DocState::uid`), to tell the scripts which closed.
+    documents: Vec<u64>,
     /// The scripts folders whose `__init__` scripts ran.
     initialized: Option<Vec<ScriptFolder>>,
     /// The tool script the Scriptographer Tool button stands for: the last one run, until it fails.
@@ -106,12 +109,9 @@ pub enum EntryKind {
     },
 }
 
-/// The tool script, global as the Scriptographer Tool is: as PaperScript fixes a script's `project`
-/// when it runs, it runs once in each document, the first time the tool is used there.
-#[derive(Clone)]
+/// The tool script, as the Scriptographer Tool stands for it while it runs.
 struct ToolScript {
     path: PathBuf,
-    source: String,
     /// Whether its tool handles keys: the keys typed on the canvas are then its own.
     keys: bool,
 }
@@ -124,18 +124,13 @@ struct Running {
     name: String,
     /// The file it runs, if any (not for the console).
     path: Option<PathBuf>,
-    /// What it runs (empty for the console).
-    source: String,
     worker: Worker,
-    /// The document it runs on (`DocState::uid`). It waits while another document is active, and
-    /// stops when its document closes.
-    doc: u64,
     /// The app's clock when it started, in seconds.
     started: f64,
-    /// The document after the script's last change: while it is still the document, the next
-    /// change adds to the same undo step.
-    last: Option<Arc<Document>>,
-    /// Whether the script made a tool: it then stays loaded, to be the active tool in its document.
+    /// Each document after the script's last change in it (`DocState::uid`): while it is still the
+    /// document, the next change there adds to the same undo step.
+    last: Vec<(u64, Arc<Document>)>,
+    /// Whether the script made a tool: it then keeps running, as the Scriptographer Tool's.
     tool: bool,
     /// Whether it has timers left (`onFrame`, intervals), as its last work said.
     timers: bool,
@@ -215,13 +210,15 @@ impl Scripts {
         }
     }
 
-    /// Unloads the tool scripts the Scriptographer Tool no longer stands for, from every document.
+    /// Unloads the tool scripts the Scriptographer Tool no longer stands for, and lets the tool go
+    /// when its script stopped.
     fn tidy(&mut self) {
-        if self.tool.is_none() {
-            self.tool_active = false;
-        }
         let tool = self.tool.as_ref().map(|t| t.path.clone());
         self.running.retain(|s| !s.tool || s.path == tool);
+        if !self.running.iter().any(|s| s.tool) {
+            self.tool = None;
+            self.tool_active = false;
+        }
     }
 
     /// Makes the app's own tools active again: the canvas no longer sends pointer events to the
@@ -377,9 +374,7 @@ pub(crate) fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
 /// `ui.evaluateScript {code}`: run `code` in the console's project, made on the first line.
 pub(crate) fn evaluate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let code = p.get("code").and_then(Value::as_str).ok_or("missing code")?.to_owned();
-    // The console's project is on the active document: a new one for another document.
-    let active = app.session.doc().map_err(|e| e.to_string())?.uid;
-    let mut console = match app.scripts.console.take().filter(|c| c.doc == active) {
+    let mut console = match app.scripts.console.take() {
         Some(console) => console,
         None => start(app, "Console".into(), None, String::new())?,
     };
@@ -411,11 +406,7 @@ pub(crate) fn stop(app: &mut VectorcraftApp) -> Result<Value, String> {
 pub(crate) fn notify(app: &mut VectorcraftApp, handler: &'static str) {
     let mut scripts = std::mem::take(&mut app.scripts.running);
     scripts.extend(app.scripts.console.take());
-    // A script whose document closed goes in the next frame, unheard.
     for script in &mut scripts {
-        if !is_open(app, script.doc) {
-            continue;
-        }
         script.queued.push_back(Work::Handler(handler));
         if let Err(e) = pump(app, script, None, FRAME_WAIT) {
             report(app, &script.name, &e);
@@ -429,7 +420,7 @@ pub(crate) fn notify(app: &mut VectorcraftApp, handler: &'static str) {
     app.scripts.running = scripts;
 }
 
-/// A script's thread, on the active document, to run `source` (queued, as the first work).
+/// A script's thread, to run `source` (queued, as the first work).
 fn start(app: &VectorcraftApp, name: String, path: Option<PathBuf>, source: String) -> Result<Running, String> {
     let state = app.session.doc().map_err(|e| e.to_string())?;
     let size = state.doc.artboards.first().map_or((800.0, 600.0), |a| (a.rect.width(), a.rect.height()));
@@ -441,18 +432,16 @@ fn start(app: &VectorcraftApp, name: String, path: Option<PathBuf>, source: Stri
         language: Some(app.ui_language().code().to_owned()),
     };
     let worker = Worker::spawn(size, setup).map_err(|e| e.to_string())?;
-    let queued = if source.is_empty() { VecDeque::new() } else { VecDeque::from([Work::Execute(source.clone())]) };
+    let queued = if source.is_empty() { VecDeque::new() } else { VecDeque::from([Work::Execute(source)]) };
     static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     Ok(Running {
         id,
         name,
         path,
-        source,
         worker,
-        doc: state.uid,
         started: app.last_time,
-        last: None,
+        last: Vec::new(),
         tool: false,
         timers: false,
         busy: None,
@@ -498,24 +487,21 @@ pub(crate) fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
         }
         notify(app, "onStartup");
     }
+    // The scripts let go of the documents that closed:
+    let documents: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
+    for uid in app.scripts.documents.iter().filter(|uid| !documents.contains(uid)) {
+        for script in app.scripts.running.iter().chain(&app.scripts.console) {
+            script.worker.send(Request::Closed(*uid));
+        }
+    }
+    app.scripts.documents = documents;
     if app.scripts.running.is_empty() && app.scripts.console.is_none() {
         return;
     }
     clipboard(app, ctx);
     dialogs(app);
     let mut scripts = std::mem::take(&mut app.scripts.running);
-    let active = app.session.active().map(|d| d.uid);
     scripts.retain_mut(|script| {
-        if !is_open(app, script.doc) {
-            // The tool script stays the Scriptographer Tool's, for the other documents.
-            if !script.tool {
-                app.scripts.push_log(format!("{} stopped: its document closed", script.name), false);
-            }
-            return false;
-        }
-        if active != Some(script.doc) {
-            return true;
-        }
         let keeps = pump(app, script, Some((now - script.started) * 1000.0), FRAME_WAIT).unwrap_or_else(|e| {
             report(app, &script.name, &e);
             false
@@ -531,12 +517,10 @@ pub(crate) fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
     app.scripts.tidy();
     if let Some(mut console) = app.scripts.console.take() {
         let ms = (now - console.started) * 1000.0;
-        if active == Some(console.doc)
-            && let Err(e) = pump(app, &mut console, Some(ms), FRAME_WAIT)
-        {
+        if let Err(e) = pump(app, &mut console, Some(ms), FRAME_WAIT) {
             report(app, &console.name, &e);
         }
-        app.scripts.console = Some(console).filter(|c| is_open(app, c.doc));
+        app.scripts.console = Some(console);
     }
     if app.scripts.is_running() {
         ctx.request_repaint();
@@ -549,8 +533,8 @@ pub(crate) fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
 /// Returns whether the script keeps running, or the error of the work that failed.
 fn pump(app: &mut VectorcraftApp, script: &mut Running, mut frame: Option<f64>, wait: Duration) -> Result<bool, String> {
     loop {
-        // Waiting on a dialog: nothing else until it's answered.
-        if script.asking.is_some() {
+        // Waiting on a dialog, or for a document to work in: nothing else until then.
+        if script.asking.is_some() || app.session.active().is_none() {
             return Ok(true);
         }
         if script.busy.is_none() {
@@ -581,7 +565,7 @@ fn pump(app: &mut VectorcraftApp, script: &mut Running, mut frame: Option<f64>, 
             // tool.
             script.tool = true;
             if app.scripts.tool().is_none_or(|t| t != path) {
-                app.scripts.tool = Some(ToolScript { path, source: script.source.clone(), keys });
+                app.scripts.tool = Some(ToolScript { path, keys });
                 app.scripts.tool_active = true;
                 script.queued.push_back(Work::Activate(true));
             }
@@ -591,9 +575,9 @@ fn pump(app: &mut VectorcraftApp, script: &mut Running, mut frame: Option<f64>, 
 
 /// Sends `work` to the script with the active document.
 fn send(app: &mut VectorcraftApp, script: &mut Running, work: Work) -> Result<(), String> {
-    let index = app.session.documents().iter().position(|d| d.uid == script.doc).ok_or("the script's document is closed")?;
-    let state = app.session.documents().get(index).ok_or("the script's document is closed")?;
-    let (doc, selection) = (state.doc.clone(), state.selection.clone());
+    let index = app.session.active_index().ok_or("no document is open")?;
+    let state = app.session.documents().get(index).ok_or("no document is open")?;
+    let (uid, doc, selection) = (state.uid, state.doc.clone(), state.selection.clone());
     // The document's view has its active artboard, the script's `project.activeArtboard`.
     let artboard = app.views.get(index).map_or(0, |v| v.artboard);
     script.busy = Some(match &work {
@@ -608,7 +592,7 @@ fn send(app: &mut VectorcraftApp, script: &mut Running, work: Work) -> Result<()
         Work::Mouse(events) => {
             if events.iter().any(|(event, ..)| *event == MouseEvent::Down) {
                 // A drag starts its own undo step.
-                script.last = None;
+                script.last.clear();
             }
             Kind::Mouse
         }
@@ -616,7 +600,7 @@ fn send(app: &mut VectorcraftApp, script: &mut Running, work: Work) -> Result<()
     let paint = &app.session.paint;
     let text = app.session.new_type_style();
     let style = vectorcraft_scriptographer::host::current_style(&paint.fill, &paint.stroke, paint.stroke_width, &text.fill);
-    script.worker.send(Request::Run { uid: script.doc, doc, selection, artboard, style, work });
+    script.worker.send(Request::Run { uid, doc, selection, artboard, style, work });
     Ok(())
 }
 
@@ -633,8 +617,8 @@ fn settle(app: &mut VectorcraftApp, script: &mut Running, wait: Duration) -> Opt
     let mut failed = None;
     while let Some(reply) = script.worker.recv(wait) {
         match reply {
-            Reply::Changes { patch, base, before, selected, effects, .. } => {
-                if let Err(e) = write_back(app, script, patch, base, &before, &selected, effects) {
+            Reply::Changes { uid, patch, base, before, selected, effects } => {
+                if let Err(e) = write_back(app, script, uid, patch, base, &before, &selected, effects) {
                     failed.get_or_insert(e);
                 }
             }
@@ -940,11 +924,6 @@ fn file_name(path: &Path) -> String {
     path.file_name().unwrap_or(path.as_os_str()).to_string_lossy().into_owned()
 }
 
-/// Whether the document `uid` is still open.
-fn is_open(app: &VectorcraftApp, uid: u64) -> bool {
-    app.session.documents().iter().any(|d| d.uid == uid)
-}
-
 /// Sends a pointer event on the canvas to the active tool script. Returns whether there is one,
 /// which then has the event instead of the app's tool. Each drag is one undo step.
 pub(crate) fn pointer(app: &mut VectorcraftApp, ev: &vectorcraft_tools::PointerEvent) -> bool {
@@ -975,7 +954,7 @@ pub(crate) fn pointer(app: &mut VectorcraftApp, ev: &vectorcraft_tools::PointerE
 /// ([`crate::canvas::PointerTimes`]); else they came in over the `dt` seconds before the frame's
 /// time `now`, and get times spread evenly over them, the last one `now`.
 pub(crate) fn flush_pointer(app: &mut VectorcraftApp, now: f64, dt: f64) {
-    if let Some((doc, mut events)) = app.scripts.pointer.take() {
+    if let Some((_, mut events)) = app.scripts.pointer.take() {
         // A stalled frame counts a tenth of a second at most.
         let (dt, count) = (dt.clamp(0.0, 0.1), events.len() as f64);
         for (i, event) in events.iter_mut().enumerate() {
@@ -992,7 +971,7 @@ pub(crate) fn flush_pointer(app: &mut VectorcraftApp, now: f64, dt: f64) {
                 }
             }
         }
-        to_tool(app, doc, [Work::Mouse(events)]);
+        to_tool(app, [Work::Mouse(events)]);
     }
 }
 
@@ -1000,10 +979,9 @@ pub(crate) fn flush_pointer(app: &mut VectorcraftApp, now: f64, dt: f64) {
 /// with Shift or not. Keys with Cmd, Ctrl or Alt stay the app's shortcuts, and so do Space (the
 /// Hand tool) and Escape. The keys it gets are taken out of the frame's input.
 pub(crate) fn keys(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let handles = app.scripts.tool.as_ref().is_some_and(|t| t.keys) && app.scripts.active_tool().is_some();
-    let Some(active) = app.session.active().map(|d| d.uid).filter(|_| handles) else {
+    if !(app.scripts.tool.as_ref().is_some_and(|t| t.keys) && app.scripts.active_tool().is_some() && app.session.active().is_some()) {
         return;
-    };
+    }
     let work = ctx.input_mut(|i| {
         let mut work = Vec::new();
         i.events.retain(|e| match e {
@@ -1019,7 +997,7 @@ pub(crate) fn keys(app: &mut VectorcraftApp, ctx: &egui::Context) {
         work
     });
     if !work.is_empty() {
-        to_tool(app, active, work);
+        to_tool(app, work);
     }
 }
 
@@ -1050,24 +1028,12 @@ fn paper_key(key: egui::Key, shift: bool) -> (String, Option<String>) {
     (name, character)
 }
 
-/// Sends `work` to the tool script in document `active`, running it there first for the tool's
-/// first use in that document.
-fn to_tool(app: &mut VectorcraftApp, active: u64, work: impl IntoIterator<Item = Work>) {
-    let script = match app.scripts.running.iter().position(|s| s.tool && s.doc == active) {
-        Some(index) => Ok(app.scripts.running.remove(index)),
-        None => match app.scripts.tool.clone() {
-            Some(tool) => load_tool(app, tool),
-            None => return,
-        },
+/// Sends `work` to the tool script.
+fn to_tool(app: &mut VectorcraftApp, work: impl IntoIterator<Item = Work>) {
+    let Some(index) = app.scripts.running.iter().position(|s| s.tool) else {
+        return;
     };
-    let mut script = match script {
-        Ok(script) => script,
-        Err(e) => {
-            app.status(e);
-            app.scripts.tool = None;
-            return;
-        }
-    };
+    let mut script = app.scripts.running.remove(index);
     // Pointer events go by the script's clock, in seconds since it started, as its frames do.
     script.queued.extend(work.into_iter().map(|work| match work {
         Work::Mouse(mut events) => {
@@ -1080,21 +1046,9 @@ fn to_tool(app: &mut VectorcraftApp, active: u64, work: impl IntoIterator<Item =
     }));
     match pump(app, &mut script, None, FRAME_WAIT) {
         Ok(_) => app.scripts.running.push(script),
-        Err(e) => {
-            report(app, &script.name, &e);
-            app.scripts.tool = None;
-        }
+        Err(e) => report(app, &script.name, &e),
     }
     app.scripts.tidy();
-}
-
-/// The tool script, to run in the active document for the tool's first use there.
-fn load_tool(app: &mut VectorcraftApp, ToolScript { path, source, .. }: ToolScript) -> Result<Running, String> {
-    let mut script = start(app, file_name(&path), Some(path), source)?;
-    script.tool = true;
-    // The tool is the active tool: in this document too.
-    script.queued.push_back(Work::Activate(true));
-    Ok(script)
 }
 
 /// The canvas cursor while the Scriptographer Tool is the active tool, as Scriptographer's tool had it:
@@ -1133,11 +1087,8 @@ pub(crate) fn tool_button(app: &mut VectorcraftApp, ui: &mut egui::Ui, center_x:
         if resp.clicked() && assigned.is_some() {
             app.scripts.select_tool();
         }
-        if resp.double_clicked()
-            && assigned.is_some()
-            && let Some(active) = app.session.active().map(|d| d.uid)
-        {
-            to_tool(app, active, [Work::Handler("onEditOptions")]);
+        if resp.double_clicked() && assigned.is_some() {
+            to_tool(app, [Work::Handler("onEditOptions")]);
         }
     });
 }
@@ -1160,22 +1111,32 @@ fn show_console(app: &mut VectorcraftApp) {
     }
 }
 
-/// Applies a script's `patch` of `base`, adding to its undo step while nothing else changed the
-/// document since its last change, and leaving out what changed since `base` when it is behind;
-/// then the objects it selected or deselected since `before`. The worker gets the patch's result.
+/// Applies a script's `patch` of `base` to the document `uid`, adding to its undo step while
+/// nothing else changed the document since its last change there, and leaving out what changed
+/// since `base` when it is behind; then the objects it selected or deselected since `before`. The
+/// worker gets the patch's result.
+#[allow(clippy::too_many_arguments)]
 fn write_back(
     app: &mut VectorcraftApp,
     script: &mut Running,
+    uid: u64,
     patch: Option<Value>,
     base: Arc<Document>,
     before: &BTreeSet<NodeId>,
     selected: &BTreeSet<NodeId>,
     effects: bool,
 ) -> Result<(), String> {
+    let document = |app: &VectorcraftApp| app.session.documents().iter().find(|d| d.uid == uid).map(|d| (d.doc.clone(), d.selection.clone()));
+    let Some((current, _)) = document(app) else {
+        // Its document closed meanwhile, and the script let go of it.
+        if patch.is_some() {
+            script.worker.send(Request::Applied { result: json!({}), doc: base, selection: Default::default(), behind: true });
+        }
+        return Ok(());
+    };
     if let Some(mut params) = patch {
-        let current = app.session.doc().map_err(|e| e.to_string())?.doc.clone();
         let behind = !Arc::ptr_eq(&base, &current);
-        let is_last = script.last.as_ref().is_some_and(|last| Arc::ptr_eq(last, &current));
+        let is_last = script.last.iter().any(|(other, last)| *other == uid && Arc::ptr_eq(last, &current));
         if let Some(params) = params.as_object_mut() {
             if behind {
                 params.insert("keep".into(), vectorcraft_engine::cmd::patch::changes_between(&base, &current));
@@ -1186,11 +1147,13 @@ fn write_back(
                 params.insert("extend".into(), json!(true));
             }
         }
-        let applied = app.run("document.patch", params);
-        let state = app.session.doc().map_err(|e| e.to_string())?;
-        let (doc, selection) = (state.doc.clone(), state.selection.clone());
+        let applied = run_in(app, uid, "document.patch", params);
+        let (doc, selection) = document(app).ok_or("the script's document closed")?;
         // Drawing its effects into another's edit doesn't make that edit the script's.
-        script.last = (!effects || is_last).then(|| doc.clone());
+        script.last.retain(|(other, _)| *other != uid);
+        if !effects || is_last {
+            script.last.push((uid, doc.clone()));
+        }
         // A patch that failed changed nothing: the script reloads all that changed since `base`.
         let (result, behind) = match &applied {
             Ok(result) => (result.clone(), behind),
@@ -1200,12 +1163,22 @@ fn write_back(
         applied?;
     }
     if selected != before {
-        let state = app.session.doc().map_err(|e| e.to_string())?;
-        let mut ids: Vec<NodeId> = state.selection.objects.iter().copied().filter(|id| !before.contains(id) || selected.contains(id)).collect();
+        let (_, selection) = document(app).ok_or("the script's document closed")?;
+        let mut ids: Vec<NodeId> = selection.objects.iter().copied().filter(|id| !before.contains(id) || selected.contains(id)).collect();
         ids.extend(selected.iter().filter(|id| !before.contains(id)));
-        app.run("select.set", json!({ "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>() }))?;
+        run_in(app, uid, "select.set", json!({ "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>() }))?;
     }
     Ok(())
+}
+
+/// Runs the command `id` in the document `uid`: as the app runs it in the active document, and in
+/// another one behind it.
+fn run_in(app: &mut VectorcraftApp, uid: u64, id: &str, params: Value) -> Result<Value, String> {
+    if app.session.active().is_some_and(|d| d.uid == uid) {
+        app.run(id, params)
+    } else {
+        app.session.execute_in(uid, id, &params).map_err(|e| e.to_string())
+    }
 }
 
 /// Puts what a script printed in the log, which shows, and its last line in the status bar.

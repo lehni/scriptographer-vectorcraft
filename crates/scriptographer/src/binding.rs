@@ -295,7 +295,10 @@ impl<E: Engine> Runtime<E> {
     pub fn apply_ids(&mut self, patch: Patch<E::Handle>, result: &Json, doc: Arc<Document>, selection: Selection, behind: bool) -> Result<(), Error> {
         let mut reload = Columns::default();
         let mut host = self.host.borrow_mut();
-        let bound = host.binding.get_mut(patch.uid).ok_or_else(|| Error::Script(format!("document {} is not bound", patch.uid)))?;
+        // A document that closed meanwhile takes nothing:
+        let Some(bound) = host.binding.get_mut(patch.uid) else {
+            return Ok(());
+        };
         if behind {
             reload = Columns::of_changes(&bound.doc, &bound.selection, &doc, &selection);
             for key in &patch.created {

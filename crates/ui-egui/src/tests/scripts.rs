@@ -172,48 +172,62 @@ fn a_tool_script_replaces_the_previous_one() {
     assert_eq!(app.scripts.tool(), Some(second.0.as_path()));
 }
 
-/// A script runs on the document it started on: it waits while another document is active, and
-/// stops when its document closes.
+/// A script works in every open document: its animation goes on in its own document while another
+/// one is active, and when another one closes. Its `onFrame` is its view's, Paper.js's, which goes
+/// with its document: then the script ends.
 #[test]
-fn scripts_stop_when_their_document_closes() {
+fn scripts_go_on_in_every_document() {
     let (mut app, id, _path) = running();
     let ctx = egui::Context::default();
+    let first = app.session.doc().unwrap().uid;
+    let moved = |app: &VectorcraftApp| {
+        let doc = &app.session.documents().iter().find(|d| d.uid == first).unwrap().doc;
+        doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().x0
+    };
     app.run("file.new", json!({})).unwrap();
     crate::scripts::frame(&mut app, &ctx, 1.0);
-    assert_eq!(children(&app), 0, "the script doesn't reach the other document");
+    assert_eq!(moved(&app), 20.0, "it moves its object while another document is active");
+    assert_eq!(children(&app), 0, "which stays in its document");
+    assert!(app.session.doc().unwrap().history.undo.is_empty(), "as does its undo step");
     app.run("file.close", json!({})).unwrap();
     crate::scripts::frame(&mut app, &ctx, 2.0);
-    assert_eq!(left(&app, id), 20.0, "back on its document, it goes on");
+    assert_eq!(left(&app, id), 30.0, "and goes on when the other one closes");
     // Closed with Don't Save.
     app.run("file.close", json!({})).unwrap();
     app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
     crate::dialogs::confirm(&mut app).unwrap();
+    app.run("file.new", json!({})).unwrap();
     crate::scripts::frame(&mut app, &ctx, 3.0);
-    assert!(app.scripts.running_paths().is_empty(), "it stopped with its document");
+    assert!(app.scripts.running_paths().is_empty(), "it ended with its document's view");
     assert!(app.scripts.log().iter().all(|l| !l.error), "without errors");
 }
 
-/// The Scriptographer Tool is global: it draws in whichever document is active, and stays when a
-/// document closes.
+/// A tool script that draws a circle when it runs, and one where the mouse goes down.
+const DRAWING_TOOL: &str = "new Path.Circle({ center: [0, 0], radius: 5 })\n\
+    function onMouseDown(event) { new Path.Circle({ center: event.point, radius: 5 }) }";
+
+/// The Scriptographer Tool is global: its script runs once, and draws in whichever document is
+/// active. It stays when a document closes.
 #[test]
 fn the_tool_works_in_every_document() {
     let (mut app, _) = app();
-    let tool = tempfile_path::Path::new(TOOL);
+    let tool = tempfile_path::Path::new(DRAWING_TOOL);
     app.run("ui.runScript", json!({ "path": tool.0.to_string_lossy() })).unwrap();
+    assert_eq!(children(&app), 2, "the rectangle, and the circle it drew when it ran");
     app.run("file.new", json!({})).unwrap();
     let ctx = egui::Context::default();
     for _ in 0..2 {
         assert!(pointer(&mut app, vectorcraft_tools::PointerKind::Down, 50.0));
         pointer(&mut app, vectorcraft_tools::PointerKind::Up, 50.0);
     }
-    assert_eq!(children(&app), 2, "it draws in the other document, run there once");
+    assert_eq!(children(&app), 2, "it draws in the other document, without running again there");
     app.run("file.close", json!({})).unwrap();
     app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
     crate::dialogs::confirm(&mut app).unwrap();
     crate::scripts::frame(&mut app, &ctx, 1.0);
     assert_eq!(app.scripts.tool(), Some(tool.0.as_path()), "it stays the Scriptographer Tool's");
     assert!(pointer(&mut app, vectorcraft_tools::PointerKind::Down, 50.0));
-    assert_eq!(children(&app), 2, "and draws in the first document");
+    assert_eq!(children(&app), 3, "and draws in the first document");
     assert!(app.scripts.log().iter().all(|l| !l.error));
 }
 
