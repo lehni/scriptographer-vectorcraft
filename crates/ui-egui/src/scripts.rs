@@ -147,8 +147,14 @@ struct Running {
     last: Vec<(u64, Arc<Document>)>,
     /// Whether the script made a tool: it then keeps running, as the Scriptographer Tool's.
     tool: bool,
-    /// Whether it has timers left (`onFrame`, intervals), as its last work said.
-    timers: bool,
+    /// When it next needs a frame, as its last work said: when its next timer is due (`onFrame`,
+    /// intervals), in milliseconds on its clock.
+    wake: Option<f64>,
+    /// Whether it defines effects, as its last work said: they draw in a frame once the document
+    /// changed.
+    effects: bool,
+    /// The document as the script last had it.
+    seen: Option<Arc<Document>>,
     /// The work it was sent and hasn't finished.
     busy: Option<Kind>,
     /// Since when, on the app's clock, it has been working without a break, or since the user
@@ -206,9 +212,20 @@ enum Kind {
 }
 
 impl Scripts {
-    /// Whether a script has timers left or is working (not waiting on a dialog).
+    /// Whether a script has timers or effects, or is working (not waiting on a dialog).
+    #[cfg(test)]
     pub fn is_running(&self) -> bool {
-        self.running.iter().chain(&self.console).any(|s| s.timers || (s.busy.is_some() && s.asking.is_none()))
+        self.running.iter().chain(&self.console).any(|s| s.wake.is_some() || s.effects || (s.busy.is_some() && s.asking.is_none()))
+    }
+
+    /// How long until a script needs a frame, in seconds from `now` on the app's clock: none while
+    /// one works (not waiting on a dialog), whose replies each frame takes, else until its next
+    /// timer is due.
+    fn next_frame(&self, now: f64) -> Option<f64> {
+        let wait = |s: &Running| {
+            if s.busy.is_some() && s.asking.is_none() { Some(0.0) } else { s.wake.map(|wake| (s.started + wake / 1000.0 - now).max(0.0)) }
+        };
+        self.running.iter().chain(&self.console).filter_map(wait).reduce(f64::min)
     }
 
     /// The tool script the Scriptographer Tool button stands for.
@@ -389,7 +406,7 @@ pub(crate) fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
     let mut script = start(app, file_name(&path), Some(path), source)?;
     let result = execute(app, &mut script, RUN_WAIT);
     let changed = !Arc::ptr_eq(&before, &app.session.doc().map_err(|e| e.to_string())?.doc);
-    let (working, running, tool) = (script.busy.is_some(), script.timers, script.tool);
+    let (working, running, tool) = (script.busy.is_some(), script.wake.is_some() || script.effects, script.tool);
     if result == Ok(true) {
         app.scripts.running.push(script);
     }
@@ -517,7 +534,9 @@ fn start(app: &VectorcraftApp, name: String, path: Option<PathBuf>, source: Stri
         started: app.last_time,
         last: Vec::new(),
         tool: false,
-        timers: false,
+        wake: None,
+        effects: false,
+        seen: None,
         busy: None,
         queued,
         asking: None,
@@ -603,17 +622,21 @@ pub(crate) fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
         app.scripts.console = Some(console);
     }
     not_responding(app, now);
-    if app.scripts.is_running() || !app.scripts.held.is_empty() {
-        ctx.request_repaint();
+    // Held keys wait for the scripts' answers, which each frame takes.
+    let wait = if app.scripts.held.is_empty() { app.scripts.next_frame(now) } else { Some(0.0) };
+    if let Some(wait) = wait {
+        ctx.request_repaint_after(Duration::from_secs_f64(wait));
     }
 }
 
 /// Sends the script its queued work, then its frame at `frame` (milliseconds since it started)
-/// when it has timers, one at a time, each with the document as it is, and applies what each one
-/// changed. Waits for its work until `until`, but not for work that already outlasted an earlier
-/// frame: a script still working then goes on in a later frame. Returns whether the script keeps
-/// running, or the error of the work that failed.
+/// when its next timer is due, or its effects have a document to catch up with, one at a time,
+/// each with the document as it is, and applies what each one changed. Waits for its work until
+/// `until`, but not for work that already outlasted an earlier frame: a script still working then
+/// goes on in a later frame. Returns whether the script keeps running, or the error of the work
+/// that failed.
 fn pump(app: &mut VectorcraftApp, script: &mut Running, mut frame: Option<f64>, until: Instant) -> Result<bool, String> {
+    let now = frame.unwrap_or((app.last_time - script.started) * 1000.0);
     let mut sent = false;
     loop {
         // Waiting on a dialog, or for a document to work in: nothing else until then.
@@ -625,11 +648,11 @@ fn pump(app: &mut VectorcraftApp, script: &mut Running, mut frame: Option<f64>, 
                 Some(work) => work,
                 None => match frame.take() {
                     // On the web, its Promise continuations change its project after its work.
-                    Some(now) if script.timers || script.worker.has_changes() => Work::Frame(now),
-                    _ => return Ok(script.timers || script.tool || script.open || script.listening),
+                    Some(_) if script.wake.is_some_and(|wake| wake <= now) || is_behind(app, script) || script.worker.has_changes() => Work::Frame,
+                    _ => return Ok(script.wake.is_some() || script.effects || script.tool || script.open || script.listening),
                 },
             };
-            send(app, script, work)?;
+            send(app, script, now, work)?;
             sent = true;
         }
         let Some(kind) = script.busy else {
@@ -659,8 +682,13 @@ fn pump(app: &mut VectorcraftApp, script: &mut Running, mut frame: Option<f64>, 
     }
 }
 
-/// Sends `work` to the script with the active document.
-fn send(app: &mut VectorcraftApp, script: &mut Running, work: Work) -> Result<(), String> {
+/// Whether the script has effects that haven't seen the active document yet.
+fn is_behind(app: &VectorcraftApp, script: &Running) -> bool {
+    script.effects && app.session.active().is_some_and(|d| !script.seen.as_ref().is_some_and(|seen| Arc::ptr_eq(seen, &d.doc)))
+}
+
+/// Sends `work` to the script at `now` (milliseconds since it started), with the active document.
+fn send(app: &mut VectorcraftApp, script: &mut Running, now: f64, work: Work) -> Result<(), String> {
     let index = app.session.active_index().ok_or("no document is open")?;
     let state = app.session.documents().get(index).ok_or("no document is open")?;
     let (uid, doc, selection) = (state.uid, state.doc.clone(), state.selection.clone());
@@ -668,7 +696,7 @@ fn send(app: &mut VectorcraftApp, script: &mut Running, work: Work) -> Result<()
     let artboard = app.views.get(index).map_or(0, |v| v.artboard);
     script.busy = Some(match &work {
         Work::Execute(_) => Kind::Execute,
-        Work::Frame(_) => Kind::Frame,
+        Work::Frame => Kind::Frame,
         Work::Key(..) | Work::DocumentKey(_) => Kind::Key,
         Work::Palette(..) => Kind::Palette,
         Work::Activate(_) => Kind::Activate,
@@ -686,7 +714,8 @@ fn send(app: &mut VectorcraftApp, script: &mut Running, work: Work) -> Result<()
     let paint = &app.session.paint;
     let text = app.session.new_type_style();
     let style = vectorcraft_scriptographer::host::current_style(&paint.fill, &paint.stroke, paint.stroke_width, &text.fill);
-    script.worker.send(Request::Run { uid, doc, selection, artboard, style, work });
+    script.seen = Some(doc.clone());
+    script.worker.send(Request::Run { uid, doc, selection, artboard, style, now, work });
     Ok(())
 }
 
@@ -715,10 +744,11 @@ fn settle(app: &mut VectorcraftApp, script: &mut Running, until: Instant) -> Opt
                 #[cfg(not(target_arch = "wasm32"))]
                 return None;
             }
-            Reply::Done { output, error, running, tool, keys, palettes, open, listening, keep_alive } => {
+            Reply::Done { output, error, wake, effects, tool, keys, palettes, open, listening, keep_alive } => {
                 show_output(app, output);
                 script.busy = None;
-                script.timers = running;
+                script.wake = wake;
+                script.effects = effects;
                 script.open = open;
                 script.listening = listening;
                 script.keep_alive = keep_alive;
@@ -1367,6 +1397,7 @@ fn write_back(
             Ok(result) => (result.clone(), behind),
             Err(_) => (json!({}), true),
         };
+        script.seen = Some(doc.clone());
         script.worker.send(Request::Applied { result, doc, selection, behind });
         applied?;
     }

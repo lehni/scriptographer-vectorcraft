@@ -19,8 +19,9 @@ use crate::{Engine, Error, Key, Modifiers, MouseEvent, PaletteEvent, Patch, Plat
 /// What the app asks a worker to do.
 pub enum Request {
     /// Make the document `uid` the active one, and catch up with it, its active artboard and the
-    /// style new art takes in the app (as [`crate::host::current_style`] makes it), then do `work`.
-    Run { uid: u64, doc: Arc<Document>, selection: Selection, artboard: usize, style: Json, work: Work },
+    /// style new art takes in the app (as [`crate::host::current_style`] makes it), then do `work`
+    /// at `now`, in milliseconds since the script started.
+    Run { uid: u64, doc: Arc<Document>, selection: Selection, artboard: usize, style: Json, now: f64, work: Work },
     /// The answer to [`Reply::Changes`]: `document.patch`'s result, and the document after it.
     /// `behind` when the document had changed in other ways since the patch's base.
     Applied { result: Json, doc: Arc<Document>, selection: Selection, behind: bool },
@@ -37,9 +38,8 @@ pub type Pointer = (MouseEvent, (f64, f64), Modifiers, f64);
 pub enum Work {
     /// Runs PaperScript.
     Execute(String),
-    /// Runs the timers due at `now`, in milliseconds since the script started: its `onFrame` and
-    /// intervals.
-    Frame(f64),
+    /// Runs the timers due: its `onFrame` and intervals.
+    Frame,
     /// Pointer events for the script's tool: a frame's, in one go.
     Mouse(Vec<Pointer>),
     /// A key going down (`true`) or up for the script's tool: its name as Paper.js has it, and the
@@ -78,15 +78,17 @@ pub enum Reply {
     /// The script's answer to a [`Work::DocumentKey`], before its `Done`: whether a listener
     /// prevented the key's default (`false` when one threw).
     Key { prevented: bool },
-    /// The work is done: what the script printed, its error if it threw, whether it has timers
-    /// left, whether it made a tool, whether that tool handles keys, the palettes that are new or
-    /// changed (as [`crate::Runtime::take_palettes`] has them), whether it has palettes open,
-    /// whether it listens for keys on its `document` or `window`, and whether it set
-    /// `script.keepAlive`.
+    /// The work is done: what the script printed, its error if it threw, when it next needs a
+    /// [`Work::Frame`] ([`crate::Runtime::next_turn`]), whether it defines effects, which draw in
+    /// a frame once the document changed, whether it made a tool, whether that tool handles keys,
+    /// the palettes that are new or changed (as [`crate::Runtime::take_palettes`] has them),
+    /// whether it has palettes open, whether it listens for keys on its `document` or `window`,
+    /// and whether it set `script.keepAlive`.
     Done {
         output: Vec<String>,
         error: Option<String>,
-        running: bool,
+        wake: Option<f64>,
+        effects: bool,
         tool: bool,
         keys: bool,
         palettes: Vec<Json>,
@@ -117,7 +119,7 @@ impl<E: Engine> Script<E> {
 
     fn handle(&mut self, request: Request) -> Vec<Reply> {
         match request {
-            Request::Run { uid, doc, selection, artboard, style, work } => self.run(uid, doc, selection, artboard, style, work),
+            Request::Run { uid, doc, selection, artboard, style, now, work } => self.run(uid, doc, selection, artboard, style, now, work),
             // An answer no dialog waits for.
             Request::Answer(_) => Vec::new(),
             Request::Applied { result, doc, selection, behind } => match self.pending.pop_front() {
@@ -139,7 +141,9 @@ impl<E: Engine> Script<E> {
 
     /// Does `work` with the document `uid` active, and replies what it changed, even when it
     /// threw, as a browser keeps what a script did before an error.
-    fn run(&mut self, uid: u64, doc: Arc<Document>, selection: Selection, artboard: usize, style: Json, work: Work) -> Vec<Reply> {
+    #[allow(clippy::too_many_arguments)]
+    fn run(&mut self, uid: u64, doc: Arc<Document>, selection: Selection, artboard: usize, style: Json, now: f64, work: Work) -> Vec<Reply> {
+        self.runtime.set_now(now);
         if let Err(e) = self.runtime.bind(&self.scope, uid, doc, selection) {
             return vec![self.done(Some(e.to_string()))];
         }
@@ -158,7 +162,7 @@ impl<E: Engine> Script<E> {
         let mut prevented = None;
         let result = match work {
             Work::Execute(source) => self.runtime.execute(&self.scope, &source),
-            Work::Frame(now) => self.runtime.run_timers(now),
+            Work::Frame => self.runtime.run_timers(now),
             Work::Mouse(events) => events
                 .into_iter()
                 .try_for_each(|(event, point, modifiers, time)| self.runtime.mouse_event(&self.scope, event, point, modifiers, time)),
@@ -228,14 +232,14 @@ impl<E: Engine> Script<E> {
             Ok(palettes) => (palettes, error),
             Err(e) => (Vec::new(), error.or(Some(e.to_string()))),
         };
-        let (running, open) = (self.runtime.is_running(), self.runtime.has_palettes());
+        let (wake, effects, open) = (self.runtime.next_turn(), self.runtime.has_effects(), self.runtime.has_palettes());
         let listening = self.runtime.has_key_listeners().unwrap_or(false);
         let keep_alive = self.runtime.keep_alive().unwrap_or(false);
         let error = match self.runtime.keep_preferences() {
             Ok(()) => error,
             Err(e) => error.or(Some(e.to_string())),
         };
-        Reply::Done { output: self.runtime.take_output(), error, running, tool, keys, palettes, open, listening, keep_alive }
+        Reply::Done { output: self.runtime.take_output(), error, wake, effects, tool, keys, palettes, open, listening, keep_alive }
     }
 }
 
@@ -272,7 +276,8 @@ impl Worker {
                         let _ = outbox.send(Reply::Done {
                             output: Vec::new(),
                             error: Some(e.to_string()),
-                            running: false,
+                            wake: None,
+                            effects: false,
                             tool: false,
                             keys: false,
                             palettes: Vec::new(),

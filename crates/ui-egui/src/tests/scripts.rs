@@ -265,6 +265,37 @@ fn hung_frames_hold_up_one_frame_once() {
     app.run("ui.stopScripts", json!({})).unwrap();
 }
 
+/// Scripts have the app redraw only when they need a frame: an interval when it is due, and
+/// effects never, which draw once the document changed.
+#[test]
+fn scripts_wake_the_app_when_their_timers_are_due() {
+    let (mut app, _) = app();
+    let ctx = egui::Context::default();
+    // How long until the app redraws, in seconds, less the frame egui allows for.
+    let wait = |app: &mut VectorcraftApp, now| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::scripts::frame(app, ui.ctx(), now));
+        out.textures_delta.clear();
+        out.viewport_output[&egui::ViewportId::ROOT].repaint_delay.as_secs_f64()
+    };
+    let path = tempfile_path::Path::new("setInterval(function() { console.log('tick') }, 60000)");
+    app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).unwrap();
+    // egui's first passes, and Paper.js's own frame after the script ran, redraw at once:
+    for now in [0.1, 0.2, 0.3] {
+        wait(&mut app, now);
+    }
+    assert!((58.9..=59.0).contains(&wait(&mut app, 1.0)), "not before it's due");
+    assert!((59.9..=60.0).contains(&wait(&mut app, 60.0)), "then a minute on");
+    assert_eq!(app.scripts.log().iter().filter(|l| l.text == "tick").count(), 1);
+    let temp = TempFolder::new("wobble-idle");
+    crate::scripts::set_up_script_folders(&mut app, &temp.0, None);
+    app.run("ui.runScript", json!({ "path": temp.0.join("Scripts").join("Wobble.js").to_string_lossy() })).unwrap();
+    for now in [61.0, 61.1] {
+        wait(&mut app, now);
+    }
+    assert!(app.scripts.is_running(), "the effects run");
+    assert!(wait(&mut app, 61.2) > 1e6, "but need no frames");
+}
+
 /// While the Scriptographer Tool is the active tool, the canvas shows its pencil.
 #[test]
 fn the_tool_has_its_own_cursor() {
