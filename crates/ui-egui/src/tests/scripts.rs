@@ -284,6 +284,16 @@ fn a_tool_script_gets_the_plain_keys() {
     assert_eq!(left, [key(egui::Key::V, egui::Modifiers::COMMAND)], "Cmd+V stays the app's");
 }
 
+/// A script that can't run, as no document is open, leaves the running ones running.
+#[test]
+fn a_script_without_a_document_stops_no_others() {
+    let (mut app, _, _path) = running();
+    app.session.execute("file.close", &json!({ "index": 0 })).unwrap();
+    let other = tempfile_path::Path::new("console.log('never')");
+    assert!(app.run("ui.runScript", json!({ "path": other.0.to_string_lossy() })).is_err());
+    assert!(app.scripts.is_running(), "the animation still runs");
+}
+
 /// A script that listens for keys on its `document` keeps running and gets the keys typed on the
 /// canvas, whose shortcuts still work; while a panel has the keyboard, it gets none.
 #[test]
