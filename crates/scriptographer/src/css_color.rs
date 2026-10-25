@@ -26,8 +26,20 @@ pub(crate) struct CssColor {
     pub legacy: bool,
 }
 
+/// The most colours nested in a colour (`color-mix()`, relative colours), each a level of
+/// recursion: deeper than CSS anyone writes, and well within a script thread's stack.
+const MOST_NESTED: usize = 16;
+
 impl CssColor {
     pub(crate) fn parse(css: &str) -> Option<Self> {
+        Self::parse_at(css, 0)
+    }
+
+    /// [`Self::parse`] of a colour nested `depth` deep in another.
+    fn parse_at(css: &str, depth: usize) -> Option<Self> {
+        if depth > MOST_NESTED {
+            return None;
+        }
         let css = css.trim().to_ascii_lowercase();
         let legacy = |color| Some(Self { color, legacy: true });
         if css == "currentcolor" {
@@ -37,9 +49,9 @@ impl CssColor {
             return legacy(parse_color(hex).ok()?);
         }
         if let Some(arguments) = arguments(&css, "color-mix") {
-            return mix(arguments);
+            return mix(arguments, depth);
         }
-        if let Some(relative) = relative(&css) {
+        if let Some(relative) = relative(&css, depth) {
             return relative;
         }
         let name = css.split('(').next().unwrap_or_default();
@@ -54,7 +66,7 @@ impl CssColor {
 }
 
 /// `color-mix(in <space> [<direction> hue], <color> [<p>], <color> [<p>])`, as CSS Color 5 mixes.
-fn mix(arguments: &str) -> Option<CssColor> {
+fn mix(arguments: &str, depth: usize) -> Option<CssColor> {
     let parts = split(arguments, ',');
     let [method, first, second] = parts.as_slice() else {
         return None;
@@ -66,7 +78,7 @@ fn mix(arguments: &str) -> Option<CssColor> {
         _ => return None,
     };
     let space = space_tag(space)?;
-    let ((first, p1), (second, p2)) = (mixed(first)?, mixed(second)?);
+    let ((first, p1), (second, p2)) = (mixed(first, depth)?, mixed(second, depth)?);
     let (p1, p2) = match (p1, p2) {
         (None, None) => (0.5, 0.5),
         (Some(p1), None) => (p1, 1.0 - p1),
@@ -86,11 +98,11 @@ fn mix(arguments: &str) -> Option<CssColor> {
 }
 
 /// A colour of `color-mix()`, and its share when it's given one, as a fraction.
-fn mixed(text: &str) -> Option<(DynamicColor, Option<f64>)> {
+fn mixed(text: &str, depth: usize) -> Option<(DynamicColor, Option<f64>)> {
     let share = |word: &str| word.strip_suffix('%')?.parse::<f64>().ok().filter(|p| (0.0..=100.0).contains(p)).map(|p| p / 100.0);
     match split(text, ' ').as_slice() {
-        [color] => Some((CssColor::parse(color)?.color, None)),
-        [color, p] | [p, color] if share(p).is_some() => Some((CssColor::parse(color)?.color, share(p))),
+        [color] => Some((CssColor::parse_at(color, depth + 1)?.color, None)),
+        [color, p] | [p, color] if share(p).is_some() => Some((CssColor::parse_at(color, depth + 1)?.color, share(p))),
         _ => None,
     }
 }
@@ -98,7 +110,7 @@ fn mixed(text: &str) -> Option<(DynamicColor, Option<f64>)> {
 /// A relative colour, `<function>(from <color> <channels> [/ <alpha>])`: its channels keywords of
 /// the origin colour's in the function's space, numbers, percentages or `none`. None when `css`
 /// isn't one; `Some(None)` when it is, but invalid.
-fn relative(css: &str) -> Option<Option<CssColor>> {
+fn relative(css: &str, depth: usize) -> Option<Option<CssColor>> {
     let (function, arguments) =
         ["rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color"].iter().find_map(|f| Some((*f, arguments(css, f)?)))?;
     let arguments = arguments.replace('/', " / ");
@@ -107,7 +119,7 @@ fn relative(css: &str) -> Option<Option<CssColor>> {
         return None;
     };
     Some((|| {
-        let origin = CssColor::parse(origin)?.color;
+        let origin = CssColor::parse_at(origin, depth + 1)?.color;
         let (space, rest) = match (function, rest) {
             ("color", [space, rest @ ..]) => (Some(*space), rest),
             (_, rest) => (None, rest),
@@ -287,6 +299,17 @@ fn system_color(name: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::serialized;
+
+    /// Colours nested in colours past what CSS anyone writes are no colour, where each level took
+    /// the thread's stack until it overflowed; two levels still mix.
+    #[test]
+    fn colors_nested_too_deep_are_no_color() {
+        let mixed = |depth: usize| "color-mix(in srgb, ".repeat(depth) + "red" + &", blue)".repeat(depth);
+        assert_eq!(serialized(&mixed(100_000)), None);
+        let relative = "rgb(from ".repeat(100_000) + "red" + &" r g b)".repeat(100_000);
+        assert_eq!(serialized(&relative), None);
+        assert!(serialized(&mixed(2)).is_some());
+    }
 
     #[test]
     fn colors_serialize_as_the_canvas_gives_them_back() {
