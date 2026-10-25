@@ -45,6 +45,9 @@ egui = { workspace = true, features = ["bytemuck", "default_fonts", "monochrome_
 # reach our tests; `theme::install_fonts` starts from `FontDefinitions::default()`, which is empty
 # without them (production would lay out tofu, and the no-interface-fonts tests would bind nothing).
 bytemuck = "1"
+# `Instant` in both builds: the page's `performance.now()` on the web (`now_ms` in src/lib.rs, the
+# scripts' waits), `std` on desktop. MIT OR Apache-2.0 and already in the build through eframe.
+web-time = "1"
 egui_extras = { workspace = true }
 image = { workspace = true }
 serde = { workspace = true }
@@ -55,11 +58,6 @@ log = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 craft-ui = { workspace = true, features = ["native-windows"] }
 craft-update = { workspace = true }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-# `now_ms` (src/lib.rs) reads the page's `performance.now()` with this crate in the web build. It is
-# MIT OR Apache-2.0 and already in the build through eframe.
-web-time = "1"
 
 # The current user's id (`geteuid`): Preview in Browser uses its temporary folder only when that
 # user owns it (src/dialogs/save_for_web.rs). Already in Cargo.lock (tempfile), so this adds no

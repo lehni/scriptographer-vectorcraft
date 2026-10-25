@@ -245,6 +245,26 @@ fn an_endless_script_goes_on_alone_until_stopped() {
     assert!(!app.scripts.is_running());
 }
 
+/// Scripts whose frames hang hold up a frame for at most one wait between them, and the frames
+/// after it not at all: the app goes on while they work.
+#[test]
+fn hung_frames_hold_up_one_frame_once() {
+    let (mut app, _) = app();
+    let path = tempfile_path::Path::new("function onFrame() { while (true) {} }");
+    for _ in 0..2 {
+        app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).unwrap();
+    }
+    let ctx = egui::Context::default();
+    let time = |app: &mut VectorcraftApp, now| {
+        let start = std::time::Instant::now();
+        crate::scripts::frame(app, &ctx, now);
+        start.elapsed()
+    };
+    assert!(time(&mut app, 1.0) < std::time::Duration::from_millis(150), "both waited for together");
+    assert!(time(&mut app, 2.0) < std::time::Duration::from_millis(50), "and not again");
+    app.run("ui.stopScripts", json!({})).unwrap();
+}
+
 /// While the Scriptographer Tool is the active tool, the canvas shows its pencil.
 #[test]
 fn the_tool_has_its_own_cursor() {
@@ -394,7 +414,8 @@ fn a_script_prevents_the_keys_it_handles() {
     // The script takes half a second over ArrowDown, so it and the keys after it wait:
     frame(&mut app, &[Key::ArrowDown, Key::ArrowLeft]);
     assert_eq!(left(&app, id), x - 1.0, "the keys wait for the script");
-    for _ in 0..20 {
+    let start = std::time::Instant::now();
+    while left(&app, id) == x - 1.0 && start.elapsed() < std::time::Duration::from_secs(5) {
         frame(&mut app, &[]);
     }
     assert_eq!(left(&app, id), x - 2.0, "and go on once it answered");
@@ -424,8 +445,9 @@ fn the_app_asks_about_a_script_that_isnt_responding() {
     assert!(!asks(&app), "Wait waits five seconds more");
     crate::scripts::frame(&mut app, &ctx, 12.5);
     assert!(asks(&app), "and asks again");
-    for i in 0..30 {
-        crate::scripts::frame(&mut app, &ctx, 13.0 + f64::from(i) * 0.1);
+    let start = std::time::Instant::now();
+    while asks(&app) && start.elapsed() < std::time::Duration::from_secs(5) {
+        crate::scripts::frame(&mut app, &ctx, 13.0 + start.elapsed().as_secs_f64());
     }
     assert!(!asks(&app), "once the script is done, the question goes");
     assert!(app.scripts.is_running(), "and the script goes on");
