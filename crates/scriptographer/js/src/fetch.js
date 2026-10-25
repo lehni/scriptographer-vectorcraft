@@ -1,7 +1,7 @@
 import { Blob, File, getBufferBytes, getBytes, joinBytes } from './blob.js'
-import { checkArguments, inject, setToStringTag } from './define.js'
+import { checkArguments, defineInterfaces } from './define.js'
 import { natives } from './natives.js'
-import { getPairs, pairIterable, setFirst } from './pairs.js'
+import { definePairIterable, getPairs, setFirst } from './pairs.js'
 import { ReadableStream } from './streams.js'
 
 // The browser's `fetch()` for scripts outside a browser, with `Headers`,
@@ -100,7 +100,7 @@ export class FormData {
 }
 
 for (const Class of [Headers, FormData]) {
-  inject(Class.prototype, pairIterable)
+  definePairIterable(Class)
 }
 
 // What `Request` and `Response` share: their body, read once, as its bytes
@@ -312,7 +312,7 @@ export class Response extends Body {
   }
 }
 
-setToStringTag(Headers, FormData, Request, Response)
+defineInterfaces(Headers, FormData, Request, Response)
 
 // A Promise of the `Response`, once its head is in, rejected with a
 // `TypeError` when the request fails, or with the signal's reason when it

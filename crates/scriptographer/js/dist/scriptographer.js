@@ -31,8 +31,18 @@
     }
   }
   __name(defineConstants, "defineConstants");
-  function setToStringTag(...classes) {
+  function defineInterfaces(...classes) {
     for (const Class of classes) {
+      for (const [target, skipped] of [
+        [Class.prototype, ["constructor"]],
+        [Class, ["length", "name", "prototype"]]
+      ]) {
+        for (const key of Object.getOwnPropertyNames(target)) {
+          if (!skipped.includes(key)) {
+            Object.defineProperty(target, key, { enumerable: true });
+          }
+        }
+      }
       inject(
         Class.prototype,
         { [Symbol.toStringTag]: Class.name },
@@ -40,7 +50,7 @@
       );
     }
   }
-  __name(setToStringTag, "setToStringTag");
+  __name(defineInterfaces, "defineInterfaces");
   var internal = /* @__PURE__ */ Symbol("internal");
   function checkInternal(key, name, how) {
     if (key !== internal) {
@@ -174,11 +184,11 @@
       __name(this, "EventTarget");
     }
     addEventListener(type, callback, options) {
+      const { capture, once, passive, signal } = getOptions(options);
+      if (signal !== void 0 && !(signal instanceof globalThis.AbortSignal)) {
+        throw new TypeError(`Invalid signal: '${signal}', not an AbortSignal.`);
+      }
       if (callback && typeof callback === "object" || typeof callback === "function") {
-        const { capture, once, passive, signal } = getOptions(options);
-        if (signal !== void 0 && !(signal instanceof globalThis.AbortSignal)) {
-          throw new TypeError(`Invalid signal: '${signal}', not an AbortSignal.`);
-        }
         if (!signal?.aborted) {
           type = String(type);
           let listeners = listenersByTarget.get(this);
@@ -206,7 +216,7 @@
       }
     }
     removeEventListener(type, callback, options) {
-      const { capture } = getOptions(options);
+      const capture = getCapture(options);
       const listener = find(
         listenersByTarget.get(this),
         String(type),
@@ -271,6 +281,10 @@
         throw new TypeError("Invalid event: its type is missing.");
       }
       const { bubbles, cancelable, composed } = init ?? {};
+      Object.defineProperty(this, "isTrusted", {
+        get: getIsTrusted,
+        enumerable: true
+      });
       states.set(this, {
         type: String(type),
         bubbles: !!bubbles,
@@ -438,8 +452,7 @@
       "eventPhase",
       "target",
       "currentTarget",
-      "timeStamp",
-      "isTrusted"
+      "timeStamp"
     ],
     [CustomEvent.name]: ["detail"],
     [MessageEvent.name]: ["data", "origin", "lastEventId", "source", "ports"],
@@ -478,7 +491,7 @@
     DOM_KEY_LOCATION_RIGHT: 2,
     DOM_KEY_LOCATION_NUMPAD: 3
   });
-  setToStringTag(
+  defineInterfaces(
     EventTarget,
     Event,
     CustomEvent,
@@ -557,6 +570,14 @@
     }
   }
   __name(getOptions, "getOptions");
+  function getCapture(options) {
+    return options && typeof options === "object" ? !!options.capture : !!options;
+  }
+  __name(getCapture, "getCapture");
+  function getIsTrusted() {
+    return getState(this).isTrusted;
+  }
+  __name(getIsTrusted, "getIsTrusted");
   function find(listeners, type, callback, capture) {
     return listeners?.find(
       (listener) => listener.type === type && listener.capture === capture && Object.is(listener.callback, callback)
@@ -650,7 +671,7 @@
     }
   };
   defineEventHandlers(AbortSignal.prototype, "abort");
-  setToStringTag(AbortSignal, AbortController2);
+  defineInterfaces(AbortSignal, AbortController2);
 
   // src/blob.js
   var blob_exports = {};
@@ -3108,7 +3129,7 @@
       return "";
     }
   };
-  setToStringTag(Blob, File);
+  defineInterfaces(Blob, File);
   function getBytes(blob) {
     return blob[readBytes]?.() ?? bytesByBlob.get(blob).bytes;
   }
@@ -3184,7 +3205,7 @@
     }
   };
   defineEventHandlers(BroadcastChannel.prototype, "message", "messageerror");
-  setToStringTag(BroadcastChannel);
+  defineInterfaces(BroadcastChannel);
 
   // src/canvas.js
   var canvas_exports = {};
@@ -3737,7 +3758,7 @@
       }
     }
   );
-  setToStringTag(
+  defineInterfaces(
     DOMPointReadOnly,
     DOMPoint,
     DOMRectReadOnly,
@@ -4231,7 +4252,7 @@
       return this.#values.baseline;
     }
   };
-  setToStringTag(TextMetrics, TextCluster);
+  defineInterfaces(TextMetrics, TextCluster);
   function drawCluster(context, draw, cluster, x3, y2, options = {}) {
     if (!(cluster instanceof TextCluster)) {
       throw new TypeError(`Invalid text cluster: '${cluster}'.`);
@@ -4738,7 +4759,7 @@
       canvas.setPatternTransform.call(this.#paint, a3, b3, c2, d2, e2, f2);
     }
   };
-  setToStringTag(
+  defineInterfaces(
     OffscreenCanvas,
     OffscreenCanvasRenderingContext2D,
     ImageData,
@@ -5023,7 +5044,7 @@
       ask({ type: "clipboardWrite", text: String(text) });
     }
   };
-  setToStringTag(Clipboard);
+  defineInterfaces(Clipboard);
   function ask(question) {
     try {
       return natives.ask(question);
@@ -5094,7 +5115,7 @@
       return this.#transform.writable;
     }
   };
-  setToStringTag(CompressionStream, DecompressionStream);
+  defineInterfaces(CompressionStream, DecompressionStream);
 
   // src/console.js
   var maxDepth = 2;
@@ -5404,7 +5425,7 @@ ${stack}` : ""));
       ].join("-");
     }
   };
-  setToStringTag(Crypto);
+  defineInterfaces(Crypto);
 
   // src/dialog.js
   var defaultTitle = "Scriptographer";
@@ -5670,7 +5691,7 @@ ${stack}` : ""));
       constants.map(([, constant], index) => [constant, index + 1])
     )
   );
-  setToStringTag(DOMException2);
+  defineInterfaces(DOMException2);
 
   // src/encoding.js
   var TextEncoder2 = class {
@@ -5831,7 +5852,7 @@ ${stack}` : ""));
       { enumerable: true }
     );
   }
-  setToStringTag(TextEncoder2, TextDecoder2, TextEncoderStream, TextDecoderStream);
+  defineInterfaces(TextEncoder2, TextDecoder2, TextEncoderStream, TextDecoderStream);
   function getIncomplete(bytes) {
     for (let back = 1; back <= Math.min(3, bytes.length); back++) {
       const byte = bytes[bytes.length - back];
@@ -5907,7 +5928,7 @@ ${stack}` : ""));
   };
   defineConstants(EventSource, states2);
   defineEventHandlers(EventSource.prototype, "open", "message", "error");
-  setToStringTag(EventSource);
+  defineInterfaces(EventSource);
 
   // src/fetch.js
   var fetch_exports = {};
@@ -5921,8 +5942,13 @@ ${stack}` : ""));
   });
 
   // src/pairs.js
+  function definePairIterable(Class) {
+    inject(Class.prototype, pairIterable);
+    inject(Class.prototype, { [Symbol.iterator]: Class.prototype.entries });
+  }
+  __name(definePairIterable, "definePairIterable");
   var pairIterable = {
-    forEach(callback, thisArg) {
+    forEach(callback, thisArg = void 0) {
       for (const [key, value] of this.entries()) {
         callback.call(thisArg, value, key, this);
       }
@@ -5932,9 +5958,6 @@ ${stack}` : ""));
     },
     *values() {
       for (const [, value] of this.entries()) yield value;
-    },
-    [Symbol.iterator]() {
-      return this.entries();
     }
   };
   function getPairs(init) {
@@ -6030,7 +6053,7 @@ ${stack}` : ""));
     }
   };
   for (const Class of [Headers2, FormData]) {
-    inject(Class.prototype, pairIterable);
+    definePairIterable(Class);
   }
   var Body = class {
     static {
@@ -6212,7 +6235,7 @@ ${stack}` : ""));
       );
     }
   };
-  setToStringTag(Headers2, FormData, Request, Response);
+  defineInterfaces(Headers2, FormData, Request, Response);
   async function fetch2(input, init) {
     const request = new Request(input, init);
     const { method, url, headers, signal, redirect } = request;
@@ -6473,7 +6496,7 @@ ${value}\r
       return natives.fs.info(this.#path);
     }
   };
-  setToStringTag(LocalFile2);
+  defineInterfaces(LocalFile2);
   function getType2(path) {
     return types[natives.fs.info(path).extension.toLowerCase()] ?? "";
   }
@@ -6647,7 +6670,7 @@ ${value}\r
       this.#bytes = bytes;
     }
   };
-  setToStringTag(
+  defineInterfaces(
     FileSystemHandle,
     FileSystemFileHandle,
     FileSystemDirectoryHandle,
@@ -7022,7 +7045,7 @@ ${value}\r
       );
     }
   };
-  setToStringTag(FontFace, FontFaceSet);
+  defineInterfaces(FontFace, FontFaceSet);
   function checkFace(face) {
     if (!(face instanceof FontFace)) {
       throw new TypeError(`Invalid font face: '${face}', not a FontFace.`);
@@ -7160,7 +7183,7 @@ ${value}\r
       return { held: decode(held), pending: decode(pending) };
     }
   };
-  setToStringTag(Lock, LockManager);
+  defineInterfaces(Lock, LockManager);
   function toKey(name) {
     return Array.from(
       { length: name.length },
@@ -7208,7 +7231,7 @@ ${value}\r
       }
     }
   };
-  setToStringTag(Palette);
+  defineInterfaces(Palette);
   function takePalettes() {
     const changed = [];
     for (const [id, entry] of palettes) {
@@ -7297,7 +7320,7 @@ ${value}\r
       natives.storage.clear(getSession(this));
     }
   };
-  setToStringTag(Storage);
+  defineInterfaces(Storage);
   var handler = {
     get(target, key, receiver) {
       return isItemKey(target, key) ? target.getItem(key) ?? void 0 : Reflect.get(target, key, receiver);
@@ -7380,7 +7403,7 @@ ${value}\r
       return getDirectoryHandle(path);
     }
   };
-  setToStringTag(StorageManager);
+  defineInterfaces(StorageManager);
 
   // src/url.js
   var parts = [
@@ -7403,7 +7426,8 @@ ${value}\r
     // The parts as the runtime parsed them:
     #parts;
     #searchParams = null;
-    constructor(url, base) {
+    constructor(url, base = void 0) {
+      checkArguments(arguments, 1, "URL");
       this.#parts = parse(url, base);
       if (!this.#parts) {
         throw new TypeError(`Invalid URL: '${url}'.`);
@@ -7414,17 +7438,19 @@ ${value}\r
         url.#parts = natives.url.set(url.#parts.href, "search", query);
       }, "setSearch");
     }
-    static canParse(url, base) {
+    static canParse(url, base = void 0) {
+      checkArguments(arguments, 1, "canParse");
       return !!parse(url, base);
     }
-    static parse(url, base) {
+    static parse(url, base = void 0) {
+      checkArguments(arguments, 1, "parse");
       return parse(url, base) ? new _URL(url, base) : null;
     }
     get href() {
       return this.#parts.href;
     }
     set href(href) {
-      this.#set("href", href);
+      this.#set("href", toUSVString(href));
     }
     get origin() {
       return this.#parts.origin;
@@ -7458,7 +7484,7 @@ ${value}\r
               return this.#parts[part];
             },
             set [part](value) {
-              this.#set(part, value);
+              this.#set(part, toUSVString(value));
             }
           },
           { enumerable: true }
@@ -7467,20 +7493,19 @@ ${value}\r
     }
   };
   var linksByParams = /* @__PURE__ */ new WeakMap();
-  var URLSearchParams2 = class _URLSearchParams {
+  var URLSearchParams2 = class {
     static {
       __name(this, "URLSearchParams");
     }
     #pairs = [];
-    // A query string (with or without `?`), `[[name, value], …]`,
-    // `{ name: value }` or another `URLSearchParams`.
+    // A query string (with or without `?`), `[[name, value], …]` or anything
+    // iterable of pairs, as `URLSearchParams` are, or `{ name: value }`.
     constructor(init = "") {
-      if (init instanceof _URLSearchParams) {
-        this.#pairs = init.#pairs.map((pair) => [...pair]);
-      } else if (init !== null && typeof init === "object") {
-        this.#pairs = getPairs(init).map((pair) => pair.map(String));
+      if (init !== null && (typeof init === "object" || typeof init === "function")) {
+        const pairs = getPairs(init).map((pair) => pair.map(toUSVString));
+        this.#pairs = typeof init[Symbol.iterator] === "function" ? pairs : [...new Map(pairs)];
       } else {
-        this.#pairs = parseQuery(String(init));
+        this.#pairs = parseQuery(toUSVString(init));
       }
     }
     static {
@@ -7492,29 +7517,38 @@ ${value}\r
       return this.#pairs.length;
     }
     append(name, value) {
-      this.#pairs.push([String(name), String(value)]);
+      checkArguments(arguments, 2, "append");
+      this.#pairs.push([toUSVString(name), toUSVString(value)]);
       this.#update();
     }
-    delete(name, value) {
-      name = String(name);
+    delete(name, value = void 0) {
+      checkArguments(arguments, 1, "delete");
+      name = toUSVString(name);
       this.#pairs = this.#pairs.filter(
-        (pair) => pair[0] !== name || value !== void 0 && pair[1] !== String(value)
+        (pair) => pair[0] !== name || value !== void 0 && pair[1] !== toUSVString(value)
       );
       this.#update();
     }
     get(name) {
-      return this.#pairs.find((pair) => pair[0] === String(name))?.[1] ?? null;
+      checkArguments(arguments, 1, "get");
+      name = toUSVString(name);
+      return this.#pairs.find((pair) => pair[0] === name)?.[1] ?? null;
     }
     getAll(name) {
-      return this.#pairs.filter((pair) => pair[0] === String(name)).map(([, value]) => value);
+      checkArguments(arguments, 1, "getAll");
+      name = toUSVString(name);
+      return this.#pairs.filter((pair) => pair[0] === name).map(([, value]) => value);
     }
-    has(name, value) {
+    has(name, value = void 0) {
+      checkArguments(arguments, 1, "has");
+      name = toUSVString(name);
       return this.#pairs.some(
-        (pair) => pair[0] === String(name) && (value === void 0 || pair[1] === String(value))
+        (pair) => pair[0] === name && (value === void 0 || pair[1] === toUSVString(value))
       );
     }
     set(name, value) {
-      this.#pairs = setFirst(this.#pairs, [String(name), String(value)]);
+      checkArguments(arguments, 2, "set");
+      this.#pairs = setFirst(this.#pairs, [toUSVString(name), toUSVString(value)]);
       this.#update();
     }
     // By name, in UTF-16 code units, as strings compare: stable.
@@ -7522,8 +7556,13 @@ ${value}\r
       this.#pairs.sort(([a3], [b3]) => a3 < b3 ? -1 : a3 > b3 ? 1 : 0);
       this.#update();
     }
+    // By index over the pairs as they are at each step, so what changes while
+    // they're iterated shows:
     *entries() {
-      for (const [name, value] of this.#pairs) yield [name, value];
+      for (let i2 = 0; i2 < this.#pairs.length; i2++) {
+        const [name, value] = this.#pairs[i2];
+        yield [name, value];
+      }
     }
     toString() {
       return natives.url.serializeQuery(this.#pairs);
@@ -7534,12 +7573,19 @@ ${value}\r
       if (url) setSearch(url, this.toString());
     }
   };
-  inject(URLSearchParams2.prototype, pairIterable);
-  setToStringTag(URL2, URLSearchParams2);
+  definePairIterable(URLSearchParams2);
+  defineInterfaces(URL2, URLSearchParams2);
   function parse(url, base) {
-    return base === void 0 ? natives.url.parse(String(url)) : natives.url.parse(String(url), String(base));
+    return base === void 0 ? natives.url.parse(toUSVString(url)) : natives.url.parse(toUSVString(url), toUSVString(base));
   }
   __name(parse, "parse");
+  function toUSVString(value) {
+    return String(value).replace(
+      /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g,
+      "\uFFFD"
+    );
+  }
+  __name(toUSVString, "toUSVString");
   function parseQuery(query) {
     return natives.url.parseQuery(query.replace(/^\?/, ""));
   }
@@ -8502,7 +8548,7 @@ ${value}\r
   };
   defineConstants(WebSocket, states3);
   defineEventHandlers(WebSocket.prototype, "open", "message", "error", "close");
-  setToStringTag(WebSocket);
+  defineInterfaces(WebSocket);
 
   // src/message-port.js
   var getNumber;
@@ -8583,7 +8629,7 @@ ${value}\r
       this.start();
     }
   });
-  setToStringTag(MessageChannel, MessagePort);
+  defineInterfaces(MessageChannel, MessagePort);
   function postWith(transfer, send) {
     const list = transfer === void 0 || transfer === null ? [] : typeof transfer === "object" && Symbol.iterator in transfer ? [...transfer] : typeof transfer === "object" ? [...transfer.transfer ?? []] : null;
     if (!list) {
@@ -8694,7 +8740,7 @@ ${value}\r
     }
   };
   defineEventHandlers(SharedWorker.prototype, "error");
-  setToStringTag(Worker, SharedWorker);
+  defineInterfaces(Worker, SharedWorker);
   function setupWorker(name, isShared) {
     const { close, importScripts } = natives.worker.self;
     inject(globalThis, { name, close, importScripts });
@@ -9090,7 +9136,11 @@ ${value}\r
     "loadend"
   );
   defineEventHandlers(XMLHttpRequest.prototype, "readystatechange");
-  setToStringTag(XMLHttpRequestEventTarget, XMLHttpRequestUpload, XMLHttpRequest);
+  defineInterfaces(
+    XMLHttpRequestEventTarget,
+    XMLHttpRequestUpload,
+    XMLHttpRequest
+  );
   function fireProgress(target, type, loaded = 0, total = 0) {
     target.dispatchEvent(
       new ProgressEvent(type, { lengthComputable: total > 0, loaded, total })
@@ -9168,7 +9218,7 @@ ${value}\r
     });
   }
   if (!globalThis.URL) {
-    inject(globalThis, { URL: URL2, URLSearchParams: URLSearchParams2 });
+    inject(globalThis, { URL: URL2, URLSearchParams: URLSearchParams2, webkitURL: URL2 });
   }
   if (!globalThis.URLPattern) {
     inject(globalThis, { URLPattern: Y2 });

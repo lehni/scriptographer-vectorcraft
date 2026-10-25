@@ -4,7 +4,7 @@ import {
   checkInternal,
   inject,
   internal,
-  setToStringTag
+  defineInterfaces
 } from './define.js'
 import { EventTarget } from './events.js'
 import { natives } from './natives.js'
@@ -235,7 +235,7 @@ export class FontFaceSet extends EventTarget {
   }
 }
 
-setToStringTag(FontFace, FontFaceSet)
+defineInterfaces(FontFace, FontFaceSet)
 
 function checkFace(face) {
   if (!(face instanceof FontFace)) {

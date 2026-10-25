@@ -2,7 +2,7 @@ import {
   checkArguments,
   checkInternal,
   internal,
-  setToStringTag
+  defineInterfaces
 } from './define.js'
 import { natives } from './natives.js'
 
@@ -48,7 +48,7 @@ export class Storage {
   }
 }
 
-setToStringTag(Storage)
+defineInterfaces(Storage)
 
 // Reading a property the storage has gives that one, any other string an item,
 // as browsers have it. Any string set is an item, even one the storage has

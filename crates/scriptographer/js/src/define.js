@@ -25,10 +25,21 @@ export function defineConstants(Class, constants) {
   }
 }
 
-// Name the instances of `classes` as the realm's own are named, in
-// `Object.prototype.toString()`: `[object Blob]`.
-export function setToStringTag(...classes) {
+// Make `classes` interfaces as WebIDL has them: their attributes and operations
+// enumerable, on the prototype and the static ones, and their instances named as
+// the realm's own are, in `Object.prototype.toString()`: `[object Blob]`.
+export function defineInterfaces(...classes) {
   for (const Class of classes) {
+    for (const [target, skipped] of [
+      [Class.prototype, ['constructor']],
+      [Class, ['length', 'name', 'prototype']]
+    ]) {
+      for (const key of Object.getOwnPropertyNames(target)) {
+        if (!skipped.includes(key)) {
+          Object.defineProperty(target, key, { enumerable: true })
+        }
+      }
+    }
     inject(
       Class.prototype,
       { [Symbol.toStringTag]: Class.name },

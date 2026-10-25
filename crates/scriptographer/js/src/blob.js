@@ -1,4 +1,4 @@
-import { checkArguments, setToStringTag } from './define.js'
+import { checkArguments, defineInterfaces } from './define.js'
 import { ReadableStream } from './streams.js'
 
 // `Blob` and `File` for scripts outside a browser. Their bytes arrive whole,
@@ -77,7 +77,7 @@ export class File extends Blob {
   }
 }
 
-setToStringTag(Blob, File)
+defineInterfaces(Blob, File)
 
 // The bytes of `blob`, which the runtime reads too, not copied.
 export function getBytes(blob) {

@@ -1,4 +1,4 @@
-import { defineConstants, setToStringTag } from './define.js'
+import { defineConstants, defineInterfaces } from './define.js'
 
 // `DOMException` for scripts outside a browser: an `Error` with a `name`, and
 // the legacy `code` of the names that had one, as `INDEX_SIZE_ERR` and the
@@ -58,4 +58,4 @@ defineConstants(
   )
 )
 
-setToStringTag(DOMException)
+defineInterfaces(DOMException)

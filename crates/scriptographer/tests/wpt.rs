@@ -2,25 +2,36 @@
 
 //! The web-platform-tests of the browser APIs Scriptographer has, against them in V8, when `cargo xtask
 //! corpus --wpt` has fetched them; skipped when it hasn't: `OffscreenCanvas` in a worker
-//! (`html/canvas/offscreen`), the geometry interfaces (`css/geometry`), streams (`streams`,
-//! `encoding/streams`), compression (`compression`), `URLPattern` (`urlpattern`) and Web Locks
-//! (`web-locks`). A test's scripts (its `importScripts()`, `<script>`s, or an `.any.js`
-//! file's `// META: script=`s) run as one, after testharness.js, as a shell runs them. The tests that fail are listed in `tests/wpt-expected-failures.txt`: this test
-//! fails when another one fails, or when a listed one passes, so the list stays the truth.
+//! (`html/canvas/offscreen`), the geometry interfaces (`css/geometry`), streams (`streams`),
+//! encoding (`encoding`), compression (`compression`), `URLPattern` (`urlpattern`), Web Locks
+//! (`web-locks`), events (`dom/events`) and `URL` (`url`). A test's scripts (its
+//! `importScripts()`, `<script>`s, or an `.any.js` file's `// META: script=`s) run as one, after
+//! testharness.js, as a shell runs them. The tests that fail are listed in
+//! `tests/wpt-expected-failures.txt`: this test fails when another one fails, or when a listed
+//! one passes, so the list stays the truth.
 //! `WPT_UPDATE=1` writes the list anew. The pass rate by folder prints with `--nocapture`, the
 //! standard's tests apart from the tentative ones, which test proposals.
 //! `WPT_FILTER=text` runs only the files whose path contains `text` and prints each test's result
 //! and message, without checking the list.
 //!
-//! What fails, by cause (2026-10-24: 4161 of 4340 pass, 4070 of the standard's 4210 and 91 of
+//! What fails, by cause (2026-10-26: 7497 of 9325 pass, 7406 of the standard's 9195 and 91 of
 //! the 130 tentative ones), to come back to; most of it rarely matters to a script. `docs/gaps.md`
 //! (G6) sums it up:
 //!
-//! - Streams (about 45): `TextDecoderStream` decodes UTF-8 only, as `TextDecoder` does; the IDL
-//!   tests, and compression's that compress media files, fetch by a relative URL, which scripts
-//!   have no base for; and what web-streams-polyfill doesn't do: the tentative `owning` type, a
-//!   string to `ReadableStream.from()`, the async iterators' prototype, a write that `enqueue()`
-//!   starts at once in a pipe, and `strategy.size` called as a method.
+//! - Encodings (about 1,500): `TextDecoder` and `TextDecoderStream` decode UTF-8 only; the tests
+//!   of a page's charset (`unsupported-encodings`) need a page, and the IDL test a window's or a
+//!   worker's global scope, which scripts' isn't; also `encodeInto()`'s checks of its bytes, and
+//!   streamed UTF-8 that turns invalid before it ends.
+//! - `Request`'s and `Response`'s `formData()` (70), which they don't have.
+//! - `URL` (about 100): where the `url` crate (2.5.8, the newest) follows an older URL standard:
+//!   `file:` hosts and empty path segments, `/.` in non-special paths, the spaces before an opaque
+//!   path's query, `blob:` origins of schemes other than HTTP(S), and hosts that end in a number
+//!   or an invalid `xn--` label.
+//! - Streams (about 20): the IDL tests, and compression's that compress media files, fetch by a
+//!   relative URL, which scripts have no base for; and what web-streams-polyfill doesn't do: the
+//!   tentative `owning` type, a string to `ReadableStream.from()`, the async iterators'
+//!   prototype, a write that `enqueue()` starts at once in a pipe, and `strategy.size` called as
+//!   a method.
 //! - `URLPattern` (about 55): what urlpattern-polyfill doesn't do: the tentative `generate()` and
 //!   `compareComponent()`, the hostname checks the standard added, and character classes of the
 //!   `v` flag (`[[a-z]--a]`).
@@ -66,14 +77,16 @@ const TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The folders of the tests that run, in the corpus, and whether their HTML pages run too: the
 /// canvas's are its tests in a window and its reftests, which compare renderings.
-const SUITES: [(&str, bool); 7] = [
+const SUITES: [(&str, bool); 9] = [
     ("html/canvas/offscreen", false),
     ("css/geometry", true),
     ("streams", false),
-    ("encoding/streams", false),
+    ("encoding", false),
     ("compression", false),
     ("urlpattern", false),
     ("web-locks", false),
+    ("dom/events", false),
+    ("url", false),
 ];
 
 struct Harness {
@@ -111,6 +124,8 @@ fn web_platform_tests() {
     for file in &files {
         let name = file.strip_prefix(&corpus).unwrap().to_string_lossy().replace('\\', "/");
         for (test, status, message) in run(&harness, file) {
+            // Titles with control characters (some of url's) stay on one line of the list:
+            let test: String = test.chars().map(|c| if c.is_control() { c.escape_default().to_string() } else { c.to_string() }).collect();
             results.insert(format!("{name}: {test}"), (status, message));
         }
     }
@@ -248,7 +263,17 @@ fn scripts(harness: &Harness, file: &Path) -> String {
 fn run(harness: &Harness, file: &Path) -> Vec<(String, String, String)> {
     // The test's URL on the server, which a worker's `location` would be:
     let path = file.strip_prefix(&harness.corpus).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_default();
-    let location = format!("Object.defineProperty(globalThis, 'location', {{ value: new URL('{}/{path}') }})", harness.server);
+    // And the scope it runs in, as the server's wrapper of an `.any.js` test says: a window, as
+    // scripts have one.
+    let location = format!(
+        "(() => {{\n\
+             const url = new URL('{}/{path}'), location = {{ toString() {{ return this.href }} }}\n\
+             for (const part of ['href', 'origin', 'protocol', 'host', 'hostname', 'port', 'pathname', 'search', 'hash']) location[part] = url[part]\n\
+             Object.defineProperty(globalThis, 'location', {{ value: location }})\n\
+         }})()\n\
+         globalThis.GLOBAL = {{ isWindow: () => true, isWorker: () => false, isShadowRealm: () => false }}",
+        harness.server
+    );
     let source = format!("{location}\n;\n{}\n;\n{REPORTER}\n;\n{}", harness.testharness, scripts(harness, file));
     let mut runtime = Runtime::<V8>::new().unwrap();
     // At the test's path, so the workers it starts are found next to it:

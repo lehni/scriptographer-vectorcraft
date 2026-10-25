@@ -2,7 +2,7 @@ import {
   checkArguments,
   checkInternal,
   internal,
-  setToStringTag
+  defineInterfaces
 } from './define.js'
 import {
   EventTarget,
@@ -101,7 +101,7 @@ Object.defineProperty(MessagePort.prototype, 'onmessage', {
     this.start()
   }
 })
-setToStringTag(MessageChannel, MessagePort)
+defineInterfaces(MessageChannel, MessagePort)
 
 // Sends a message with the ports and the buffers in `transfer`, a list of them
 // or `{ transfer }` as `postMessage()` takes it: `send(ports, numbers, buffers)`

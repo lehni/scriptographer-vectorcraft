@@ -30,7 +30,13 @@ const PATHS: &[&str] = &[
     "interfaces/web-locks.idl",
     "encoding/streams",
     "encoding/resources",
+    "encoding/*.any.js",
+    "dom/events",
+    "url",
+    "interfaces/url.idl",
     "common/gc.js",
+    "common/subset-tests.js",
+    "common/subset-tests-by-key.js",
     "common/sab.js",
     "common/get-host-info.sub.js",
     "resources/test-only-api.js",
@@ -89,7 +95,20 @@ pub fn fetch() -> Result<(), String> {
 fn tree_hash(dest: &Path) -> Result<String, String> {
     let mut files = Vec::new();
     for path in PATHS {
-        collect(dest, &dest.join(path), &mut files)?;
+        // `folder/*.suffix`: the files of the folder with the suffix, as the sparse checkout has them.
+        match path.split_once("/*") {
+            Some((folder, suffix)) => {
+                let folder = dest.join(folder);
+                let entries = std::fs::read_dir(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
+                for entry in entries {
+                    let entry = entry.map_err(|e| format!("{}: {e}", folder.display()))?;
+                    if entry.file_name().to_string_lossy().ends_with(suffix) {
+                        collect(dest, &entry.path(), &mut files)?;
+                    }
+                }
+            }
+            None => collect(dest, &dest.join(path), &mut files)?,
+        }
     }
     files.sort();
     let mut listing = String::new();

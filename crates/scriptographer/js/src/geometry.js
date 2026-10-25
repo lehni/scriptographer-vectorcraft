@@ -1,5 +1,5 @@
 import { parseTransformList } from './css-transform.js'
-import { inject, setToStringTag } from './define.js'
+import { inject, defineInterfaces } from './define.js'
 
 // The Geometry Interfaces, for scripts outside a browser: `DOMPoint`,
 // `DOMRect`, `DOMQuad` and `DOMMatrix`, with their read-only versions. A
@@ -390,7 +390,7 @@ defineAttributes(
   }
 )
 
-setToStringTag(
+defineInterfaces(
   DOMPointReadOnly,
   DOMPoint,
   DOMRectReadOnly,

@@ -1,4 +1,4 @@
-import { setToStringTag } from './define.js'
+import { defineInterfaces } from './define.js'
 import { natives } from './natives.js'
 
 // `crypto.getRandomValues()` and `crypto.randomUUID()` for scripts outside a
@@ -56,4 +56,4 @@ export class Crypto {
   }
 }
 
-setToStringTag(Crypto)
+defineInterfaces(Crypto)

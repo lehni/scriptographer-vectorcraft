@@ -1,4 +1,4 @@
-import { checkInternal, internal, setToStringTag } from './define.js'
+import { checkInternal, internal, defineInterfaces } from './define.js'
 import { Event, EventTarget, defineEventHandlers } from './events.js'
 
 // `AbortController` and `AbortSignal`, for scripts outside a browser.
@@ -92,4 +92,4 @@ export class AbortController {
 }
 
 defineEventHandlers(AbortSignal.prototype, 'abort')
-setToStringTag(AbortSignal, AbortController)
+defineInterfaces(AbortSignal, AbortController)

@@ -144,8 +144,18 @@
     return target;
   }
   __name(inject, "inject");
-  function setToStringTag(...classes) {
+  function defineInterfaces(...classes) {
     for (const Class of classes) {
+      for (const [target, skipped] of [
+        [Class.prototype, ["constructor"]],
+        [Class, ["length", "name", "prototype"]]
+      ]) {
+        for (const key of Object.getOwnPropertyNames(target)) {
+          if (!skipped.includes(key)) {
+            Object.defineProperty(target, key, { enumerable: true });
+          }
+        }
+      }
       inject(
         Class.prototype,
         { [Symbol.toStringTag]: Class.name },
@@ -153,7 +163,7 @@
       );
     }
   }
-  __name(setToStringTag, "setToStringTag");
+  __name(defineInterfaces, "defineInterfaces");
 
   // src/web/local-file.js
   var handles = /* @__PURE__ */ new WeakMap();
@@ -279,7 +289,7 @@
       return this.name;
     }
   };
-  setToStringTag(LocalFile);
+  defineInterfaces(LocalFile);
 
   // src/web/index.js
   var { ask } = globalThis.__scriptographer;

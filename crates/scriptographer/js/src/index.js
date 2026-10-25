@@ -123,7 +123,7 @@ if (!globalThis.localStorage) {
   })
 }
 if (!globalThis.URL) {
-  inject(globalThis, { URL, URLSearchParams })
+  inject(globalThis, { URL, URLSearchParams, webkitURL: URL })
 }
 if (!globalThis.URLPattern) {
   inject(globalThis, { URLPattern })

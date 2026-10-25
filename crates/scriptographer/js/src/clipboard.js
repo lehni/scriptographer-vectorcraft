@@ -1,4 +1,4 @@
-import { checkArguments, setToStringTag } from './define.js'
+import { checkArguments, defineInterfaces } from './define.js'
 import { EventTarget } from './events.js'
 import { natives } from './natives.js'
 
@@ -17,7 +17,7 @@ export class Clipboard extends EventTarget {
   }
 }
 
-setToStringTag(Clipboard)
+defineInterfaces(Clipboard)
 
 function ask(question) {
   try {

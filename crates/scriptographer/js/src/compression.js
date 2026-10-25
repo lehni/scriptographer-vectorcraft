@@ -1,4 +1,4 @@
-import { setToStringTag } from './define.js'
+import { defineInterfaces } from './define.js'
 import { natives } from './natives.js'
 import { TransformStream } from './streams.js'
 
@@ -69,4 +69,4 @@ export class DecompressionStream {
   }
 }
 
-setToStringTag(CompressionStream, DecompressionStream)
+defineInterfaces(CompressionStream, DecompressionStream)

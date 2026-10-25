@@ -1,5 +1,5 @@
 import { reportError } from './global-scope.js'
-import { defineConstants, inject, setToStringTag } from './define.js'
+import { defineConstants, inject, defineInterfaces } from './define.js'
 
 // `EventTarget` and the event classes for scripts outside a browser, as the DOM
 // standard has them, to extend (`class Emitter extends EventTarget`). There's
@@ -16,14 +16,15 @@ const handlersByTarget = new WeakMap()
 
 export class EventTarget {
   addEventListener(type, callback, options) {
+    // The options are read first, as the DOM standard reads them:
+    const { capture, once, passive, signal } = getOptions(options)
+    if (signal !== undefined && !(signal instanceof globalThis.AbortSignal)) {
+      throw new TypeError(`Invalid signal: '${signal}', not an AbortSignal.`)
+    }
     if (
       callback && typeof callback === 'object' ||
       typeof callback === 'function'
     ) {
-      const { capture, once, passive, signal } = getOptions(options)
-      if (signal !== undefined && !(signal instanceof globalThis.AbortSignal)) {
-        throw new TypeError(`Invalid signal: '${signal}', not an AbortSignal.`)
-      }
       if (!signal?.aborted) {
         type = String(type)
         let listeners = listenersByTarget.get(this)
@@ -52,7 +53,7 @@ export class EventTarget {
   }
 
   removeEventListener(type, callback, options) {
-    const { capture } = getOptions(options)
+    const capture = getCapture(options)
     const listener = find(
       listenersByTarget.get(this),
       String(type),
@@ -118,6 +119,12 @@ export class Event {
       throw new TypeError('Invalid event: its type is missing.')
     }
     const { bubbles, cancelable, composed } = init ?? {}
+    // The event's own, as WebIDL has [LegacyUnforgeable] attributes, one getter
+    // for all events:
+    Object.defineProperty(this, 'isTrusted', {
+      get: getIsTrusted,
+      enumerable: true
+    })
     states.set(this, {
       type: String(type),
       bubbles: !!bubbles,
@@ -292,8 +299,7 @@ const fields = {
     'eventPhase',
     'target',
     'currentTarget',
-    'timeStamp',
-    'isTrusted'
+    'timeStamp'
   ],
   [CustomEvent.name]: ['detail'],
   [MessageEvent.name]: ['data', 'origin', 'lastEventId', 'source', 'ports'],
@@ -335,7 +341,7 @@ defineConstants(KeyboardEvent, {
   DOM_KEY_LOCATION_NUMPAD: 3
 })
 
-setToStringTag(
+defineInterfaces(
   EventTarget,
   Event,
   CustomEvent,
@@ -418,7 +424,7 @@ function setMembers(event, init, defaults) {
   }
 }
 
-// The listener options: `capture`, from a boolean too, and for adding, `once`,
+// The options of adding a listener: `capture`, from a boolean too, `once`,
 // `passive` and `signal`.
 function getOptions(options) {
   if (options && typeof options === 'object') {
@@ -432,6 +438,15 @@ function getOptions(options) {
       signal: undefined
     }
   }
+}
+
+// The capture of the options, all that removing a listener reads of them.
+function getCapture(options) {
+  return options && typeof options === 'object' ? !!options.capture : !!options
+}
+
+function getIsTrusted() {
+  return getState(this).isTrusted
 }
 
 function find(listeners, type, callback, capture) {

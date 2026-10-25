@@ -3,7 +3,7 @@ import {
   checkInternal,
   inject,
   internal,
-  setToStringTag
+  defineInterfaces
 } from './define.js'
 import { DOMRect, DOMRectReadOnly } from './geometry.js'
 
@@ -266,7 +266,7 @@ export class TextCluster {
   }
 }
 
-setToStringTag(TextMetrics, TextCluster)
+defineInterfaces(TextMetrics, TextCluster)
 
 // Draws `cluster` with the context's `draw` (`fillText` or `strokeText`) at
 // `(x, y)`, moved by its `x` and `y` and placed by its `align` and `baseline`,

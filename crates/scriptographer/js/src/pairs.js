@@ -1,10 +1,17 @@
+import { inject } from './define.js'
+
 // What the classes of `[name, value]` pairs share: `Headers`, `FormData` and
 // `URLSearchParams`.
 
-// What WebIDL's pair iterators give, from the `entries()` of the class they're
-// injected into.
-export const pairIterable = {
-  forEach(callback, thisArg) {
+// Give `Class` what WebIDL's pair iterators have, from its `entries()`, which is
+// its `[Symbol.iterator]()` too.
+export function definePairIterable(Class) {
+  inject(Class.prototype, pairIterable)
+  inject(Class.prototype, { [Symbol.iterator]: Class.prototype.entries })
+}
+
+const pairIterable = {
+  forEach(callback, thisArg = undefined) {
     for (const [key, value] of this.entries()) {
       callback.call(thisArg, value, key, this)
     }
@@ -16,10 +23,6 @@ export const pairIterable = {
 
   *values() {
     for (const [, value] of this.entries()) yield value
-  },
-
-  [Symbol.iterator]() {
-    return this.entries()
   }
 }
 

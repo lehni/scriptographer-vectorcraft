@@ -1,4 +1,4 @@
-import { inject, setToStringTag } from './define.js'
+import { inject, defineInterfaces } from './define.js'
 import {
   ErrorEvent,
   EventTarget,
@@ -99,7 +99,7 @@ export class SharedWorker extends EventTarget {
 }
 
 defineEventHandlers(SharedWorker.prototype, 'error')
-setToStringTag(Worker, SharedWorker)
+defineInterfaces(Worker, SharedWorker)
 
 // Give the worker's global object, an `EventTarget` as every one is here, what
 // a worker's has: `name`, `close()` and `importScripts()`, and a dedicated
