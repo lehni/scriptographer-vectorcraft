@@ -424,7 +424,11 @@ pub(crate) fn poll<H: Clone>(call: &mut dyn Call<H>) -> Result<(), Error> {
         for sent in sent {
             let sent = match sent {
                 FromWorker::Output(lines) => {
-                    call.host()?.borrow_mut().output.extend(lines);
+                    let host = call.host()?;
+                    let mut host = host.borrow_mut();
+                    for line in lines {
+                        host.print(line);
+                    }
                     continue;
                 }
                 FromWorker::Closed => {

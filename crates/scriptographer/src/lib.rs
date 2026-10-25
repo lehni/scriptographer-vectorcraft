@@ -126,8 +126,8 @@ pub enum Error {
 
 /// The state behind the host functions of one runtime.
 pub struct Host<H> {
-    /// Lines printed with `console.log`, kept until [`Runtime::take_output`].
-    output: Vec<String>,
+    /// Lines printed with `console.log`, kept until [`Runtime::take_output`] ([`Host::print`]).
+    output: std::collections::VecDeque<String>,
     next_interval_id: u32,
     /// The time of the last [`Runtime::run_timers`], in milliseconds.
     now: f64,
@@ -241,10 +241,24 @@ struct Interval<H> {
     repeats: bool,
 }
 
+/// The most lines of output a runtime keeps until they're taken.
+const MOST_OUTPUT: usize = 1000;
+
+impl<H> Host<H> {
+    /// Adds `line` to the output, in place of the oldest past [`MOST_OUTPUT`] lines: a script
+    /// that prints without end would fill the memory.
+    pub(crate) fn print(&mut self, line: String) {
+        if self.output.len() >= MOST_OUTPUT {
+            self.output.pop_front();
+        }
+        self.output.push_back(line);
+    }
+}
+
 impl<H> Default for Host<H> {
     fn default() -> Self {
         Self {
-            output: Vec::new(),
+            output: std::collections::VecDeque::new(),
             next_interval_id: 0,
             now: 0.0,
             intervals: Vec::new(),
@@ -527,7 +541,7 @@ impl<E: Engine> Runtime<E> {
             let mut host = self.host.borrow_mut();
             host.now = now;
             if let Err(e) = host.local_storage.write(Some(now)) {
-                host.output.push(e);
+                host.print(e);
             }
             for interval in host.intervals.iter_mut().filter(|interval| interval.due <= now) {
                 due.push(interval.callback.clone());
@@ -706,7 +720,7 @@ impl<E: Engine> Runtime<E> {
 
     /// Returns the lines printed with `console.log` since the last call.
     pub fn take_output(&mut self) -> Vec<String> {
-        std::mem::take(&mut self.host.borrow_mut().output)
+        self.host.borrow_mut().output.drain(..).collect()
     }
 }
 
@@ -909,7 +923,7 @@ fn handle<H>(value: Value<H>, name: &str) -> Result<H, Error> {
 /// it (`js/src/console.js`).
 fn print<H>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let line = call.to_string(args.first().unwrap_or(&Value::Undefined))?;
-    call.host()?.borrow_mut().output.push(line);
+    call.host()?.borrow_mut().print(line);
     Ok(Value::Undefined)
 }
 

@@ -178,7 +178,7 @@ impl<E: Engine> Runtime<E> {
                     }
                     Err(e) => {
                         let mut host = self.host.borrow_mut();
-                        host.output.push(format!("Uncaught {e}"));
+                        host.print(format!("Uncaught {e}"));
                         host.script_effects.failed.push(input.fingerprint);
                     }
                 }

@@ -80,7 +80,7 @@ pub(crate) fn load<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[V
         None => {}
     }
     if is_web(&key) {
-        call.host()?.borrow_mut().output.push(format!("import {key}"));
+        call.host()?.borrow_mut().print(format!("import {key}"));
     }
     let cache = call.host()?.borrow().cache.clone();
     let source = source(&key, cache.as_deref()).map_err(|e| Error::Script(format!("import '{specifier}': {e}")))?;
