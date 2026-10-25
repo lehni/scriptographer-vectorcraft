@@ -133,6 +133,28 @@ fn frames_with_a_big_selection_are_quick() {
     assert!(start.elapsed() < Duration::from_millis(8), "{:?}", start.elapsed());
 }
 
+/// After an edit in a big layer, a script catches up without measuring the layer: bounds are
+/// measured when it asks for them.
+#[test]
+fn an_edit_in_a_big_layer_costs_a_frame_little() {
+    let mut s = session();
+    for i in 0..20000 {
+        s.execute("shape.ellipse", &json!({"x": (i % 200) * 5, "y": (i / 200) * 5, "width": 4, "height": 3})).unwrap();
+    }
+    let worker = spawn();
+    send(&s, &worker, Work::Execute("var count = project.activeLayer.children.length\nfunction onFrame() {}".into()));
+    assert_eq!(settle(&mut s, &worker), None);
+    send_at(&s, &worker, 20.0, Work::Frame);
+    assert_eq!(settle(&mut s, &worker), None);
+    let id = s.active().unwrap().doc.layers[0].children().unwrap()[100].id.0;
+    s.execute("object.move", &json!({"ids": [id], "dx": 1, "dy": 0})).unwrap();
+    let start = std::time::Instant::now();
+    send_at(&s, &worker, 40.0, Work::Frame);
+    assert_eq!(settle(&mut s, &worker), None);
+    // Measuring the layer took 11 ms in a release build:
+    assert!(start.elapsed() < Duration::from_millis(5), "{:?}", start.elapsed());
+}
+
 /// A script that fills V8's heap stops with an error, where V8 would end the app.
 #[cfg(feature = "v8")]
 #[test]
