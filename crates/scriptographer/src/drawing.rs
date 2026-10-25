@@ -1283,6 +1283,21 @@ fn line<H: Clone>(call: &mut dyn Call<H>, this: &Value<H>, dash: &[f64]) -> Resu
     Ok(Some(stroke))
 }
 
+/// The most dashes a stroke makes, as in Skia: past that its line is drawn whole.
+const MOST_DASHES: f64 = 1e6;
+
+/// `stroke` for `path` (in the stroke's space), without its dashes when there would be more than
+/// [`MOST_DASHES`] of them: dashes a fraction of a pixel long on a long path kept the stroker busy
+/// for ever.
+fn dashes_within(mut stroke: Stroke, path: &BezPath) -> Stroke {
+    let period: f64 = stroke.dash_pattern.iter().sum();
+    let dashes = path.perimeter(1.0) / period;
+    if !stroke.dash_pattern.is_empty() && (dashes > MOST_DASHES || dashes.is_nan()) {
+        stroke.dash_pattern.clear();
+    }
+    stroke
+}
+
 /// Strokes `path` (in pixels) with `strokeStyle`, its line in the current user space.
 fn stroke_path<H: Clone>(call: &mut dyn Call<H>, this: &Value<H>, path: BezPath) -> Result<(), Error> {
     let Some(style) = style(call, this, "strokeStyle")? else {
@@ -1301,6 +1316,7 @@ fn stroke_path<H: Clone>(call: &mut dyn Call<H>, this: &Value<H>, path: BezPath)
             return;
         }
         let path = transform.inverse() * path;
+        let stroke = dashes_within(stroke, &path);
         s.draw(&compositing, |scene, offset| {
             scene.set_transform(offset * transform);
             scene.set_stroke(stroke.clone());
@@ -1366,7 +1382,8 @@ pub(crate) fn is_point_in_stroke<H: Clone>(call: &mut dyn Call<H>, this: &Value<
         return Ok(Value::Bool(false));
     }
     let inverse = transform.inverse();
-    let outline = vello_cpu::kurbo::stroke(inverse * path, &line, &vello_cpu::kurbo::StrokeOpts::default(), 0.01);
+    let path = inverse * path;
+    let outline = vello_cpu::kurbo::stroke(&path, &dashes_within(line, &path), &vello_cpu::kurbo::StrokeOpts::default(), 0.01);
     Ok(Value::Bool(contains(&outline, inverse * Point::new(x, y), Fill::NonZero)))
 }
 
@@ -1620,8 +1637,8 @@ pub(crate) fn set_pattern_transform<H: Clone>(call: &mut dyn Call<H>, this: &Val
 
 #[cfg(test)]
 mod tests {
-    use super::{Effect, Pen, parse_filter};
-    use vello_cpu::kurbo::{Affine, BezPath, Point, Vec2};
+    use super::{Effect, Pen, dashes_within, parse_filter};
+    use vello_cpu::kurbo::{Affine, BezPath, Line, Point, Shape, Stroke, Vec2};
     use vello_cpu::peniko::Color;
 
     /// An arc's pieces don't grow with its radius past what can be seen: one of a radius of 1e30
@@ -1637,6 +1654,16 @@ mod tests {
         assert!(pieces(1e30) < 100, "{}", pieces(1e30));
         assert!(pieces(1e300) < 100, "{}", pieces(1e300));
         assert!(pieces(10.0) > 4, "a small circle is still drawn closely");
+    }
+
+    /// Dashes past a million on a path draw its line whole, as in Skia, where dashes a fraction of
+    /// a pixel long made the stroker run for ever; fewer stay dashes.
+    #[test]
+    fn too_many_dashes_draw_the_line_whole() {
+        let line = Line::new((0.0, 0.0), (1000.0, 0.0)).to_path(0.1);
+        let dashed = |dash: f64| dashes_within(Stroke::new(1.0).with_dashes(0.0, [dash, dash]), &line).dash_pattern.len();
+        assert_eq!(dashed(1e-9), 0);
+        assert_eq!(dashed(1.0), 2);
     }
 
     #[test]
