@@ -10,7 +10,7 @@
 //! changed goes back whole into its first item ([`written`]), and the items it links make the
 //! thread, for the document to flow the story across them again.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde_json::{Map, Value as Json, json};
 use vectorcraft_doc::{
@@ -228,15 +228,14 @@ pub fn story_properties(t: &TextObject, first: &[bool], props: &mut Map<String, 
 /// The character properties of the runs of `t`, each with the auto leading of the paragraph it
 /// starts in, and whether it paints its stroke `first`. Their gradients fit the whole text.
 fn run_properties(t: &TextObject, first: &[bool]) -> Vec<Map<String, Json>> {
-    let text = t.plain_text();
     let bounds = t.local_bounds();
     t.runs
         .iter()
         .zip(first.iter().chain(std::iter::repeat(&false)))
-        .scan(0, |start, (run, first)| {
-            let paragraph = text.get(..*start).map_or(0, |before| before.matches('\n').count());
-            *start += run.text.len();
-            Some(char_properties(&run.style, t.para_at(paragraph), *first, bounds))
+        .scan(0, |paragraph, (run, first)| {
+            let properties = char_properties(&run.style, t.para_at(*paragraph), *first, bounds);
+            *paragraph += run.text.matches('\n').count();
+            Some(properties)
         })
         .collect()
 }
@@ -348,12 +347,24 @@ fn runs(props: &Map<String, Json>, old: &[TextRun], old_props: &[Map<String, Jso
     let mut arts = old.iter().filter_map(|run| run.inline.clone());
     let mut runs = Vec::new();
     let mut first = Vec::new();
+    // Each found at once, as a text may have a run per character: the first old run that reads as
+    // the item does, and the one at the item's place, as the places only grow.
+    let mut reading = HashMap::new();
+    for (i, props) in old_props.iter().enumerate() {
+        reading.entry(Json::Object(props.clone()).to_string()).or_insert(i);
+    }
+    let (mut place, mut end) = (0, old.first().map_or(0, |run| run.text.len()));
     let mut offset = 0;
     for item in items {
         let content = item.get("content").and_then(Json::as_str).unwrap_or_default();
         let now = completed(item, char_defaults());
         let stroke_first = now.get("paintOrder").and_then(Json::as_str) == Some("stroke");
-        let index = old_props.iter().position(|p| *p == now).or_else(|| at_offset(old, offset)).unwrap_or(0);
+        while offset >= end && place + 1 < old.len() {
+            place += 1;
+            end += old[place].text.len();
+        }
+        let at_place = (offset < end).then_some(place);
+        let index = reading.get(&Json::Object(now.clone()).to_string()).copied().or(at_place).unwrap_or(0);
         let mut style = old.get(index).map(|run| run.style.clone()).unwrap_or_default();
         if let Some(was) = old_props.get(index) {
             apply_char(&mut style, &now, was);
@@ -380,15 +391,6 @@ fn runs(props: &Map<String, Json>, old: &[TextRun], old_props: &[Map<String, Jso
         first.push(false);
     }
     (runs, first)
-}
-
-/// The index of the old run that holds byte `offset` of the old text.
-fn at_offset(old: &[TextRun], offset: usize) -> Option<usize> {
-    let mut start = 0;
-    old.iter().position(|run| {
-        start += run.text.len();
-        offset < start
-    })
 }
 
 /// The paragraph styles of a text item's JSON, `count` of them: those of `paragraphs`, or the
