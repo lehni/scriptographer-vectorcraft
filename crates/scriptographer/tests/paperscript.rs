@@ -2156,6 +2156,27 @@ fn font_faces_give_canvases_fonts_by_the_scripts_names<E: Engine>() {
     );
 }
 
+/// `fonts.check()` and `load()` read the families of a CSS `font` as canvases do, names of several
+/// words too, and an invalid one is a `SyntaxError`.
+fn font_sets_match_the_families_of_a_font<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    runtime
+        .execute(
+            &scope,
+            "const face = new FontFace('My Face', new Uint8Array([1, 2, 3]))\n\
+             face.loaded.catch(() => {\n\
+                 fonts.add(face)\n\
+                 console.log(fonts.check('bold 16px \"My Face\", serif'), fonts.check('16px My Face'), fonts.check('16px Other'))\n\
+                 try { fonts.check('bold') } catch (e) { console.log(e.name) }\n\
+                 fonts.load('nope').catch(e => console.log(e.name))\n\
+             })",
+        )
+        .unwrap();
+    run_until_done(&mut runtime);
+    assert_eq!(runtime.take_output(), ["false false true", "SyntaxError", "SyntaxError"]);
+}
+
 fn canvas_text_is_placed_by_its_anchor<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
@@ -2661,6 +2682,11 @@ macro_rules! engine_tests {
             #[test]
             fn canvases_encode_transfer_and_stay_opaque() {
                 super::canvases_encode_transfer_and_stay_opaque::<$engine>();
+            }
+
+            #[test]
+            fn font_sets_match_the_families_of_a_font() {
+                super::font_sets_match_the_families_of_a_font::<$engine>();
             }
 
             #[test]

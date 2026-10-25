@@ -140,6 +140,7 @@ pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E:
         ("createPath", path2d::construct),
         ("createImageBitmap", bitmap::create),
         ("addFont", add_font),
+        ("fontFamilies", font_families),
         ("setFontFace", set_font_face),
         ("release", release),
     ];
@@ -904,6 +905,17 @@ fn add_font<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>
     }
     let array = crate::global_class(call, "Array")?;
     let families: Vec<Value<H>> = families.into_iter().map(Value::String).collect();
+    crate::method(call, &array, "of", &families)
+}
+
+/// `fontFamilies(font)`: the families of the CSS `font` shorthand, `null` when it isn't one.
+fn font_families<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
+    let font = call.to_string(args.first().unwrap_or(&Value::Undefined))?;
+    let Some(font) = Font::parse(&font) else {
+        return Ok(Value::Null);
+    };
+    let array = crate::global_class(call, "Array")?;
+    let families: Vec<Value<H>> = font.families.into_iter().map(Value::String).collect();
     crate::method(call, &array, "of", &families)
 }
 
