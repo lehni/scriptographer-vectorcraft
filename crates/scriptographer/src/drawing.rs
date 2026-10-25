@@ -530,21 +530,17 @@ pub(crate) fn close_path<H: Clone, T: Target>(call: &mut dyn Call<H>, this: &Val
     Ok(Value::Undefined)
 }
 
-/// The current point of a path, where a subpath starts or the last segment ends.
+/// The current point of a path, where the last segment ends, or after a close, where its subpath
+/// starts. Read from the end, as each segment added asks for it.
 fn current(path: &BezPath) -> Option<Point> {
-    let mut start = None;
-    let mut last = None;
-    for element in path.elements() {
-        match element {
-            PathEl::MoveTo(p) => {
-                start = Some(*p);
-                last = Some(*p);
-            }
-            PathEl::LineTo(p) | PathEl::QuadTo(_, p) | PathEl::CurveTo(_, _, p) => last = Some(*p),
-            PathEl::ClosePath => last = start,
-        }
+    let elements = path.elements();
+    match elements.last()? {
+        PathEl::MoveTo(p) | PathEl::LineTo(p) | PathEl::QuadTo(_, p) | PathEl::CurveTo(_, _, p) => Some(*p),
+        PathEl::ClosePath => elements.iter().rev().find_map(|element| match element {
+            PathEl::MoveTo(p) => Some(*p),
+            _ => None,
+        }),
     }
-    last
 }
 
 impl Pen<'_> {
