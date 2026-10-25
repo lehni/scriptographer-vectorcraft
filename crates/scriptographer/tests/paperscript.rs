@@ -1541,6 +1541,16 @@ fn image_bitmaps_decode_crop_flip_and_resize<E: Engine>() {
     );
 }
 
+/// A script that prints without end keeps only its last lines, where every line stayed until the
+/// app took them.
+fn output_keeps_the_last_lines<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    runtime.execute(&scope, "for (let i = 0; i < 5000; i++) console.log(i)").unwrap();
+    let output = runtime.take_output();
+    assert_eq!((output.len(), output.first().map(String::as_str), output.last().map(String::as_str)), (1000, Some("4000"), Some("4999")));
+}
+
 /// `getImageData()` past the area a canvas may have throws a `RangeError`, where it made a buffer
 /// of that size whatever the canvas's; within it, the pixels off the canvas are transparent black.
 fn image_data_past_a_canvas_area_throws<E: Engine>() {
@@ -2731,6 +2741,11 @@ macro_rules! engine_tests {
             #[test]
             fn image_bitmaps_decode_crop_flip_and_resize() {
                 super::image_bitmaps_decode_crop_flip_and_resize::<$engine>();
+            }
+
+            #[test]
+            fn output_keeps_the_last_lines() {
+                super::output_keeps_the_last_lines::<$engine>();
             }
 
             #[test]
