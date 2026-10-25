@@ -905,6 +905,57 @@ fn xml_http_requests_report_progress_as_bodies_arrive<E: Engine>() {
     assert_eq!(output, ["progress 3 6 true 3 one", "progress 6 6 true 3 onetwo", "progress 6 6 true 3 onetwo", "load onetwo"]);
 }
 
+/// An `XMLHttpRequest` aborted while its body arrives ends with `abort` and nothing else, and one
+/// whose connection drops halfway through its body ends with `error`, as a network error.
+fn xml_http_requests_end_when_their_bodies_fail<E: Engine>() {
+    use std::io::{BufRead, BufReader, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = format!("http://{}", listener.local_addr().unwrap());
+    std::thread::spawn(move || {
+        for _ in 0..2 {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            let drops = line.contains("/drop");
+            while reader.read_line(&mut line).unwrap() > 2 {
+                line.clear();
+            }
+            stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: close\r\n\r\none").unwrap();
+            stream.flush().unwrap();
+            std::thread::spawn(move || {
+                // The dropped one closes halfway through its body; the aborted one waits.
+                std::thread::sleep(std::time::Duration::from_millis(if drops { 300 } else { 5000 }));
+                drop(stream);
+            });
+        }
+    });
+    let mut runtime = Runtime::<E>::new().unwrap();
+    runtime
+        .eval(&format!(
+            "const aborted = new XMLHttpRequest()\n\
+             aborted.onprogress = () => aborted.abort()\n\
+             aborted.onabort = () => console.log('abort')\n\
+             aborted.onloadend = () => console.log('aborted loadend')\n\
+             aborted.open('GET', '{address}/abort')\n\
+             aborted.send()\n\
+             const dropped = new XMLHttpRequest()\n\
+             dropped.onerror = () => console.log('error', dropped.readyState, dropped.status)\n\
+             dropped.onloadend = () => console.log('dropped loadend')\n\
+             dropped.open('GET', '{address}/drop')\n\
+             dropped.send()"
+        ))
+        .unwrap();
+    let started = std::time::Instant::now();
+    let mut output = Vec::new();
+    while !output.iter().any(|line: &String| line == "dropped loadend") && started.elapsed() < std::time::Duration::from_secs(10) {
+        runtime.run_timers(started.elapsed().as_secs_f64() * 1000.0).unwrap();
+        output.extend(runtime.take_output());
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert_eq!(output, ["abort", "aborted loadend", "error 4 0", "dropped loadend"]);
+}
+
 fn scripts_fetch<E: Engine>() {
     let address = serve(4);
     let mut runtime = Runtime::<E>::new().unwrap();
@@ -2370,6 +2421,11 @@ macro_rules! engine_tests {
             #[test]
             fn fetched_bodies_stream_as_they_arrive() {
                 super::fetched_bodies_stream_as_they_arrive::<$engine>();
+            }
+
+            #[test]
+            fn xml_http_requests_end_when_their_bodies_fail() {
+                super::xml_http_requests_end_when_their_bodies_fail::<$engine>();
             }
 
             #[test]
