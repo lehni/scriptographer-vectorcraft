@@ -90,6 +90,8 @@ function loadView() {
   void view.addEventListener
   const { addEventListener, removeEventListener, dispatchEvent } = globalThis
   Object.assign(view, { addEventListener, removeEventListener, dispatchEvent })
+  // The fonts of the canvases, as a browser window's document has them:
+  inject(view.document, { fonts: globalThis.fonts }, { writable: false })
   trackKeys(view.document)
   return view
 }

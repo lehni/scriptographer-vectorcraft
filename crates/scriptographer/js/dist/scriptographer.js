@@ -4965,6 +4965,7 @@
     void view2.addEventListener;
     const { addEventListener, removeEventListener, dispatchEvent } = globalThis;
     Object.assign(view2, { addEventListener, removeEventListener, dispatchEvent });
+    inject(view2.document, { fonts: globalThis.fonts }, { writable: false });
     trackKeys(view2.document);
     return view2;
   }

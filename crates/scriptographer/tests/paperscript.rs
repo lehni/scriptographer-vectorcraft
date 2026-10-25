@@ -2303,7 +2303,7 @@ fn font_sets_match_the_families_of_a_font<E: Engine>() {
     runtime
         .execute(
             &scope,
-            "const face = new FontFace('My Face', new Uint8Array([1, 2, 3]))\n\
+            "globalThis.face = new FontFace('My Face', new Uint8Array([1, 2, 3]))\n\
              face.loaded.catch(() => {\n\
                  fonts.add(face)\n\
                  console.log(fonts.check('bold 16px \"My Face\", serif'), fonts.check('16px My Face'), fonts.check('16px Other'))\n\
@@ -2314,6 +2314,8 @@ fn font_sets_match_the_families_of_a_font<E: Engine>() {
         .unwrap();
     run_until_done(&mut runtime);
     assert_eq!(runtime.take_output(), ["false false true", "SyntaxError", "SyntaxError"]);
+    runtime.execute(&scope, "console.log(document.fonts === fonts, document.fonts.has(face))").unwrap();
+    assert_eq!(runtime.take_output(), ["true true"], "the document's fonts are the same, as in a browser's window");
 }
 
 fn canvas_text_is_placed_by_its_anchor<E: Engine>() {
