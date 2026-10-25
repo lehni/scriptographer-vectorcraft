@@ -286,23 +286,30 @@ impl Worker {
                 if let Ok(mut slot) = shared.lock() {
                     *slot = script.runtime.interrupt();
                 }
-                // A dialog asks the app, and waits for its answer: the app sends nothing else
-                // meanwhile. Stopped, the script throws.
-                let (asking, answers) = (outbox.clone(), inbox.clone());
+                // A dialog asks the app, and waits for its answer; what else the app sends
+                // meanwhile (a document that closed) waits for the script's work to end. Stopped,
+                // the script throws.
+                let deferred = std::rc::Rc::new(std::cell::RefCell::new(std::collections::VecDeque::new()));
+                let (asking, answers, waiting) = (outbox.clone(), inbox.clone(), deferred.clone());
                 script.runtime.set_ask(Box::new(move |question| {
                     asking.send(Reply::Ask(question)).map_err(|_| Error::Script("stopped".into()))?;
                     loop {
                         match answers.recv() {
                             Ok(Request::Answer(answer)) => return Ok(answer),
-                            Ok(_) => continue,
+                            Ok(request) => waiting.borrow_mut().push_back(request),
                             Err(_) => return Err(Error::Script("stopped".into())),
                         }
                     }
                 }));
                 // Until the app drops the worker.
-                while let Ok(request) = inbox.recv()
-                    && !is_stopped()
-                {
+                loop {
+                    let next = deferred.borrow_mut().pop_front();
+                    let Some(request) = next.or_else(|| inbox.recv().ok()) else {
+                        return;
+                    };
+                    if is_stopped() {
+                        return;
+                    }
                     for reply in script.handle(request) {
                         if outbox.send(reply).is_err() {
                             return;

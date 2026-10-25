@@ -88,6 +88,28 @@ fn a_dialog_waits_for_the_answer() {
     assert_eq!(output, ["true"]);
 }
 
+/// A document that closes while a script waits on a dialog takes its project once the dialog is
+/// answered.
+#[test]
+fn a_document_that_closes_during_a_dialog_takes_its_project() {
+    let mut s = session();
+    s.execute("file.new", &json!({})).unwrap();
+    let worker = spawn();
+    s.set_active(0);
+    send(&s, &worker, Work::Execute("1".into()));
+    assert_eq!(settle(&mut s, &worker), None);
+    let first = s.documents()[0].uid;
+    s.set_active(1);
+    send(&s, &worker, Work::Execute("Dialog.alert('Wait')".into()));
+    let Some(Reply::Ask(_)) = worker.recv(WAIT) else { panic!("a question") };
+    worker.send(Request::Closed(first));
+    worker.send(Request::Answer(json!(true)));
+    assert_eq!(settle(&mut s, &worker), None);
+    send(&s, &worker, Work::Execute("console.log(paper.projects.length)".into()));
+    let Some(Reply::Done { output, error: None, .. }) = worker.recv(WAIT) else { panic!("done") };
+    assert_eq!(output, ["1"], "the closed document's project is gone");
+}
+
 /// Text on a path that a script moves goes on moving with it after the app changes the text, as
 /// when the user selects all and clears the fill.
 #[test]
