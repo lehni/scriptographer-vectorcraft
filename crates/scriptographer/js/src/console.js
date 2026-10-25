@@ -181,10 +181,14 @@ function inspect(value, depth) {
     return String(value)
   }
   const tag = Object.prototype.toString.call(value)
-  if (tag === '[object Array]') {
+  const isTyped = ArrayBuffer.isView(value) && !(value instanceof DataView)
+  if (tag === '[object Array]' || isTyped) {
+    const prefix = isTyped ? `${tag.slice(8, -1)}(${value.length}) ` : ''
     return depth > maxDepth
-      ? '[Array]'
-      : `[${
+      ? isTyped
+        ? `${prefix}[…]`
+        : '[Array]'
+      : `${prefix}[${
           getItems(
             Array.from({ length: Math.min(value.length, maxItems) }, (_, i) => [
               i,
@@ -194,29 +198,79 @@ function inspect(value, depth) {
             (_, item) => inspect(item, depth + 1)
           )
         }]`
-  } else if (/^\[object (Async|Generator)?Function\]$/.test(tag)) {
+  } else if (/^\[object (Async)?(Generator)?Function\]$/.test(tag)) {
     return `ƒ ${value.name}()`
-  } else if (tag === '[object Error]') {
+  } else if (value instanceof Error || tag === '[object DOMException]') {
     return formatError(value)
+  } else if (value instanceof Map || value instanceof Set) {
+    const name = value instanceof Map ? 'Map' : 'Set'
+    const entries = [...value].slice(0, maxItems)
+    return depth > maxDepth
+      ? `${name}(${value.size}) {…}`
+      : `${name}(${value.size}) {${
+          getItems(
+            entries.map(entry =>
+              value instanceof Map ? entry : [entry, entry]
+            ),
+            value.size,
+            (key, member) =>
+              value instanceof Map
+                ? `${inspect(key, depth + 1)} => ${inspect(member, depth + 1)}`
+                : inspect(member, depth + 1)
+          )
+        }}`
   } else {
-    // An object that writes itself (`toString()` of its own) is written so.
-    const written = String(value)
+    // An object that writes itself (`toString()` of its own) is written so;
+    // one without, or whose `toString()` throws, by its members:
+    let written = '[object Object]'
+    try {
+      written = String(value)
+    } catch {}
     if (!written.startsWith('[object ')) {
       return written
     } else if (depth > maxDepth) {
       return '{…}'
     } else {
-      // Named for its class, unless it's a plain object.
+      // Named for its class, unless it's a plain object, with the getters of
+      // its class too, as the members of DOM objects are:
       const name = value.constructor?.name
       const prefix = name && name !== 'Object' ? `${name} ` : ''
-      const keys = Object.keys(value)
+      const keys = [...Object.keys(value), ...getGetters(value)]
       const members = getItems(
-        keys.slice(0, maxItems).map(key => [key, value[key]]),
+        keys.slice(0, maxItems).map(key => [key, read(value, key)]),
         keys.length,
         (key, member) => `${key}: ${inspect(member, depth + 1)}`
       )
       return `${prefix}{${members}}`
     }
+  }
+}
+
+// The names of the enumerable getters of `value`'s classes.
+function getGetters(value) {
+  const names = []
+  for (
+    let proto = Object.getPrototypeOf(value);
+    proto && proto !== Object.prototype;
+    proto = Object.getPrototypeOf(proto)
+  ) {
+    for (const [name, descriptor] of Object.entries(
+      Object.getOwnPropertyDescriptors(proto)
+    )) {
+      if (descriptor.get && descriptor.enumerable && !names.includes(name)) {
+        names.push(name)
+      }
+    }
+  }
+  return names
+}
+
+// `value[key]`, or the error reading it threw.
+function read(value, key) {
+  try {
+    return value[key]
+  } catch (err) {
+    return err
   }
 }
 

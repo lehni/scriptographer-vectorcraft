@@ -5214,8 +5214,10 @@ ${stack}` : ""));
       return String(value);
     }
     const tag = Object.prototype.toString.call(value);
-    if (tag === "[object Array]") {
-      return depth > maxDepth ? "[Array]" : `[${getItems(
+    const isTyped = ArrayBuffer.isView(value) && !(value instanceof DataView);
+    if (tag === "[object Array]" || isTyped) {
+      const prefix = isTyped ? `${tag.slice(8, -1)}(${value.length}) ` : "";
+      return depth > maxDepth ? isTyped ? `${prefix}[\u2026]` : "[Array]" : `${prefix}[${getItems(
         Array.from({ length: Math.min(value.length, maxItems) }, (_3, i2) => [
           i2,
           value[i2]
@@ -5223,12 +5225,26 @@ ${stack}` : ""));
         value.length,
         (_3, item) => inspect(item, depth + 1)
       )}]`;
-    } else if (/^\[object (Async|Generator)?Function\]$/.test(tag)) {
+    } else if (/^\[object (Async)?(Generator)?Function\]$/.test(tag)) {
       return `\u0192 ${value.name}()`;
-    } else if (tag === "[object Error]") {
+    } else if (value instanceof Error || tag === "[object DOMException]") {
       return formatError(value);
+    } else if (value instanceof Map || value instanceof Set) {
+      const name = value instanceof Map ? "Map" : "Set";
+      const entries = [...value].slice(0, maxItems);
+      return depth > maxDepth ? `${name}(${value.size}) {\u2026}` : `${name}(${value.size}) {${getItems(
+        entries.map(
+          (entry) => value instanceof Map ? entry : [entry, entry]
+        ),
+        value.size,
+        (key, member) => value instanceof Map ? `${inspect(key, depth + 1)} => ${inspect(member, depth + 1)}` : inspect(member, depth + 1)
+      )}}`;
     } else {
-      const written = String(value);
+      let written = "[object Object]";
+      try {
+        written = String(value);
+      } catch {
+      }
       if (!written.startsWith("[object ")) {
         return written;
       } else if (depth > maxDepth) {
@@ -5236,9 +5252,9 @@ ${stack}` : ""));
       } else {
         const name = value.constructor?.name;
         const prefix = name && name !== "Object" ? `${name} ` : "";
-        const keys = Object.keys(value);
+        const keys = [...Object.keys(value), ...getGetters(value)];
         const members = getItems(
-          keys.slice(0, maxItems).map((key) => [key, value[key]]),
+          keys.slice(0, maxItems).map((key) => [key, read(value, key)]),
           keys.length,
           (key, member) => `${key}: ${inspect(member, depth + 1)}`
         );
@@ -5247,6 +5263,28 @@ ${stack}` : ""));
     }
   }
   __name(inspect, "inspect");
+  function getGetters(value) {
+    const names2 = [];
+    for (let proto = Object.getPrototypeOf(value); proto && proto !== Object.prototype; proto = Object.getPrototypeOf(proto)) {
+      for (const [name, descriptor] of Object.entries(
+        Object.getOwnPropertyDescriptors(proto)
+      )) {
+        if (descriptor.get && descriptor.enumerable && !names2.includes(name)) {
+          names2.push(name);
+        }
+      }
+    }
+    return names2;
+  }
+  __name(getGetters, "getGetters");
+  function read(value, key) {
+    try {
+      return value[key];
+    } catch (err) {
+      return err;
+    }
+  }
+  __name(read, "read");
   function getItems(entries, total, write) {
     const written = entries.map(([key, value]) => write(key, value));
     if (total > entries.length) {
@@ -5617,17 +5655,17 @@ ${stack}` : ""));
     // As much of `text` as fits in `bytes`, whole characters only.
     encodeInto(text, bytes) {
       text = String(text);
-      let read = 0;
+      let read2 = 0;
       let written = 0;
       for (const char of text) {
         const point = char.codePointAt(0);
         const length = point < 128 ? 1 : point < 2048 ? 2 : point < 65536 ? 3 : 4;
         if (written + length > bytes.length) break;
-        read += char.length;
+        read2 += char.length;
         written += length;
       }
-      bytes.set(natives.encoding.encode(text.slice(0, read)));
-      return { read, written };
+      bytes.set(natives.encoding.encode(text.slice(0, read2)));
+      return { read: read2, written };
     }
   };
   var labels = ["utf-8", "utf8", "unicode-1-1-utf-8", "unicode11utf8"];
