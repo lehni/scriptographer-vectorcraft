@@ -273,6 +273,23 @@ fn tool_scripts_get_pointer_events<E: Engine>() {
     assert_eq!(patch.params["insert"].as_array().unwrap().len(), 1, "one drag event drew one circle");
 }
 
+/// With `tool.eventInterval`, a held mouse goes on dragging where it is, on the runtime's timers.
+fn a_held_mouse_drags_at_the_event_interval<E: Engine>() {
+    use vectorcraft_scriptographer::{Modifiers, MouseEvent};
+    let (s, _, _) = document();
+    let st = s.active().unwrap();
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.execute(&scope, "tool.eventInterval = 10\nfunction onMouseDrag(event) { console.log('drag', event.point.x, event.count) }").unwrap();
+    runtime.mouse_event(&scope, MouseEvent::Down, (5.0, 0.0), Modifiers::default(), 0.0).unwrap();
+    runtime.run_timers(15.0).unwrap();
+    runtime.run_timers(30.0).unwrap();
+    runtime.mouse_event(&scope, MouseEvent::Up, (5.0, 0.0), Modifiers::default(), 0.03).unwrap();
+    runtime.run_timers(45.0).unwrap();
+    assert_eq!(runtime.take_output(), ["drag 5 0", "drag 5 1"], "it drags while held, and not after");
+}
+
 fn tool_scripts_get_key_events<E: Engine>() {
     use vectorcraft_scriptographer::Modifiers;
     let (s, _, _) = document();
@@ -1114,6 +1131,11 @@ macro_rules! engine_tests {
             #[test]
             fn items_moved_into_a_new_group() {
                 super::items_moved_into_a_new_group::<$engine>();
+            }
+
+            #[test]
+            fn a_held_mouse_drags_at_the_event_interval() {
+                super::a_held_mouse_drags_at_the_event_interval::<$engine>();
             }
 
             #[test]
