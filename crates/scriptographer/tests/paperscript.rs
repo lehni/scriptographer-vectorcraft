@@ -1541,6 +1541,23 @@ fn image_bitmaps_decode_crop_flip_and_resize<E: Engine>() {
     );
 }
 
+/// `getImageData()` past the area a canvas may have throws a `RangeError`, where it made a buffer
+/// of that size whatever the canvas's; within it, the pixels off the canvas are transparent black.
+fn image_data_past_a_canvas_area_throws<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    runtime
+        .execute(
+            &scope,
+            "const ctx = new OffscreenCanvas(1, 1).getContext('2d')\n\
+             ctx.fillStyle = 'red'; ctx.fillRect(0, 0, 1, 1)\n\
+             try { ctx.getImageData(0, 0, 16384, 16384) } catch (e) { console.log(e instanceof RangeError) }\n\
+             console.log(Array.from(ctx.getImageData(0, 0, 2, 1).data).join())",
+        )
+        .unwrap();
+    assert_eq!(runtime.take_output(), ["true", "255,0,0,255,0,0,0,0"]);
+}
+
 fn host_functions_throw_the_browsers_exceptions<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
@@ -2714,6 +2731,11 @@ macro_rules! engine_tests {
             #[test]
             fn image_bitmaps_decode_crop_flip_and_resize() {
                 super::image_bitmaps_decode_crop_flip_and_resize::<$engine>();
+            }
+
+            #[test]
+            fn image_data_past_a_canvas_area_throws() {
+                super::image_data_past_a_canvas_area_throws::<$engine>();
             }
 
             #[test]

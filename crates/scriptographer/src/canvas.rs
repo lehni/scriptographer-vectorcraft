@@ -325,18 +325,24 @@ fn get_image_data<H: Clone>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Val
         return Err(Error::Script("getImageData: the width and height must not be 0".into()));
     }
     let (sw, sh) = (pixels(w.abs())?, pixels(h.abs())?);
+    // No more than a canvas may hold, whatever this one's size.
+    if f64::from(sw) * f64::from(sh) > AREA {
+        return Err(Error::Range(format!("getImageData: {sw} × {sh} pixels are more than a canvas may have")));
+    }
     let (left, top) = ((if w < 0.0 { x + w } else { x }).round(), (if h < 0.0 { y + h } else { y }).round());
     let bytes = with_pixmap(call, this, |pixmap| {
         let mut bytes = vec![0u8; usize::from(sw) * usize::from(sh) * 4];
-        for row in 0..usize::from(sh) {
-            for column in 0..usize::from(sw) {
+        // Only the rows and columns on the canvas: the rest stays transparent black.
+        let within = |start: f64, count: u16, size: u16| {
+            (-start).clamp(0.0, f64::from(count)) as usize..(f64::from(size) - start).clamp(0.0, f64::from(count)) as usize
+        };
+        for row in within(top, sh, pixmap.height()) {
+            for column in within(left, sw, pixmap.width()) {
                 let (px, py) = (left + column as f64, top + row as f64);
-                if px >= 0.0 && py >= 0.0 && px < f64::from(pixmap.width()) && py < f64::from(pixmap.height()) {
-                    let pixel = unpremultiply(pixmap.sample(px as u16, py as u16));
-                    let at = (row * usize::from(sw) + column) * 4;
-                    if let Some(target) = bytes.get_mut(at..at + 4) {
-                        target.copy_from_slice(&pixel);
-                    }
+                let pixel = unpremultiply(pixmap.sample(px as u16, py as u16));
+                let at = (row * usize::from(sw) + column) * 4;
+                if let Some(target) = bytes.get_mut(at..at + 4) {
+                    target.copy_from_slice(&pixel);
                 }
             }
         }
