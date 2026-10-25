@@ -6938,7 +6938,7 @@ ${value}\r
       return this.#faces.values();
     }
     // The faces of the families in the CSS `font`, loaded:
-    load(font, text = "") {
+    async load(font, text = "") {
       return Promise.all(this.#matching(font).map((face) => face.load()));
     }
     // Whether the faces of the families in the CSS `font` are all loaded:
@@ -6946,11 +6946,13 @@ ${value}\r
       return this.#matching(font).every((face) => face.status === "loaded");
     }
     #matching(font) {
-      const families = String(font).split(",").map(
-        (family) => family.trim().split(/\s+/).pop().replace(/^['"]|['"]$/g, "")
-      ).map((family) => family.toLowerCase());
+      const families = natives.canvas.fontFamilies(String(font));
+      if (!families) {
+        throw new DOMException(`Invalid font: '${font}'.`, "SyntaxError");
+      }
+      const names2 = families.map((family) => family.toLowerCase());
       return [...this.#faces].filter(
-        (face) => families.includes(face.family.toLowerCase())
+        (face) => names2.includes(face.family.toLowerCase())
       );
     }
   };
