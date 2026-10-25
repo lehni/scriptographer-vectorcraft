@@ -4891,16 +4891,21 @@
   __name(setupKeys, "setupKeys");
   function hasKeyListeners() {
     return keyTargets.some(
-      ({ target, listeners }) => keyTypes.some((type) => listeners.get(type).size > 0 || target[`on${type}`])
+      ({ target, listeners }) => keyTypes.some((type) => listeners.get(type).length > 0 || target[`on${type}`])
     );
   }
   __name(hasKeyListeners, "hasKeyListeners");
   function dispatchKey(type, init) {
     const options = { ...init, bubbles: true, cancelable: true };
+    const reached = [];
+    let prevented;
     if (!natives.dom) {
-      return !document.dispatchEvent(new globalThis.KeyboardEvent(type, options));
+      const event = new globalThis.KeyboardEvent(type, options);
+      prevented = !document.dispatchEvent(event);
+      reached.push(document, globalThis);
     } else {
       const event = new KeyboardEvent(type, options);
+      let stopped = false;
       if (view) {
         const { document: document2 } = view;
         const documentEvent = new view.Event(type, options);
@@ -4910,11 +4915,25 @@
         documentEvent.getModifierState = (key) => event.getModifierState(key);
         document2[`on${type}`]?.call(document2, documentEvent);
         document2.dispatchEvent(documentEvent);
+        reached.push(document2);
         if (documentEvent.defaultPrevented) event.preventDefault();
-        if (documentEvent.cancelBubble) return event.defaultPrevented;
+        stopped = documentEvent.cancelBubble;
       }
-      return !fire(globalThis, event);
+      if (!stopped) {
+        fire(globalThis, event);
+        reached.push(globalThis);
+      }
+      prevented = event.defaultPrevented;
     }
+    for (const { target, listeners } of keyTargets) {
+      if (reached.includes(target)) {
+        listeners.set(
+          type,
+          listeners.get(type).filter((entry) => !entry.once)
+        );
+      }
+    }
+    return prevented;
   }
   __name(dispatchKey, "dispatchKey");
   function loadView() {
@@ -4927,21 +4946,44 @@
   }
   __name(loadView, "loadView");
   function trackKeys(target) {
-    const listeners = new Map(keyTypes.map((type) => [type, /* @__PURE__ */ new Set()]));
+    const listeners = new Map(keyTypes.map((type) => [type, []]));
     keyTargets.push({ target, listeners });
     const { addEventListener, removeEventListener } = target;
+    const find2 = /* @__PURE__ */ __name((entries, listener, capture) => entries.findIndex(
+      (entry) => entry.listener === listener && entry.capture === capture
+    ), "find");
     inject(target, {
       addEventListener(type, listener, options) {
-        listeners.get(type)?.add(listener);
+        const entries = listeners.get(type);
+        const { capture, once, signal } = getOptions2(options);
+        if (entries && listener && !signal?.aborted && find2(entries, listener, capture) < 0) {
+          const entry = { listener, capture, once };
+          entries.push(entry);
+          signal?.addEventListener("abort", () => {
+            const entries2 = listeners.get(type);
+            const index = entries2.indexOf(entry);
+            if (index >= 0) entries2.splice(index, 1);
+          });
+        }
         return addEventListener.call(this, type, listener, options);
       },
       removeEventListener(type, listener, options) {
-        listeners.get(type)?.delete(listener);
+        const entries = listeners.get(type);
+        const index = entries ? find2(entries, listener, getOptions2(options).capture) : -1;
+        if (index >= 0) entries.splice(index, 1);
         return removeEventListener.call(this, type, listener, options);
       }
     });
   }
   __name(trackKeys, "trackKeys");
+  function getOptions2(options) {
+    return options && typeof options === "object" ? {
+      capture: !!options.capture,
+      once: !!options.once,
+      signal: options.signal
+    } : { capture: !!options, once: false, signal: null };
+  }
+  __name(getOptions2, "getOptions");
 
   // src/clipboard.js
   var Clipboard = class extends EventTarget {

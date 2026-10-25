@@ -31,7 +31,7 @@ export function setupKeys() {
 
 export function hasKeyListeners() {
   return keyTargets.some(({ target, listeners }) =>
-    keyTypes.some(type => listeners.get(type).size > 0 || target[`on${type}`])
+    keyTypes.some(type => listeners.get(type).length > 0 || target[`on${type}`])
   )
 }
 
@@ -40,13 +40,18 @@ export function hasKeyListeners() {
 // browser. Whether a listener prevented its default.
 export function dispatchKey(type, init) {
   const options = { ...init, bubbles: true, cancelable: true }
+  const reached = []
+  let prevented
   if (!natives.dom) {
-    return !document.dispatchEvent(new globalThis.KeyboardEvent(type, options))
+    const event = new globalThis.KeyboardEvent(type, options)
+    prevented = !document.dispatchEvent(event)
+    reached.push(document, globalThis)
   } else {
     // linkedom's document takes its own events only, which bubble up to its
     // window but not on to the global object, so it gets one of its own, with
     // the members of ours, unless no script read the document yet:
     const event = new KeyboardEvent(type, options)
+    let stopped = false
     if (view) {
       const { document } = view
       const documentEvent = new view.Event(type, options)
@@ -56,11 +61,26 @@ export function dispatchKey(type, init) {
       documentEvent.getModifierState = key => event.getModifierState(key)
       document[`on${type}`]?.call(document, documentEvent)
       document.dispatchEvent(documentEvent)
+      reached.push(document)
       if (documentEvent.defaultPrevented) event.preventDefault()
-      if (documentEvent.cancelBubble) return event.defaultPrevented
+      stopped = documentEvent.cancelBubble
     }
-    return !fire(globalThis, event)
+    if (!stopped) {
+      fire(globalThis, event)
+      reached.push(globalThis)
+    }
+    prevented = event.defaultPrevented
   }
+  // The `once` listeners the key reached are gone:
+  for (const { target, listeners } of keyTargets) {
+    if (reached.includes(target)) {
+      listeners.set(
+        type,
+        listeners.get(type).filter(entry => !entry.once)
+      )
+    }
+  }
+  return prevented
 }
 
 function loadView() {
@@ -75,18 +95,53 @@ function loadView() {
 }
 
 function trackKeys(target) {
-  const listeners = new Map(keyTypes.map(type => [type, new Set()]))
+  // Each listener with its capture, which tells it apart as the DOM does:
+  const listeners = new Map(keyTypes.map(type => [type, []]))
   keyTargets.push({ target, listeners })
   const { addEventListener, removeEventListener } = target
+  const find = (entries, listener, capture) =>
+    entries.findIndex(
+      entry => entry.listener === listener && entry.capture === capture
+    )
   inject(target, {
     addEventListener(type, listener, options) {
-      listeners.get(type)?.add(listener)
+      const entries = listeners.get(type)
+      const { capture, once, signal } = getOptions(options)
+      if (
+        entries &&
+        listener &&
+        !signal?.aborted &&
+        find(entries, listener, capture) < 0
+      ) {
+        const entry = { listener, capture, once }
+        entries.push(entry)
+        signal?.addEventListener('abort', () => {
+          const entries = listeners.get(type)
+          const index = entries.indexOf(entry)
+          if (index >= 0) entries.splice(index, 1)
+        })
+      }
       return addEventListener.call(this, type, listener, options)
     },
 
     removeEventListener(type, listener, options) {
-      listeners.get(type)?.delete(listener)
+      const entries = listeners.get(type)
+      const index = entries
+        ? find(entries, listener, getOptions(options).capture)
+        : -1
+      if (index >= 0) entries.splice(index, 1)
       return removeEventListener.call(this, type, listener, options)
     }
   })
+}
+
+// The listener options as the DOM reads them: `capture` from a boolean too.
+function getOptions(options) {
+  return options && typeof options === 'object'
+    ? {
+        capture: !!options.capture,
+        once: !!options.once,
+        signal: options.signal
+      }
+    : { capture: !!options, once: false, signal: null }
 }
