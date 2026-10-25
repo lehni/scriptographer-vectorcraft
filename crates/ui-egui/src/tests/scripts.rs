@@ -1521,3 +1521,38 @@ fn the_examples_run() {
         }
     }
 }
+
+/// The Vektor example labels the vector it draws with its angle and lengths, and replaces the
+/// labels as the vector changes.
+#[test]
+fn the_vektor_example_labels_its_vector() {
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let (mut app, _) = app();
+    let temp = TempFolder::new("vektor");
+    crate::scripts::set_up_script_folders(&mut app, &temp.0, None);
+    let path = temp.0.join("Tools").join("Vektor.js");
+    // With the palette's Vector and Coordinates on:
+    let source = std::fs::read_to_string(&path)
+        .unwrap()
+        .replace("showAngleLength: false", "showAngleLength: true")
+        .replace("showCoordinates: false", "showCoordinates: true");
+    let script = tempfile_path::Path::new(&source);
+    app.run("ui.runScript", json!({ "path": script.0.to_string_lossy() })).unwrap();
+    let labels = |app: &VectorcraftApp| {
+        let mut labels = Vec::new();
+        app.session.doc().unwrap().doc.walk(|n| {
+            if let vectorcraft_doc::NodeKind::Text(text) = &n.kind {
+                labels.push(text.plain_text());
+            }
+        });
+        labels
+    };
+    for (kind, x) in [(Down, 0.0), (Drag, 120.0), (Up, 120.0)] {
+        pointer(&mut app, kind, x);
+    }
+    assert_eq!(labels(&app), ["0°", "120", "x: 120"]);
+    for (kind, x) in [(Drag, 150.0), (Up, 150.0)] {
+        pointer(&mut app, kind, x);
+    }
+    assert_eq!(labels(&app), ["0°", "150", "x: 150"]);
+}

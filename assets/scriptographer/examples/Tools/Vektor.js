@@ -1,8 +1,3 @@
-// Not ported yet: the angle and length labels, which are text items, and
-// PaperCraft can't add text to the document yet. The dashed guides show.
-// Set showLabels to true once it can.
-var showLabels = false;
-
 ////////////////////////////////////////////////////////////////////////////////
 // Values
 
@@ -112,7 +107,7 @@ function drawAngle(center, vector, label) {
 				end,
 				end + arrowVector.rotate(-135)
 		]));
-		if (label && showLabels) {
+		if (label) {
 			// Angle Label
 			var text = new PointText(center
 					+ through.normalize(radius + 10) + new Point(0, 3));
@@ -142,7 +137,7 @@ function drawLength(from, to, sign, label, value, prefix) {
 	line.lineBy(lengthVector);
 	line.lineBy(downVector);
 	dashedItems.push(line);
-	if (label && showLabels) {
+	if (label) {
 		// Length Label
 		var textAngle = Math.abs(vector.angle) > 90
 				? textAngle = 180 + vector.angle : vector.angle;
