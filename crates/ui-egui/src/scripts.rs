@@ -432,8 +432,7 @@ pub(crate) fn notify(app: &mut VectorcraftApp, handler: &'static str) {
 /// A script's thread, on the active document, to run `source` (queued, as the first work).
 fn start(app: &VectorcraftApp, name: String, path: Option<PathBuf>, source: String) -> Result<Running, String> {
     let state = app.session.doc().map_err(|e| e.to_string())?;
-    let (doc, selection) = (state.doc.clone(), state.selection.clone());
-    let size = doc.artboards.first().map_or((800.0, 600.0), |a| (a.rect.width(), a.rect.height()));
+    let size = state.doc.artboards.first().map_or((800.0, 600.0), |a| (a.rect.width(), a.rect.height()));
     let file = path.as_ref().map(|p| p.to_string_lossy().into_owned());
     let setup = Setup {
         file,
@@ -441,7 +440,7 @@ fn start(app: &VectorcraftApp, name: String, path: Option<PathBuf>, source: Stri
         cache: app.ui.scriptographer_cache.clone(),
         language: Some(app.ui_language().code().to_owned()),
     };
-    let worker = Worker::spawn(size, setup, doc, selection).map_err(|e| e.to_string())?;
+    let worker = Worker::spawn(size, setup).map_err(|e| e.to_string())?;
     let queued = if source.is_empty() { VecDeque::new() } else { VecDeque::from([Work::Execute(source.clone())]) };
     static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -617,7 +616,7 @@ fn send(app: &mut VectorcraftApp, script: &mut Running, work: Work) -> Result<()
     let paint = &app.session.paint;
     let text = app.session.new_type_style();
     let style = vectorcraft_scriptographer::host::current_style(&paint.fill, &paint.stroke, paint.stroke_width, &text.fill);
-    script.worker.send(Request::Run { doc, selection, artboard, style, work });
+    script.worker.send(Request::Run { uid: script.doc, doc, selection, artboard, style, work });
     Ok(())
 }
 
@@ -634,7 +633,7 @@ fn settle(app: &mut VectorcraftApp, script: &mut Running, wait: Duration) -> Opt
     let mut failed = None;
     while let Some(reply) = script.worker.recv(wait) {
         match reply {
-            Reply::Changes { patch, base, before, selected, effects } => {
+            Reply::Changes { patch, base, before, selected, effects, .. } => {
                 if let Err(e) = write_back(app, script, patch, base, &before, &selected, effects) {
                     failed.get_or_insert(e);
                 }

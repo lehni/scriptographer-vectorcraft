@@ -60,9 +60,6 @@ mod writeback;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
-
-use vectorcraft_doc::Document;
 
 pub use binding::Patch;
 pub use dialog::Ask;
@@ -138,10 +135,8 @@ pub struct Host<H> {
     intervals: Vec<Interval<H>>,
     /// The callbacks `requestAnimationFrame()` asked to run on the next frame, by id.
     frames: Vec<(u32, H)>,
-    /// The document the project reads from ([`Runtime::bind`]).
-    bound: Option<binding::Bound>,
-    /// The document's active artboard, `project.activeArtboard` ([`Runtime::set_artboard`]).
-    artboard: usize,
+    /// The documents the projects read from ([`Runtime::bind`]).
+    binding: binding::Binding<H>,
     /// Paper.js's `Rectangle`, for `project.artboards`.
     rectangle: Option<H>,
     /// Paper.js's `Base`, for the art the app's effects draw.
@@ -254,8 +249,7 @@ impl<H> Default for Host<H> {
             now: 0.0,
             intervals: Vec::new(),
             frames: Vec::new(),
-            bound: None,
-            artboard: 0,
+            binding: Default::default(),
             rectangle: None,
             base: None,
             canvases: None,
@@ -705,11 +699,6 @@ impl<E: Engine> Runtime<E> {
     /// A way to stop the runtime's scripts from another thread, where the engine has one.
     pub fn interrupt(&mut self) -> Option<Interrupt> {
         self.engine.interrupt()
-    }
-
-    /// The document the project reads from, as it was when the project last caught up with it.
-    pub fn document(&self) -> Option<Arc<Document>> {
-        self.host.borrow().bound.as_ref().map(|b| b.doc.clone())
     }
 
     /// Returns the lines printed with `console.log` since the last call.

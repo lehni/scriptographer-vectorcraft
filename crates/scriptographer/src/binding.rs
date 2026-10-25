@@ -1,5 +1,6 @@
-//! The document binding: a scope's project reads the document through Paper.js's host interface,
-//! loading only what scripts touch, and its changes go back as one `document.patch`.
+//! The document binding: each open document is a project of the scope, which reads it through
+//! Paper.js's host interface, loading only what scripts touch, and whose changes go back as one
+//! `document.patch` of that document. The active document's project is the scope's.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -13,27 +14,120 @@ use crate::text;
 use crate::writeback::{self, Change};
 use crate::{Call, Engine, Error, Runtime, Scope, Value, define_accessor, handle, method, object};
 
-/// The document a runtime's project reads from.
-pub(crate) struct Bound {
-    pub doc: Arc<Document>,
-    pub selection: Selection,
+/// The documents a runtime's projects read from, the active one's `uid`, and, once the first
+/// document is bound, the host functions every project's host shares and the size of the views.
+pub(crate) struct Binding<H> {
+    documents: Vec<Bound<H>>,
+    active: Option<u64>,
+    functions: Option<H>,
+    size: Option<H>,
 }
 
-/// The changes a script made, as `document.patch` params, the new items waiting for the ids that
-/// patch gives them, and the keys of the new definitions.
+/// A document and the project that reads from it: its `uid` (`DocState::uid` in the app), and its
+/// active artboard, `project.activeArtboard`.
+pub(crate) struct Bound<H> {
+    uid: u64,
+    project: H,
+    pub doc: Arc<Document>,
+    selection: Selection,
+    artboard: usize,
+}
+
+impl<H> Default for Binding<H> {
+    fn default() -> Self {
+        Self { documents: Vec::new(), active: None, functions: None, size: None }
+    }
+}
+
+impl<H> Binding<H> {
+    /// The active document's binding.
+    pub(crate) fn active(&self) -> Option<&Bound<H>> {
+        self.active.and_then(|uid| self.get(uid))
+    }
+
+    fn get(&self, uid: u64) -> Option<&Bound<H>> {
+        self.documents.iter().find(|b| b.uid == uid)
+    }
+
+    fn get_mut(&mut self, uid: u64) -> Option<&mut Bound<H>> {
+        self.documents.iter_mut().find(|b| b.uid == uid)
+    }
+}
+
+/// The changes a script made to the document `uid`, as `document.patch` params of `base`, the
+/// document its project read, the new items waiting for the ids that patch gives them, and the
+/// keys of the new definitions.
 pub struct Patch<H> {
+    pub uid: u64,
+    pub base: Arc<Document>,
     pub params: Json,
     inserted: Vec<H>,
     created: Vec<String>,
 }
 
 impl<E: Engine> Runtime<E> {
-    /// Makes the document the host of `scope`'s project, and tracks the project's changes.
-    /// `project.artboards` lists the document's artboards and `project.activeArtboard` is the
-    /// active one: VectorCraft's, on top of Paper.js.
-    pub fn bind(&mut self, scope: &Scope<E::Handle>, doc: Arc<Document>, selection: Selection) -> Result<(), Error> {
+    /// Makes the document `uid`, as `doc` and `selection`, the active one: its project becomes
+    /// the scope's, made the first time the document is bound, and catches up with it otherwise.
+    /// `project.artboards` lists the document's artboards and
+    /// `project.activeArtboard` is the active one: VectorCraft's, on top of Paper.js.
+    pub fn bind(&mut self, scope: &Scope<E::Handle>, uid: u64, doc: Arc<Document>, selection: Selection) -> Result<(), Error> {
+        let project = self.host.borrow().binding.get(uid).map(|b| b.project.clone());
+        let project = match project {
+            Some(project) => {
+                self.update(uid, doc, selection)?;
+                project
+            }
+            None => self.add_project(scope, uid, doc, selection)?,
+        };
+        self.host.borrow_mut().binding.active = Some(uid);
+        self.engine.with_call(|call| method(call, &project, "activate", &[]).map(|_| ()))
+    }
+
+    /// A project for the document `uid`: the scope's own for the first document, a new one with a
+    /// view of its size for the others.
+    fn add_project(&mut self, scope: &Scope<E::Handle>, uid: u64, doc: Arc<Document>, selection: Selection) -> Result<E::Handle, Error> {
         let selected = selection.objects.clone();
-        self.host.borrow_mut().bound = Some(Bound { doc, selection });
+        let functions = self.host.borrow().binding.functions.clone();
+        let functions = match functions {
+            Some(functions) => functions,
+            None => self.host_functions()?,
+        };
+        let artboards = self.engine.function("artboards", artboards)?;
+        let active_artboard = self.engine.function("activeArtboard", active_artboard)?;
+        let global = self.engine.global()?;
+        let (paper, binding) = (&self.paper, self.host.clone());
+        self.engine.with_call(|call| {
+            let size = binding.borrow().binding.size.clone();
+            let project = match size {
+                Some(size) => {
+                    let size = method(call, &size, "clone", &[])?;
+                    let constructor = object(call, paper, "Project")?;
+                    handle(call.construct(&constructor, &[size])?, "Project")?
+                }
+                None => {
+                    let project = object(call, &scope.0, "project")?;
+                    let view = object(call, &project, "view")?;
+                    binding.borrow_mut().binding.size = Some(object(call, &view, "viewSize")?);
+                    project
+                }
+            };
+            // Each project's host is the functions', with the document's uid, which they read from it:
+            let object_class = object(call, &global, "Object")?;
+            let host = handle(method(call, &object_class, "create", &[Value::Js(functions.clone())])?, "host")?;
+            call.set(&host, "uid", &Value::Number(uid as f64))?;
+            binding.borrow_mut().binding.documents.push(Bound { uid, project: project.clone(), doc, selection, artboard: 0 });
+            method(call, &project, "setHost", &[Value::Js(host)])?;
+            define_accessor(call, &global, &project, "artboards", artboards, None)?;
+            define_accessor(call, &global, &project, "activeArtboard", active_artboard, None)?;
+            call.set(&project, "trackChanges", &Value::Bool(true))?;
+            register(call, &project, &selected)?;
+            Ok(project)
+        })
+    }
+
+    /// The host functions the projects' hosts share, and the effects the app draws, which a
+    /// runtime sets up once.
+    fn host_functions(&mut self) -> Result<E::Handle, Error> {
         let get_children = self.engine.function("getChildren", get_children)?;
         let get_item = self.engine.function("getItem", get_item)?;
         let get_definition = self.engine.function("getDefinition", get_definition)?;
@@ -41,12 +135,9 @@ impl<E: Engine> Runtime<E> {
         let get_story = self.engine.function("getStory", get_story)?;
         let get_ancestor_keys = self.engine.function("getAncestorKeys", get_ancestor_keys)?;
         let lay_out = self.engine.function("layOut", lay_out)?;
-        let artboards = self.engine.function("artboards", artboards)?;
-        let active_artboard = self.engine.function("activeArtboard", active_artboard)?;
         let apply_effect = self.engine.function("apply", apply_effect)?;
-        let global = self.engine.global()?;
         let paper = &self.paper;
-        self.engine.with_call(|call| {
+        let functions = self.engine.with_call(|call| {
             let rectangle = object(call, paper, "Rectangle")?;
             let base = object(call, paper, "Base")?;
             {
@@ -69,21 +160,35 @@ impl<E: Engine> Runtime<E> {
             }
             // Those the scripts define from now on, the app lists while they run:
             crate::call_bundle(call, "watchEffects", &[Value::Js(effect)])?;
-            let host = call.new_object()?;
-            call.set(&host, "getChildren", &Value::Js(get_children))?;
-            call.set(&host, "getItem", &Value::Js(get_item))?;
-            call.set(&host, "getDefinition", &Value::Js(get_definition))?;
-            call.set(&host, "getDefinitionKeys", &Value::Js(get_definition_keys))?;
-            call.set(&host, "getStory", &Value::Js(get_story))?;
-            call.set(&host, "getAncestorKeys", &Value::Js(get_ancestor_keys))?;
-            call.set(&host, "layOut", &Value::Js(lay_out))?;
-            let project = object(call, &scope.0, "project")?;
-            method(call, &project, "setHost", &[Value::Js(host)])?;
-            define_accessor(call, &global, &project, "artboards", artboards, None)?;
-            define_accessor(call, &global, &project, "activeArtboard", active_artboard, None)?;
-            call.set(&project, "trackChanges", &Value::Bool(true))?;
-            register(call, &project, &selected)
-        })
+            let functions = call.new_object()?;
+            call.set(&functions, "getChildren", &Value::Js(get_children))?;
+            call.set(&functions, "getItem", &Value::Js(get_item))?;
+            call.set(&functions, "getDefinition", &Value::Js(get_definition))?;
+            call.set(&functions, "getDefinitionKeys", &Value::Js(get_definition_keys))?;
+            call.set(&functions, "getStory", &Value::Js(get_story))?;
+            call.set(&functions, "getAncestorKeys", &Value::Js(get_ancestor_keys))?;
+            call.set(&functions, "layOut", &Value::Js(lay_out))?;
+            Ok(functions)
+        })?;
+        self.host.borrow_mut().binding.functions = Some(functions.clone());
+        Ok(functions)
+    }
+
+    /// Lets go of the document `uid`, which closed: its project is removed, and its items with it.
+    pub fn unbind(&mut self, uid: u64) -> Result<(), Error> {
+        let bound = {
+            let mut host = self.host.borrow_mut();
+            let binding = &mut host.binding;
+            if binding.active == Some(uid) {
+                binding.active = None;
+            }
+            let at = binding.documents.iter().position(|b| b.uid == uid);
+            at.map(|at| binding.documents.remove(at))
+        };
+        match bound {
+            Some(bound) => self.engine.with_call(|call| method(call, &bound.project, "remove", &[]).map(|_| ())),
+            None => Ok(()),
+        }
     }
 
     /// The objects selected in `scope`'s project, as the script left them.
@@ -103,65 +208,76 @@ impl<E: Engine> Runtime<E> {
         })
     }
 
-    /// Takes the changes `scope`'s project logged since the last call, as a patch of the bound
-    /// document, or `None` when nothing changed.
-    pub fn take_patch(&mut self, scope: &Scope<E::Handle>) -> Result<Option<Patch<E::Handle>>, Error> {
-        let host = self.host.clone();
+    /// Takes the changes the projects logged since the last call, as a patch of each document
+    /// that changed, the active one's first.
+    pub fn take_patches(&mut self) -> Result<Vec<Patch<E::Handle>>, Error> {
+        let mut documents: Vec<(u64, E::Handle, Arc<Document>)> = {
+            let host = self.host.borrow();
+            host.binding.documents.iter().map(|b| (b.uid, b.project.clone(), b.doc.clone())).collect()
+        };
+        let active = self.host.borrow().binding.active;
+        documents.sort_by_key(|(uid, ..)| Some(*uid) != active);
+        // Not borrowed while the write-back calls into the script, which may need the host.
         self.engine.with_call(|call| {
-            let project = object(call, &scope.0, "project")?;
-            let changes = handle(method(call, &project, "takeChanges", &[])?, "takeChanges()")?;
-            let count = number(call.get(&changes, "length")?);
-            let (mut list, mut definitions) = (Vec::with_capacity(count as usize), Vec::new());
-            for i in 0..count as usize {
-                let entry = object(call, &changes, &i.to_string())?;
-                match call.get(&entry, "item")? {
-                    Value::Js(item) => {
-                        let flags = number(call.get(&entry, "flags")?) as u32;
-                        list.push(Change::read(call, item, flags)?);
+            let mut patches = Vec::new();
+            for (uid, project, doc) in documents {
+                let changes = handle(method(call, &project, "takeChanges", &[])?, "takeChanges()")?;
+                let count = number(call.get(&changes, "length")?);
+                let (mut list, mut definitions) = (Vec::with_capacity(count as usize), Vec::new());
+                for i in 0..count as usize {
+                    let entry = object(call, &changes, &i.to_string())?;
+                    match call.get(&entry, "item")? {
+                        Value::Js(item) => {
+                            let flags = number(call.get(&entry, "flags")?) as u32;
+                            list.push(Change::read(call, item, flags)?);
+                        }
+                        _ => definitions.push(object(call, &entry, "definition")?),
                     }
-                    _ => definitions.push(object(call, &entry, "definition")?),
                 }
+                patches.extend(writeback::patch(call, uid, &doc, list, &definitions)?);
             }
-            // Not borrowed while the write-back calls into the script, which may need the host.
-            let doc = host.borrow().bound.as_ref().map(|b| b.doc.clone()).ok_or_else(|| Error::Script("no document is bound".into()))?;
-            writeback::patch(call, &doc, list, &definitions)
+            Ok(patches)
         })
     }
 
-    /// Whether `scope`'s project changed since its changes were last taken ([`Runtime::take_patch`]):
+    /// Whether a project changed since its changes were last taken ([`Runtime::take_patches`]):
     /// on the web, a script's Promise continuations run after the call into it has returned.
     #[cfg(target_arch = "wasm32")]
-    pub fn has_changes(&mut self, scope: &Scope<E::Handle>) -> Result<bool, Error> {
+    pub fn has_changes(&mut self) -> Result<bool, Error> {
+        let projects: Vec<E::Handle> = self.host.borrow().binding.documents.iter().map(|b| b.project.clone()).collect();
         self.engine.with_call(|call| {
-            let project = object(call, &scope.0, "project")?;
-            method(call, &project, "hasChanges", &[]).map(|changed| crate::truthy(&changed))
+            for project in &projects {
+                if crate::truthy(&method(call, project, "hasChanges", &[])?) {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
         })
     }
 
-    /// Brings `scope`'s project up to `doc` and `selection`, as they are after edits made outside
-    /// the script: the items of the objects that changed reload from the document the next time
-    /// the script touches them. Objects that didn't change keep their items, and so does
-    /// everything when the document is the one the project already reads.
-    pub fn update(&mut self, scope: &Scope<E::Handle>, doc: Arc<Document>, selection: Selection) -> Result<(), Error> {
+    /// Brings the project of the document `uid` up to `doc` and `selection`, as they are after
+    /// edits made outside the script: the items of the objects that changed reload from the
+    /// document the next time the script touches them. Objects that didn't change keep their
+    /// items, and so does everything when the document is the one the project already reads.
+    fn update(&mut self, uid: u64, doc: Arc<Document>, selection: Selection) -> Result<(), Error> {
         let selected = selection.objects.clone();
-        let changes = {
+        let (changes, project) = {
             let mut host = self.host.borrow_mut();
-            let Some(bound) = host.bound.as_mut() else {
-                return Err(Error::Script("no document is bound".into()));
+            let Some(bound) = host.binding.get_mut(uid) else {
+                return Err(Error::Script(format!("document {uid} is not bound")));
             };
             if Arc::ptr_eq(&bound.doc, &doc) && bound.selection == selection {
                 return Ok(());
             }
             let changes = Columns::of_changes(&bound.doc, &bound.selection, &doc, &selection);
-            *bound = Bound { doc, selection };
-            changes
+            (bound.doc, bound.selection) = (doc, selection);
+            (changes, bound.project.clone())
         };
         if changes.is_empty() {
             return Ok(());
         }
         self.engine.with_call(|call| {
             let columns = columns_object(call, &changes)?;
-            let project = object(call, &scope.0, "project")?;
             method(call, &project, "invalidate", &[Value::Js(columns)])?;
             register(call, &project, &selected)
         })
@@ -176,18 +292,10 @@ impl<E: Engine> Runtime<E> {
     /// document changed in other ways too since the project last caught up with it (`behind`: the
     /// patch was applied later), everything that changed loads again, and so do the new
     /// definitions, which a failed patch didn't make.
-    pub fn apply_ids(
-        &mut self,
-        scope: &Scope<E::Handle>,
-        patch: Patch<E::Handle>,
-        result: &Json,
-        doc: Arc<Document>,
-        selection: Selection,
-        behind: bool,
-    ) -> Result<(), Error> {
+    pub fn apply_ids(&mut self, patch: Patch<E::Handle>, result: &Json, doc: Arc<Document>, selection: Selection, behind: bool) -> Result<(), Error> {
         let mut reload = Columns::default();
         let mut host = self.host.borrow_mut();
-        let bound = host.bound.as_mut().ok_or_else(|| Error::Script("no document is bound".into()))?;
+        let bound = host.binding.get_mut(patch.uid).ok_or_else(|| Error::Script(format!("document {} is not bound", patch.uid)))?;
         if behind {
             reload = Columns::of_changes(&bound.doc, &bound.selection, &doc, &selection);
             for key in &patch.created {
@@ -207,7 +315,8 @@ impl<E: Engine> Runtime<E> {
                 }
             }
         }
-        *bound = Bound { doc, selection };
+        (bound.doc, bound.selection) = (doc, selection);
+        let project = bound.project.clone();
         drop(host);
         let ids = result["ids"].as_array().cloned().unwrap_or_default();
         self.engine.with_call(|call| {
@@ -218,7 +327,6 @@ impl<E: Engine> Runtime<E> {
             }
             if !reload.is_empty() {
                 let columns = columns_object(call, &reload)?;
-                let project = object(call, &scope.0, "project")?;
                 method(call, &project, "invalidate", &[Value::Js(columns)])?;
             }
             Ok(())
@@ -227,8 +335,8 @@ impl<E: Engine> Runtime<E> {
 }
 
 impl<H> Patch<H> {
-    pub(crate) fn new(params: Json, inserted: Vec<H>, created: Vec<String>) -> Self {
-        Self { params, inserted, created }
+    pub(crate) fn new(uid: u64, base: Arc<Document>, params: Json, inserted: Vec<H>, created: Vec<String>) -> Self {
+        Self { uid, base, params, inserted, created }
     }
 }
 
@@ -258,24 +366,36 @@ fn key<H>(args: &[Value<H>]) -> Option<NodeId> {
 }
 
 impl<E: Engine> Runtime<E> {
-    /// Makes artboard `index` of the document `project.activeArtboard`.
+    /// Makes artboard `index` of the active document its project's `activeArtboard`.
     pub fn set_artboard(&mut self, index: usize) {
-        self.host.borrow_mut().artboard = index;
+        let mut host = self.host.borrow_mut();
+        let binding = &mut host.binding;
+        if let Some(bound) = binding.active.and_then(|uid| binding.get_mut(uid)) {
+            bound.artboard = index;
+        }
+    }
+
+    /// The active document, as it was when its project last caught up with it.
+    pub fn document(&self) -> Option<Arc<Document>> {
+        self.host.borrow().binding.active().map(|b| b.doc.clone())
     }
 }
 
 /// `project.artboards`: the document's artboards, in order, each as `{ name, bounds }`.
-fn artboards<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, _args: &[Value<H>]) -> Result<Value<H>, Error> {
-    let boards = with_bound(call, |doc, _| doc.artboards.iter().map(|a| (a.name.clone(), a.rect)).collect::<Vec<_>>())?;
+fn artboards<H: Clone>(call: &mut dyn Call<H>, this: &Value<H>, _args: &[Value<H>]) -> Result<Value<H>, Error> {
+    let host = project_host(call, this)?;
+    let boards = with_bound(call, &host, |doc, _| doc.artboards.iter().map(|a| (a.name.clone(), a.rect)).collect::<Vec<_>>())?;
     let list = boards.into_iter().map(|(name, rect)| artboard(call, name, rect).map(Value::Js)).collect::<Result<Vec<_>, _>>()?;
     Ok(Value::Js(call.new_array(&list)?))
 }
 
 /// `project.activeArtboard`: the active one of `project.artboards` (the first when there is no
 /// such artboard), `null` without artboards.
-fn active_artboard<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, _args: &[Value<H>]) -> Result<Value<H>, Error> {
-    let index = call.host()?.borrow().artboard;
-    match with_bound(call, |doc, _| doc.artboards.get(index).or(doc.artboards.first()).map(|a| (a.name.clone(), a.rect)))? {
+fn active_artboard<H: Clone>(call: &mut dyn Call<H>, this: &Value<H>, _args: &[Value<H>]) -> Result<Value<H>, Error> {
+    let host = project_host(call, this)?;
+    let uid = bound_uid(call, &host)?;
+    let index = call.host()?.borrow().binding.get(uid).map_or(0, |b| b.artboard);
+    match with_bound(call, &host, |doc, _| doc.artboards.get(index).or(doc.artboards.first()).map(|a| (a.name.clone(), a.rect)))? {
         Some((name, rect)) => Ok(Value::Js(artboard(call, name, rect)?)),
         None => Ok(Value::Null),
     }
@@ -292,18 +412,39 @@ fn artboard<H: Clone>(call: &mut dyn Call<H>, name: String, rect: vectorcraft_ge
     Ok(board)
 }
 
-/// Runs `f` with the bound document and selection.
-fn with_bound<H, R>(call: &mut dyn Call<H>, f: impl FnOnce(&Document, &Selection) -> R) -> Result<R, Error> {
+/// The host of the project `this`.
+fn project_host<H: Clone>(call: &mut dyn Call<H>, this: &Value<H>) -> Result<Value<H>, Error> {
+    match this {
+        Value::Js(project) => call.get(project, "host"),
+        _ => Err(Error::Script("not a project".into())),
+    }
+}
+
+/// The `uid` of the document whose project has the host `this`.
+fn bound_uid<H>(call: &mut dyn Call<H>, this: &Value<H>) -> Result<u64, Error> {
+    match this {
+        Value::Js(host) => match call.get(host, "uid")? {
+            Value::Number(uid) if uid.is_finite() && uid >= 0.0 => Ok(uid as u64),
+            _ => Err(Error::Script("not a project's host".into())),
+        },
+        _ => Err(Error::Script("not a project's host".into())),
+    }
+}
+
+/// Runs `f` with the document and selection of the project whose host is `this`, as the host
+/// functions are called.
+fn with_bound<H, R>(call: &mut dyn Call<H>, this: &Value<H>, f: impl FnOnce(&Document, &Selection) -> R) -> Result<R, Error> {
+    let uid = bound_uid(call, this)?;
     let host = call.host()?;
     let host = host.borrow();
-    let bound = host.bound.as_ref().ok_or_else(|| Error::Script("no document is bound".into()))?;
+    let bound = host.binding.get(uid).ok_or_else(|| Error::Script("the project's document closed".into()))?;
     Ok(f(&bound.doc, &bound.selection))
 }
 
 /// `source.getChildren(key)`: the records of a container's children, as columns.
-fn get_children<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
+fn get_children<H: Clone>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let parent = key(args);
-    let columns = with_bound(call, |doc, selection| Columns::of_children(doc, parent, selection))?.unwrap_or_default();
+    let columns = with_bound(call, this, |doc, selection| Columns::of_children(doc, parent, selection))?.unwrap_or_default();
     Ok(Value::Js(columns_object(call, &columns)?))
 }
 
@@ -345,9 +486,9 @@ fn columns_object<H: Clone>(call: &mut dyn Call<H>, columns: &Columns) -> Result
 
 /// `source.getItem(key)`: the item's own content as Paper.js JSON; for a frame of a thread, without
 /// its story, which [`get_story`] gives, and with the frames it's `linked` with.
-fn get_item<H>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
+fn get_item<H>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let id = key(args).ok_or_else(|| Error::Script("getItem: no key".into()))?;
-    let json = with_bound(call, |doc, selection| {
+    let json = with_bound(call, this, |doc, selection| {
         doc.node(id).map(|node| {
             let mut json = item_json(node, selection);
             if let Some(linked) = text::linked(doc, id)
@@ -367,23 +508,23 @@ fn get_item<H>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> R
 
 /// `source.getDefinition(key)`: the definition `key` names as Paper.js JSON, as
 /// [`definition_json`] gives it.
-fn get_definition<H>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
+fn get_definition<H>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let key = match args.first() {
         Some(Value::String(key)) => key.clone(),
         _ => return Err(Error::Script("getDefinition: no key".into())),
     };
-    let json = with_bound(call, |doc, _| definition_json(doc, &key))?;
+    let json = with_bound(call, this, |doc, _| definition_json(doc, &key))?;
     let json = json.ok_or_else(|| Error::Script(format!("getDefinition: no definition '{key}'")))?;
     Ok(Value::String(json.to_string()))
 }
 
 /// `source.getDefinitionKeys(class)`: the keys of the document's definitions of the class.
-fn get_definition_keys<H>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
+fn get_definition_keys<H>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let class = match args.first() {
         Some(Value::String(class)) => class.clone(),
         _ => return Err(Error::Script("getDefinitionKeys: no class".into())),
     };
-    let keys: Vec<_> = with_bound(call, |doc, _| definition_keys(doc, &class))?.into_iter().map(Value::String).collect();
+    let keys: Vec<_> = with_bound(call, this, |doc, _| definition_keys(doc, &class))?.into_iter().map(Value::String).collect();
     Ok(Value::Js(call.new_array(&keys)?))
 }
 
@@ -409,7 +550,7 @@ fn apply_effect<H: Clone>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value
         _ => None,
     };
     let effect = writeback::exported(call, effect)?;
-    let output = with_bound(call, |doc, _| {
+    let output = with_active(call, |doc| {
         let art = match id {
             Some(id) => doc.node(id).cloned(),
             None => writeback::new_node(&json).ok(),
@@ -425,11 +566,19 @@ fn apply_effect<H: Clone>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value
     }
 }
 
+/// Runs `f` with the active document.
+fn with_active<H, R>(call: &mut dyn Call<H>, f: impl FnOnce(&Document) -> R) -> Result<R, Error> {
+    let host = call.host()?;
+    let host = host.borrow();
+    let bound = host.binding.active().ok_or_else(|| Error::Script("no document is bound".into()))?;
+    Ok(f(&bound.doc))
+}
+
 /// `source.getStory(key)`: the story of the thread the frame `key` is in, its runs and paragraphs as
 /// Paper.js JSON, once for all its frames.
-fn get_story<H>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
+fn get_story<H>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let id = key(args).ok_or_else(|| Error::Script("getStory: no key".into()))?;
-    let json = with_bound(call, |doc, _| match doc.node(id) {
+    let json = with_bound(call, this, |doc, _| match doc.node(id) {
         Some(node @ Node { kind: NodeKind::Text(t), .. }) => {
             let mut props = Map::new();
             let (story, first) = text::unfolded(&text::story_view(doc, id, t), &node.appearance);
@@ -447,12 +596,12 @@ fn get_story<H>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> 
 /// JSON as the script holds it, starting from that text object where there is one, so what
 /// Paper.js has no form for, as text wraps, stays, see Paper.js's `Project#host`. A frame of a
 /// thread holds the whole story, laid out from `start`, where the frame before it ends.
-fn lay_out<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
+fn lay_out<H: Clone>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let start = match args.get(1) {
         Some(Value::Number(n)) if n.is_finite() && *n >= 0.0 => *n as usize,
         _ => 0,
     };
-    let before = with_bound(call, |doc, _| match key(args.get(2..).unwrap_or_default()).and_then(|id| doc.node(id)) {
+    let before = with_bound(call, this, |doc, _| match key(args.get(2..).unwrap_or_default()).and_then(|id| doc.node(id)) {
         Some(node @ Node { id, kind: NodeKind::Text(t), .. }) => Some(text::unfolded(&text::story_view(doc, *id, t), &node.appearance)),
         _ => None,
     })?;
@@ -489,9 +638,9 @@ pub(crate) fn js_value<H: Clone>(call: &mut dyn Call<H>, json: &Json) -> Result<
 }
 
 /// `source.getAncestorKeys(key)`: the keys from the layer down to the item's parent.
-fn get_ancestor_keys<H>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
+fn get_ancestor_keys<H>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let id = key(args).ok_or_else(|| Error::Script("getAncestorKeys: no key".into()))?;
-    let mut ancestry = with_bound(call, |doc, _| doc.ancestry(id))?.unwrap_or_default();
+    let mut ancestry = with_bound(call, this, |doc, _| doc.ancestry(id))?.unwrap_or_default();
     ancestry.pop();
     let keys: Vec<_> = ancestry.iter().map(|id| Value::Number(id.0 as f64)).collect();
     Ok(Value::Js(call.new_array(&keys)?))
