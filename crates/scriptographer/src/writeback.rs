@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use serde_json::{Map, Value as Json, json};
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
-use vectorcraft_doc::{Appearance, Document, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Scaling, TextWrap};
+use vectorcraft_doc::{Appearance, Document, LayerColor, LineCap, LineJoin, LiveShape, Node, NodeId, NodeKind, Scaling, TextWrap};
 use vectorcraft_geom::{Affine, Anchor, AnchorKind, PathData, Point, SubPath};
 
 use crate::binding::{Patch, node, number};
@@ -303,6 +303,11 @@ impl<H: Clone> News<H> {
 /// go in after it.
 fn container_node<H: Clone>(call: &mut dyn Call<H>, item: &H) -> Result<(bool, Node), Error> {
     let mut json = export(call, item)?;
+    // A shape that no live shape is (a rectangle with elliptical corners) goes in as its path:
+    if json.get(0).and_then(Json::as_str) == Some("Shape") && json.get(1).and_then(Json::as_object).and_then(live_shape).is_none() {
+        let path = crate::handle(method(call, item, "toPath", &[Value::Bool(false)])?, "path")?;
+        json = export(call, &path)?;
+    }
     let container = matches!(json.get(0).and_then(Json::as_str), Some("Group" | "Layer"));
     if container && let Some(props) = json.get_mut(1).and_then(Json::as_object_mut) {
         props.remove("children");
@@ -436,6 +441,29 @@ fn replaced<H: Clone>(call: &mut dyn Call<H>, doc: &Document, original: &Node, c
         "Path" | "CompoundPath" => {
             let json = export(call, &change.item)?;
             apply(&mut node, &json, &before)?;
+        }
+        "Shape" => {
+            let json = export(call, &change.item)?;
+            let props = json.get(1).and_then(Json::as_object).cloned().unwrap_or_default();
+            match live_shape(&props) {
+                Some(live) => {
+                    if let NodeKind::Path { path, live: shape, .. } = &mut node.kind
+                        && !is_same_path(path, &live.to_path())
+                    {
+                        *path = live.to_path();
+                        *shape = Some(Box::new(live));
+                    }
+                    let mut appearance = (*node.appearance).clone();
+                    apply_style(&mut appearance, &props, &before[1]);
+                    node.appearance = appearance.into();
+                    apply_attributes(&mut node, &props, &before[1]);
+                }
+                // One that no live shape is, as its path:
+                None => {
+                    let path = crate::handle(method(call, &change.item, "toPath", &[Value::Bool(false)])?, "path")?;
+                    apply(&mut node, &export(call, &path)?, &before)?;
+                }
+            }
         }
         "SymbolItem" => {
             let json = export(call, &change.item)?;
@@ -866,6 +894,31 @@ fn anchor(segment: &Json, kind: Option<AnchorKind>) -> Anchor {
     Anchor { p, h_in, h_out, kind }
 }
 
+/// The live shape of a Paper.js `Shape`'s properties: a circle or ellipse, or a rectangle whose
+/// corners are circular. Paper.js centres it on its matrix's origin.
+fn live_shape(props: &Map<String, Json>) -> Option<LiveShape> {
+    let pair = |json: Option<&Json>| match json {
+        Some(Json::Array(v)) => Some((v.first()?.as_f64()?, v.get(1)?.as_f64()?)),
+        Some(n) => n.as_f64().map(|n| (n, n)),
+        None => Some((0.0, 0.0)),
+    };
+    let (w, h) = pair(props.get("size")).filter(|(w, h)| w.is_finite() && h.is_finite())?;
+    let centred = Affine::translate((-w / 2.0, -h / 2.0));
+    let mut live = match props.get("type").and_then(Json::as_str)? {
+        "circle" | "ellipse" => LiveShape::Ellipse { w, h, pie: (0.0, 360.0), xf: centred },
+        "rectangle" => match pair(props.get("radius"))? {
+            (rx, ry) if rx == ry && rx.is_finite() => {
+                LiveShape::Rectangle { w, h, radii: [rx.max(0.0); 4], kinds: Default::default(), radii_relative: false, xf: centred }
+            }
+            _ => return None,
+        },
+        _ => return None,
+    };
+    // Paper.js leaves out the matrix where it's the identity:
+    live.transform(props.get("matrix").map_or(Some(Affine::IDENTITY), matrix)?);
+    Some(live)
+}
+
 /// A new node from a Paper.js item's JSON: layers, groups, paths and compound paths.
 pub fn new_node(json: &Json) -> Result<Node, Error> {
     let class = json.get(0).and_then(Json::as_str).unwrap_or_default();
@@ -878,6 +931,17 @@ pub fn new_node(json: &Json) -> Result<Node, Error> {
         "Path" | "CompoundPath" => {
             let mut node = Node::path(id, path_data(json, None)?, Appearance::basic(Paint::None, Paint::None, 1.0));
             apply(&mut node, json, &Json::Null)?;
+            node
+        }
+        "Shape" => {
+            let live = live_shape(props).ok_or_else(|| Error::Script("no live shape is this shape".into()))?;
+            let mut node = Node::path(id, live.to_path(), Appearance::basic(Paint::None, Paint::None, 1.0));
+            if let NodeKind::Path { live: shape, .. } = &mut node.kind {
+                *shape = Some(Box::new(live));
+            }
+            let mut appearance = (*node.appearance).clone();
+            apply_style(&mut appearance, props, &Json::Null);
+            node.appearance = appearance.into();
             node
         }
         "PointText" | "AreaText" | "PathText" => {

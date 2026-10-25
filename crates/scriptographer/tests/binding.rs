@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use serde_json::json;
 use vectorcraft_color::{Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
-use vectorcraft_doc::{Node, NodeId, NodeKind};
+use vectorcraft_doc::{LiveShape, Node, NodeId, NodeKind};
 use vectorcraft_engine::Session;
 use vectorcraft_geom::{Affine, Point, Rect};
 use vectorcraft_scriptographer::{Engine, Runtime};
@@ -126,6 +126,58 @@ fn an_item_the_document_cant_hold_is_left_out<E: Engine>() {
     let output = turn(&mut s, &mut runtime, "new Path.Circle({ center: [50, 50], radius: 5 })\nproject.activeLayer.lastChild.bringToFront()");
     assert_eq!(output, Vec::<String>::new(), "no message again");
     assert_eq!(s.active().unwrap().doc.layers[0].children().unwrap().len(), 3, "the circle went in, beside the two rectangles");
+}
+
+/// New `Shape`s are live shapes, sized and placed as the script made them; a rectangle with
+/// elliptical corners, which no live shape is, a path of its outline.
+fn new_shapes_are_live_shapes<E: Engine>() {
+    let (mut s, _, _) = document();
+    run::<E>(
+        &mut s,
+        "new Shape.Circle({ center: [100, 100], radius: 10, fillColor: 'red' })\n\
+         var box = new Shape.Rectangle({ point: [200, 50], size: [40, 20], radius: 4 })\n\
+         box.rotate(90)\n\
+         new Shape.Rectangle({ point: [0, 200], size: [40, 20], radius: [6, 3] })",
+    );
+    let children = s.active().unwrap().doc.layers[0].children().unwrap().clone();
+    let [circle, rectangle, elliptical] = [&children[2], &children[3], &children[4]];
+    assert!(matches!(circle.live_shape(), Some(LiveShape::Ellipse { w: 20.0, h: 20.0, .. })), "{:?}", circle.live_shape());
+    assert_eq!(circle.appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    let close = |r: Rect, x0: f64, y0: f64, x1: f64, y1: f64| [r.x0 - x0, r.y0 - y0, r.x1 - x1, r.y1 - y1].iter().all(|d| d.abs() < 1e-9);
+    assert!(close(circle.geometric_bounds().unwrap(), 90.0, 90.0, 110.0, 110.0));
+    let Some(LiveShape::Rectangle { w, h, radii, .. }) = rectangle.live_shape() else { panic!("{:?}", rectangle.live_shape()) };
+    assert_eq!((*w, *h, radii[0]), (40.0, 20.0, 4.0));
+    let bounds = rectangle.geometric_bounds().unwrap();
+    assert!(close(bounds, 210.0, 40.0, 230.0, 80.0), "turned about its centre: {bounds:?}");
+    assert!(elliptical.live_shape().is_none() && elliptical.path_data().is_some(), "a path");
+    assert!(close(elliptical.geometric_bounds().unwrap(), 0.0, 200.0, 40.0, 220.0));
+}
+
+/// A `Shape` the script changes later changes its live shape, and its style.
+fn shapes_change_as_scripts_change_them<E: Engine>() {
+    let (mut s, _, _) = document();
+    let st = s.active().unwrap();
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
+    for script in [
+        "globalThis.circle = new Shape.Circle({ center: [100, 100], radius: 10 })",
+        "circle.position += [50, 0]\ncircle.radius = 20\ncircle.fillColor = 'blue'",
+    ] {
+        let st = s.active().unwrap();
+        runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
+        runtime.execute(&scope, script).unwrap();
+        for patch in runtime.take_patches().unwrap() {
+            let result = s.execute("document.patch", &patch.params).unwrap();
+            let st = s.active().unwrap();
+            runtime.apply_ids(patch, &result, st.doc.clone(), st.selection.clone(), false).unwrap();
+        }
+    }
+    let circle = s.active().unwrap().doc.layers[0].children().unwrap()[2].clone();
+    assert!(matches!(circle.live_shape(), Some(LiveShape::Ellipse { w: 40.0, h: 40.0, .. })), "{:?}", circle.live_shape());
+    let bounds = circle.geometric_bounds().unwrap();
+    assert!((bounds.x0 - 130.0).abs() < 1e-9 && (bounds.y1 - 120.0).abs() < 1e-9, "{bounds:?}");
+    assert_eq!(circle.appearance.fill_paint(), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
 }
 
 /// `paintOrder` is the order of the top fill and stroke, both ways.
@@ -1141,6 +1193,16 @@ macro_rules! engine_tests {
             #[test]
             fn an_item_the_document_cant_hold_is_left_out() {
                 super::an_item_the_document_cant_hold_is_left_out::<$engine>();
+            }
+
+            #[test]
+            fn new_shapes_are_live_shapes() {
+                super::new_shapes_are_live_shapes::<$engine>();
+            }
+
+            #[test]
+            fn shapes_change_as_scripts_change_them() {
+                super::shapes_change_as_scripts_change_them::<$engine>();
             }
 
             #[test]
