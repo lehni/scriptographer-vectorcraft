@@ -180,6 +180,27 @@ fn shapes_change_as_scripts_change_them<E: Engine>() {
     assert_eq!(circle.appearance.fill_paint(), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
 }
 
+/// A change of a compound path's child path changes the compound, which keeps its paths and the
+/// points that didn't move; a path added to it joins its geometry.
+fn compound_paths_change_as_their_paths_do<E: Engine>() {
+    let (mut s, a, b) = document();
+    s.execute("select.set", &json!({ "ids": [a.0, b.0] })).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let layer = |s: &Session| s.active().unwrap().doc.layers[0].children().unwrap().clone();
+    let compound = layer(&s)[0].clone();
+    let NodeKind::Compound { children: before, .. } = &compound.kind else { panic!("a compound path") };
+    let anchors = |n: &Node| n.path_data().unwrap().subpaths[0].anchors.clone();
+    run::<E>(&mut s, "project.activeLayer.firstChild.lastChild.position += [0, 100]");
+    assert_eq!(layer(&s).len(), 1, "no path of its own");
+    let NodeKind::Compound { children, .. } = &layer(&s)[0].kind else { panic!("still a compound path") };
+    assert_eq!(children.iter().map(|c| c.id).collect::<Vec<_>>(), before.iter().map(|c| c.id).collect::<Vec<_>>(), "with its paths");
+    assert_eq!(anchors(&children[0]), anchors(&before[0]), "the one not moved as it was");
+    assert_eq!(children[1].geometric_bounds().unwrap().y0, before[1].geometric_bounds().unwrap().y0 + 100.0, "the moved one moved");
+    run::<E>(&mut s, "project.activeLayer.firstChild.addChild(new Path.Rectangle([300, 200], [10, 10]))");
+    assert_eq!(layer(&s).len(), 1);
+    assert_eq!(layer(&s)[0].geometric_bounds().unwrap().x1, 310.0, "the added path is part of it");
+}
+
 /// `paintOrder` is the order of the top fill and stroke, both ways.
 fn paint_order_is_the_order_of_fill_and_stroke<E: Engine>() {
     let (mut s, a, _) = document();
@@ -1203,6 +1224,11 @@ macro_rules! engine_tests {
             #[test]
             fn shapes_change_as_scripts_change_them() {
                 super::shapes_change_as_scripts_change_them::<$engine>();
+            }
+
+            #[test]
+            fn compound_paths_change_as_their_paths_do() {
+                super::compound_paths_change_as_their_paths_do::<$engine>();
             }
 
             #[test]
