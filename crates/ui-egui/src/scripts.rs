@@ -32,6 +32,7 @@ use vectorcraft_doc::{Document, NodeId};
 use vectorcraft_scriptographer::worker::{Pointer, Reply, Request, Work, Worker};
 use vectorcraft_scriptographer::{Key, Modifiers, MouseEvent, PaletteEvent, Setup};
 use vectorcraft_tools::Cursor;
+use web_time::Instant;
 
 use crate::state::ScriptFolder;
 use crate::{FilePick, VectorcraftApp};
@@ -42,8 +43,9 @@ const EXTS: &[&str] = &["js", "pjs"];
 /// How long the app waits for a script it runs before it goes on, and the script with it.
 const RUN_WAIT: Duration = Duration::from_secs(2);
 
-/// How long a frame waits for each of a script's replies: an animation's changes show in the
-/// frame that asked for them, unless the script takes longer, when they show in a later one.
+/// How long a frame waits for the scripts' replies to the work it sends them: an animation's
+/// changes show in the frame that asked for them, unless the script takes longer, when they show
+/// in a later one, which doesn't wait for them.
 const FRAME_WAIT: Duration = Duration::from_millis(100);
 /// How long a script works on before the app asks whether to wait for it, in seconds.
 const NOT_RESPONDING: f64 = 5.0;
@@ -475,9 +477,10 @@ fn not_responding(app: &mut VectorcraftApp, now: f64) {
 pub(crate) fn notify(app: &mut VectorcraftApp, handler: &'static str) {
     let mut scripts = std::mem::take(&mut app.scripts.running);
     scripts.extend(app.scripts.console.take());
+    let until = Instant::now() + FRAME_WAIT;
     scripts.retain_mut(|script| {
         script.queued.push_back(Work::Handler(handler));
-        let result = pump(app, script, None, FRAME_WAIT);
+        let result = pump(app, script, None, until);
         if let Err(e) = &result {
             report(app, &script.name, e);
         }
@@ -528,10 +531,10 @@ fn start(app: &VectorcraftApp, name: String, path: Option<PathBuf>, source: Stri
     })
 }
 
-/// Runs the script's queued work, waiting at most `wait` for each. Returns whether it keeps
+/// Runs the script's queued work, waiting at most `wait` for it. Returns whether it keeps
 /// running, or reports its error.
 fn execute(app: &mut VectorcraftApp, script: &mut Running, wait: Duration) -> Result<bool, String> {
-    pump(app, script, None, wait).inspect_err(|e| report(app, &script.name, e))
+    pump(app, script, None, Instant::now() + wait).inspect_err(|e| report(app, &script.name, e))
 }
 
 /// Drives the running scripts, once per frame: their queued work, timers and `onFrame` handlers
@@ -576,9 +579,10 @@ pub(crate) fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
     }
     clipboard(app, ctx);
     dialogs(app);
+    let until = Instant::now() + FRAME_WAIT;
     let mut scripts = std::mem::take(&mut app.scripts.running);
     scripts.retain_mut(|script| {
-        let keeps = pump(app, script, Some((now - script.started) * 1000.0), FRAME_WAIT).unwrap_or_else(|e| {
+        let keeps = pump(app, script, Some((now - script.started) * 1000.0), until).unwrap_or_else(|e| {
             report(app, &script.name, &e);
             false
         });
@@ -593,7 +597,7 @@ pub(crate) fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
     app.scripts.tidy();
     if let Some(mut console) = app.scripts.console.take() {
         let ms = (now - console.started) * 1000.0;
-        if let Err(e) = pump(app, &mut console, Some(ms), FRAME_WAIT) {
+        if let Err(e) = pump(app, &mut console, Some(ms), until) {
             report(app, &console.name, &e);
         }
         app.scripts.console = Some(console);
@@ -606,9 +610,11 @@ pub(crate) fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
 
 /// Sends the script its queued work, then its frame at `frame` (milliseconds since it started)
 /// when it has timers, one at a time, each with the document as it is, and applies what each one
-/// changed. Waits at most `wait` for each: a script still working then goes on in a later frame.
-/// Returns whether the script keeps running, or the error of the work that failed.
-fn pump(app: &mut VectorcraftApp, script: &mut Running, mut frame: Option<f64>, wait: Duration) -> Result<bool, String> {
+/// changed. Waits for its work until `until`, but not for work that already outlasted an earlier
+/// frame: a script still working then goes on in a later frame. Returns whether the script keeps
+/// running, or the error of the work that failed.
+fn pump(app: &mut VectorcraftApp, script: &mut Running, mut frame: Option<f64>, until: Instant) -> Result<bool, String> {
+    let mut sent = false;
     loop {
         // Waiting on a dialog, or for a document to work in: nothing else until then.
         if script.asking.is_some() || app.session.active().is_none() {
@@ -624,10 +630,13 @@ fn pump(app: &mut VectorcraftApp, script: &mut Running, mut frame: Option<f64>, 
                 },
             };
             send(app, script, work)?;
+            sent = true;
         }
         let Some(kind) = script.busy else {
             return Ok(true);
         };
+        // Work that outlasted an earlier frame's wait isn't waited for again.
+        let wait = if sent || script.busy_since.is_none() { until } else { Instant::now() };
         let Some(Done { error, tool, keys }) = settle(app, script, wait) else {
             return Ok(true);
         };
@@ -689,10 +698,10 @@ struct Done {
 }
 
 /// Applies what the script's work changed as its replies come, until the work is done, the script
-/// asks a dialog, or a reply takes longer than `wait`.
-fn settle(app: &mut VectorcraftApp, script: &mut Running, wait: Duration) -> Option<Done> {
+/// asks a dialog, or `until`.
+fn settle(app: &mut VectorcraftApp, script: &mut Running, until: Instant) -> Option<Done> {
     let mut failed = None;
-    while let Some(reply) = script.worker.recv(wait) {
+    while let Some(reply) = script.worker.recv(until.saturating_duration_since(Instant::now())) {
         match reply {
             Reply::Changes { uid, patch, base, before, selected, effects } => {
                 if let Err(e) = write_back(app, script, uid, patch, base, &before, &selected, effects) {
@@ -1131,14 +1140,15 @@ pub(crate) fn document_keys(app: &mut VectorcraftApp, ctx: &egui::Context) {
     ctx.input_mut(|i| i.events = events);
 }
 
-/// Lets the scripts that owe answers to held keys work on them for up to [`FRAME_WAIT`] each, and
-/// matches their answers with the keys; a script that failed or stopped owes none.
+/// Lets the scripts that owe answers to held keys work on them for up to [`FRAME_WAIT`] together,
+/// and matches their answers with the keys; a script that failed or stopped owes none.
 fn answer_keys(app: &mut VectorcraftApp) {
+    let until = Instant::now() + FRAME_WAIT;
     let mut scripts = std::mem::take(&mut app.scripts.running);
     scripts.extend(app.scripts.console.take());
     scripts.retain_mut(|script| {
         if app.scripts.held.iter().any(|h| h.owing.contains(&script.id))
-            && let Err(e) = pump(app, script, None, FRAME_WAIT)
+            && let Err(e) = pump(app, script, None, until)
         {
             report(app, &script.name, &e);
             return false;
@@ -1242,7 +1252,7 @@ fn to_tool(app: &mut VectorcraftApp, work: impl IntoIterator<Item = Work>) {
         }
         work => work,
     }));
-    match pump(app, &mut script, None, FRAME_WAIT) {
+    match pump(app, &mut script, None, Instant::now() + FRAME_WAIT) {
         Ok(_) => app.scripts.running.push(script),
         Err(e) => report(app, &script.name, &e),
     }
