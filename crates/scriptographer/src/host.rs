@@ -5,6 +5,7 @@
 //! is a `HostItem`: Paper.js knows its bounds and attributes, never its content. VectorCraft has no
 //! per-object matrix, so records leave their matrix out (identity), and boxes are in document
 //! coordinates, but for text: its transform is its matrix, and its boxes are in its own space.
+//! Records come without boxes: Paper.js asks for an item's ([`boxes`]) once it needs them.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -51,9 +52,6 @@ pub struct Columns {
     pub keys: Vec<f64>,
     pub types: Vec<u8>,
     pub flags: Vec<u16>,
-    /// Twelve numbers per record: bounds, stroke bounds and rough bounds, each `x, y, width,
-    /// height`.
-    pub boxes: Vec<f64>,
     /// Names by record index.
     pub names: Vec<(usize, String)>,
     /// Matrices by record index, `[a, b, c, d, tx, ty]`: text's, whose boxes are in its own space.
@@ -106,29 +104,13 @@ impl Columns {
         if matrix != Affine::IDENTITY {
             self.matrices.push((self.keys.len(), matrix.as_coeffs()));
         }
-        let (bounds, stroke, rough) = match &node.kind {
-            NodeKind::Text(t) => {
-                let bounds = text_bounds(t);
-                (bounds, bounds, bounds)
-            }
-            // Instances are measured with their strokes, as Paper.js's are:
-            NodeKind::SymbolInstance { symbol, .. } => {
-                let art = symbols.document().symbols.iter().find(|s| s.name == *symbol);
-                let bounds = art.and_then(|s| s.art.visual_bounds_with(symbols));
-                (bounds, bounds, bounds)
-            }
-            _ => {
-                let bounds = node.geometric_bounds_with(symbols);
-                let stroke = node.visual_bounds_with(symbols).or(bounds);
-                (bounds, stroke, rough_bounds(node, symbols).or(stroke))
-            }
+        // A container is empty without children, as Paper.js's are, which measures nothing:
+        let is_empty = match &node.kind {
+            NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => children.is_empty(),
+            _ => boxes(node, symbols).is_none(),
         };
-        if bounds.is_none() {
+        if is_empty {
             flags |= flags::EMPTY;
-        }
-        for rect in [bounds, stroke, rough] {
-            let rect = rect.unwrap_or(Rect::ZERO);
-            self.boxes.extend([rect.x0, rect.y0, rect.width(), rect.height()]);
         }
         if let Some(name) = &node.name {
             self.names.push((self.keys.len(), name.clone()));
@@ -288,6 +270,33 @@ impl Walk<'_> {
 }
 
 /// The bounds of text in its own space, as its matrix places them.
+/// The twelve numbers Paper.js measures `node` by: its bounds, stroke bounds and rough bounds,
+/// each `x, y, width, height`; `None` when it has no geometry. Text's and symbol instances' are in
+/// their own space.
+pub fn boxes(node: &Node, symbols: &SymbolBoxes) -> Option<[f64; 12]> {
+    let (bounds, stroke, rough) = match &node.kind {
+        NodeKind::Text(t) => {
+            let bounds = text_bounds(t);
+            (bounds, bounds, bounds)
+        }
+        // Instances are measured with their strokes, as Paper.js's are:
+        NodeKind::SymbolInstance { symbol, .. } => {
+            let art = symbols.document().symbols.iter().find(|s| s.name == *symbol);
+            let bounds = art.and_then(|s| s.art.visual_bounds_with(symbols));
+            (bounds, bounds, bounds)
+        }
+        _ => {
+            let bounds = node.geometric_bounds_with(symbols);
+            let stroke = node.visual_bounds_with(symbols).or(bounds);
+            (bounds, stroke, rough_bounds(node, symbols).or(stroke))
+        }
+    };
+    let (bounds, stroke, rough) = (bounds?, stroke.unwrap_or_default(), rough.unwrap_or_default());
+    let rect = |r: Rect| [r.x0, r.y0, r.width(), r.height()];
+    let [a, b, c] = [rect(bounds), rect(stroke), rect(rough)];
+    Some([a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3], c[0], c[1], c[2], c[3]])
+}
+
 fn text_bounds(t: &TextObject) -> Option<Rect> {
     match &t.kind {
         TextKind::Area { frame } => frame.bounds(),

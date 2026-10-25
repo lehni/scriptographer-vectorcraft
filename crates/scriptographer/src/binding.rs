@@ -136,6 +136,7 @@ impl<E: Engine> Runtime<E> {
     fn host_functions(&mut self) -> Result<E::Handle, Error> {
         let get_children = self.engine.function("getChildren", get_children)?;
         let get_item = self.engine.function("getItem", get_item)?;
+        let get_bounds = self.engine.function("getBounds", get_bounds)?;
         let get_definition = self.engine.function("getDefinition", get_definition)?;
         let get_definition_keys = self.engine.function("getDefinitionKeys", get_definition_keys)?;
         let get_story = self.engine.function("getStory", get_story)?;
@@ -169,6 +170,7 @@ impl<E: Engine> Runtime<E> {
             let functions = call.new_object()?;
             call.set(&functions, "getChildren", &Value::Js(get_children))?;
             call.set(&functions, "getItem", &Value::Js(get_item))?;
+            call.set(&functions, "getBounds", &Value::Js(get_bounds))?;
             call.set(&functions, "getDefinition", &Value::Js(get_definition))?;
             call.set(&functions, "getDefinitionKeys", &Value::Js(get_definition_keys))?;
             call.set(&functions, "getStory", &Value::Js(get_story))?;
@@ -460,7 +462,6 @@ fn columns_object<H: Clone>(call: &mut dyn Call<H>, columns: &Columns) -> Result
     let type_names: Vec<_> = TYPE_NAMES.iter().map(|n| Value::String((*n).to_owned())).collect();
     let type_names = call.new_array(&type_names)?;
     let flags = call.new_uint16_array(&columns.flags)?;
-    let boxes = call.new_float64_array(&columns.boxes)?;
     let names = call.new_object()?;
     for (index, name) in &columns.names {
         call.set(&names, &index.to_string(), &Value::String(name.clone()))?;
@@ -478,7 +479,6 @@ fn columns_object<H: Clone>(call: &mut dyn Call<H>, columns: &Columns) -> Result
         ("types", types),
         ("typeNames", type_names),
         ("flags", flags),
-        ("boxes", boxes),
         ("names", names),
         ("matrices", matrices),
         ("definitions", definitions),
@@ -508,6 +508,17 @@ fn get_item<H>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value<H>]) -> Re
     })?;
     let json = json.ok_or_else(|| Error::Script(format!("getItem: no object {id}")))?;
     Ok(Value::String(json.to_string()))
+}
+
+/// `host.getBounds(key)`: the boxes of the object `key` names, as [`crate::host::boxes`] measures
+/// them, `null` when it has no geometry. Paper.js asks once it needs them.
+fn get_bounds<H>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
+    let id = key(args).ok_or_else(|| Error::Script("getBounds: no key".into()))?;
+    let boxes = with_bound(call, this, |doc, _| doc.node(id).map(|node| crate::host::boxes(node, &doc.symbol_boxes())))?;
+    match boxes.ok_or_else(|| Error::Script(format!("getBounds: no object {id}")))? {
+        Some(boxes) => Ok(Value::Js(call.new_float64_array(&boxes)?)),
+        None => Ok(Value::Null),
+    }
 }
 
 /// `source.getDefinition(key)`: the definition `key` names as Paper.js JSON, as
