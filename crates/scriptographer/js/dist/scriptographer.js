@@ -8379,6 +8379,7 @@ ${value}\r
     #readyState = states3.CONNECTING;
     #protocol = "";
     #binaryType = "blob";
+    #hasFailed = false;
     constructor(url, protocols = []) {
       super();
       url = String(url);
@@ -8449,6 +8450,7 @@ ${value}\r
         );
       }
       if (this.#readyState < states3.CLOSING) {
+        this.#hasFailed = this.#readyState === states3.CONNECTING;
         this.#readyState = states3.CLOSING;
         natives.socket.close(this.#number, code ?? 1e3, reason);
       }
@@ -8457,17 +8459,21 @@ ${value}\r
     #receive({ type, protocol, data, message, code, reason, wasClean }) {
       switch (type) {
         case "open":
-          this.#readyState = states3.OPEN;
-          this.#protocol = protocol;
-          this.dispatchEvent(new Event("open"));
+          if (this.#readyState === states3.CONNECTING) {
+            this.#readyState = states3.OPEN;
+            this.#protocol = protocol;
+            this.dispatchEvent(new Event("open"));
+          }
           break;
         case "message":
-          this.dispatchEvent(
-            new MessageEvent("message", {
-              data: typeof data === "string" ? data : this.#binaryType === "arraybuffer" ? data.buffer : new Blob([data]),
-              origin: new URL(this.#url).origin
-            })
-          );
+          if (this.#readyState === states3.OPEN) {
+            this.dispatchEvent(
+              new MessageEvent("message", {
+                data: typeof data === "string" ? data : this.#binaryType === "arraybuffer" ? data.buffer : new Blob([data]),
+                origin: new URL(this.#url).origin
+              })
+            );
+          }
           break;
         case "error":
           console.error(`WebSocket ${this.#url}: ${message}`);
@@ -8475,7 +8481,14 @@ ${value}\r
           break;
         case "close":
           this.#readyState = states3.CLOSED;
-          this.dispatchEvent(new CloseEvent("close", { code, reason, wasClean }));
+          if (this.#hasFailed) {
+            this.dispatchEvent(new Event("error"));
+            this.dispatchEvent(new CloseEvent("close", { code: 1006 }));
+          } else {
+            this.dispatchEvent(
+              new CloseEvent("close", { code, reason, wasClean })
+            );
+          }
           break;
       }
     }
