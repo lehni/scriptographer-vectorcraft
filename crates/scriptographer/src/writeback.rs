@@ -125,7 +125,7 @@ pub(crate) fn patch<H: Clone>(
     for (id, item) in parents {
         let children = object(call, &item, "children")?;
         let count = number(call.get(&children, "length")?) as usize;
-        let mut slots = Vec::with_capacity(count);
+        let mut slots = Vec::new();
         for i in 0..count {
             let child = object(call, &children, &i.to_string())?;
             match call.get(&child, "key")? {
@@ -268,7 +268,7 @@ impl<H: Clone> News<H> {
         }
         let children = object(call, item, "children")?;
         let count = number(call.get(&children, "length")?) as usize;
-        let mut slots = Vec::with_capacity(count);
+        let mut slots = Vec::new();
         for i in 0..count {
             let child = object(call, &children, &i.to_string())?;
             match call.get(&child, "key")? {
