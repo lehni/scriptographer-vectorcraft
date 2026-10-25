@@ -8,6 +8,9 @@
 //! On the web, a script's file dialog is first one of the app's ([`FILE_KIND`]): browsers show
 //! their file pickers only in a click, which its Choose… is. Fields: `script`, `name` (the
 //! script's file name) and `question`.
+//!
+//! A script that hasn't finished its work for a while is asked about, as browsers ask about a page
+//! that hangs ([`NOT_RESPONDING`]): Wait asks again later, Stop stops it. Fields: `script`, `name`.
 
 use serde_json::{Map, Value, json};
 
@@ -18,6 +21,7 @@ use crate::widgets;
 
 pub const KIND: &str = "scriptDialog";
 pub const FILE_KIND: &str = "scriptFileDialog";
+pub const NOT_RESPONDING: &str = "scriptNotResponding";
 
 /// Whether a dialog of `kind` is one a script waits on.
 pub(crate) fn is_script_dialog(kind: &str) -> bool {
@@ -84,6 +88,28 @@ pub(super) const FILE_SPEC: DialogSpec = DialogSpec {
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn open_file(app: &mut VectorcraftApp, script: u64, name: &str, question: &Value) {
     app.ui.dialog = Some(Dialog::new(FILE_KIND, json!({ "script": script, "name": name, "question": question })));
+}
+
+pub(super) const NOT_RESPONDING_SPEC: DialogSpec = DialogSpec {
+    heading: |d| crate::i18n::fmt(tl!("“{name}” isn't responding"), &[("name", d.fields["name"].as_str().unwrap_or_default())]),
+    body: |_, ui, _| {
+        ui.label(tl!("The script hasn't finished its work. You can wait for it, or stop it."));
+        false
+    },
+    confirm: |app, d| {
+        crate::scripts::stop_script(app, d.fields.get("script").and_then(Value::as_u64).unwrap_or_default());
+        app.ui.dialog = None;
+        Ok(Value::Null)
+    },
+    ok: Some("Stop"),
+    cancel: Some("Wait"),
+    max_width: Some(420.0),
+    ..DialogSpec::FORM
+};
+
+/// The question whether to wait for the script with id `script`, `name`, or stop it.
+pub(crate) fn open_not_responding(app: &mut VectorcraftApp, script: u64, name: &str) {
+    app.ui.dialog = Some(Dialog::new(NOT_RESPONDING, json!({ "script": script, "name": name })));
 }
 
 /// The dialog for `question`, which the script with id `script` waits on.
