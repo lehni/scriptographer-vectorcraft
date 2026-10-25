@@ -381,6 +381,17 @@ fn a_script_without_a_document_stops_no_others() {
     assert!(app.scripts.is_running(), "the animation still runs");
 }
 
+/// `ui.inspect` has the Scriptographer console's lines, for tests that drive the app.
+#[test]
+fn inspect_has_the_script_console() {
+    let (mut app, _) = app();
+    let path = tempfile_path::Path::new("console.log('hello')\nthrow new Error('oops')");
+    app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).ok();
+    let log = crate::control::inspect(&app, &egui::Context::default())["scriptLog"].clone();
+    assert_eq!(log[0], json!({ "text": "hello", "error": false }));
+    assert!(log[1]["error"] == json!(true) && log[1]["text"].as_str().unwrap().contains("oops"), "{log}");
+}
+
 /// A switch to another document reaches the scripts as it happens: the project of the document
 /// left has caught up with it, what the user selected there too, when its `onDeactivate` fires,
 /// and switching back fires its `onActivate`.

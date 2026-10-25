@@ -211,6 +211,8 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         // A native file dialog open off the UI thread (`open`, `place`, `save`, `folder`), waiting
         // for the person at the computer: what asked for it runs again when it answers.
         "fileDialog": app.picks.waiting_kind(),
+        // The Scriptographer console's lines, the last thousand.
+        "scriptLog": app.scripts.log().iter().map(|l| json!({"text": l.text, "error": l.error})).collect::<Vec<_>>(),
     })
 }
 
