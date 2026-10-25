@@ -120,6 +120,24 @@ fn a_throwing_timer_keeps_the_others<E: Engine>() {
     assert_eq!(runtime.take_output(), ["second", "frame"]);
 }
 
+/// The scripts need a turn when their next timer is due, counted from when they set it, or at
+/// once for a frame callback. Paper.js's own frame after a script ran comes first.
+fn turns_come_when_timers_are_due<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    assert_eq!(runtime.next_turn(), None, "nothing to wait for");
+    runtime.execute(&scope, "setInterval(function() {}, 60000)").unwrap();
+    runtime.run_timers(100.0).unwrap();
+    assert_eq!(runtime.next_turn(), Some(60000.0));
+    runtime.set_now(1000.0);
+    runtime.execute(&scope, "setTimeout(function() { print('early') }, 500)").unwrap();
+    runtime.run_timers(1100.0).unwrap();
+    assert_eq!(runtime.next_turn(), Some(1500.0), "from when it was set");
+    assert!(runtime.take_output().is_empty());
+    runtime.execute(&scope, "requestAnimationFrame(function() {})").unwrap();
+    assert_eq!(runtime.next_turn(), Some(1100.0), "a frame at once");
+}
+
 fn animation_frames_run_once_a_frame<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
@@ -2772,6 +2790,11 @@ macro_rules! engine_tests {
             #[test]
             fn timeouts_run_once() {
                 super::timeouts_run_once::<$engine>();
+            }
+
+            #[test]
+            fn turns_come_when_timers_are_due() {
+                super::turns_come_when_timers_are_due::<$engine>();
             }
 
             #[test]

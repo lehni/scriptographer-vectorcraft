@@ -22,12 +22,18 @@ fn spawn() -> Worker {
     Worker::spawn((400.0, 300.0), Setup::default()).unwrap()
 }
 
+/// Sends `work` as the script starts.
 fn send(s: &Session, worker: &Worker, work: Work) {
+    send_at(s, worker, 0.0, work);
+}
+
+/// Sends `work` at `now`, in milliseconds since the script started.
+fn send_at(s: &Session, worker: &Worker, now: f64, work: Work) {
     let st = s.active().unwrap();
     // The styles the app gives scripts.
     let paint = &s.paint;
     let style = vectorcraft_scriptographer::host::current_style(&paint.fill, &paint.stroke, paint.stroke_width, &s.new_type_style().fill);
-    worker.send(Request::Run { uid: st.uid, doc: st.doc.clone(), selection: st.selection.clone(), artboard: 0, style, work });
+    worker.send(Request::Run { uid: st.uid, doc: st.doc.clone(), selection: st.selection.clone(), artboard: 0, style, now, work });
 }
 
 /// Applies the replies until `Done`, as the app does, and returns `Done`'s error.
@@ -57,7 +63,7 @@ fn a_script_runs_on_its_thread_and_its_changes_come_back() {
     send(&s, &worker, Work::Execute("var item = project.activeLayer.firstChild\nfunction onFrame() { item.position += [10, 0] }".into()));
     assert_eq!(settle(&mut s, &worker), None);
     for (i, now) in [20.0, 40.0].into_iter().enumerate() {
-        send(&s, &worker, Work::Frame(now));
+        send_at(&s, &worker, now, Work::Frame);
         assert_eq!(settle(&mut s, &worker), None);
         assert_eq!(left(&s), 20.0 + 10.0 * i as f64, "each frame moves it");
     }
@@ -159,12 +165,12 @@ fn text_on_a_path_keeps_its_path_when_the_app_changes_it() {
             _ => None,
         })
     };
-    send(&s, &worker, Work::Frame(20.0));
+    send_at(&s, &worker, 20.0, Work::Frame);
     assert_eq!(settle(&mut s, &worker), None);
     let before = path_left(&s).expect("the text on its path");
     s.execute("select.all", &json!({})).unwrap();
     s.execute("paint.setFill", &json!({"none": true})).unwrap();
-    send(&s, &worker, Work::Frame(40.0));
+    send_at(&s, &worker, 40.0, Work::Frame);
     assert_eq!(settle(&mut s, &worker), None);
     assert!(path_left(&s).unwrap() > before + 5.0, "the text moves on with its path");
 }

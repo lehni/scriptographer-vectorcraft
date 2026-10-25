@@ -535,8 +535,16 @@ impl<E: Engine> Runtime<E> {
         })
     }
 
+    /// Sets the time, in milliseconds since the runtime was created, that the timers set from now on
+    /// count from: a timer set in a click counts from the click, not from the last frame.
+    pub fn set_now(&mut self, now: f64) {
+        self.host.borrow_mut().now = now;
+    }
+
     /// Runs the `setInterval` and `setTimeout` callbacks that are due at `now`, in milliseconds
-    /// since the runtime was created, then those `requestAnimationFrame()` asked for, with `now`. The host calls this once per frame, so no interval runs more often than that.
+    /// since the runtime was created, then those `requestAnimationFrame()` asked for, with `now`.
+    /// The host calls this at most once per frame, once [`Runtime::next_turn`] is due, so no
+    /// interval runs more often than that.
     pub fn run_timers(&mut self, now: f64) -> Result<(), Error> {
         let mut due = Vec::new();
         {
@@ -596,23 +604,34 @@ impl<E: Engine> Runtime<E> {
         self.host.borrow_mut().failure.take().map_or(Ok(()), Err)
     }
 
-    /// Whether the scripts have something left to run: a timer, which `onFrame` uses too, a frame
-    /// callback, a request out, a connection or channel open, or an effect of theirs.
+    /// Whether the scripts have something left to run: a turn they wait for ([`Runtime::next_turn`]),
+    /// or an effect of theirs.
     pub fn is_running(&self) -> bool {
+        self.next_turn().is_some() || self.has_effects()
+    }
+
+    /// When the scripts next need [`Runtime::run_timers`], on its clock: when their next timer is
+    /// due, which `onFrame` uses too, or now, for a frame callback, or a request out or a
+    /// connection or channel open, which it polls. `None` when nothing waits for it.
+    pub fn next_turn(&self) -> Option<f64> {
         let host = self.host.borrow();
+        let polls = !host.frames.is_empty();
         #[cfg(not(target_arch = "wasm32"))]
-        if !host.fetches.is_empty()
+        let polls = polls
+            || !host.fetches.is_empty()
             || !host.sockets.is_empty()
             || host.children.iter().any(|c| !c.shared)
             || host.ports.iter().any(|p| p.is_open())
             || !host.channels.is_empty()
             || !host.event_sources.is_empty()
-            || host.locks.is_waiting()
-        {
-            return true;
-        }
-        // A script's effects draw on its turns:
-        !host.intervals.is_empty() || !host.frames.is_empty() || !host.script_effects.types.is_empty()
+            || host.locks.is_waiting();
+        if polls { Some(host.now) } else { host.intervals.iter().map(|i| i.due).reduce(f64::min) }
+    }
+
+    /// Whether the scripts define effects, which draw on their turns once the document changed
+    /// ([`Runtime::effect_outputs`]).
+    pub fn has_effects(&self) -> bool {
+        !self.host.borrow().script_effects.types.is_empty()
     }
 
     /// Sets the current styles of `scope`'s project, `project.currentStyle` and
