@@ -310,6 +310,30 @@ fn keys_reach_the_document_and_the_window<E: Engine>() {
     runtime.take_output();
 }
 
+/// A `once` key listener keeps a script running until its key comes, one with a signal until the
+/// signal aborts, and removing a listener takes the one with the same capture only.
+fn key_listeners_keep_a_script_running_as_long_as_they_listen<E: Engine>() {
+    use vectorcraft_scriptographer::{Key, Modifiers};
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    let key = Key { down: true, key: "a".into(), code: "KeyA".into(), repeat: false, modifiers: Modifiers::default() };
+    runtime.execute(&scope, "document.addEventListener('keydown', e => console.log('once'), { once: true })").unwrap();
+    assert!(runtime.has_key_listeners().unwrap());
+    runtime.document_key(&key).unwrap();
+    assert_eq!(runtime.take_output(), ["once"]);
+    assert!(!runtime.has_key_listeners().unwrap(), "it went with its key");
+    runtime
+        .execute(&scope, "globalThis.controller = new AbortController()\naddEventListener('keydown', e => {}, { signal: controller.signal })")
+        .unwrap();
+    assert!(runtime.has_key_listeners().unwrap());
+    runtime.execute(&scope, "controller.abort()").unwrap();
+    assert!(!runtime.has_key_listeners().unwrap(), "it went with its signal");
+    runtime.execute(&scope, "globalThis.down = e => {}\naddEventListener('keydown', down, true)\nremoveEventListener('keydown', down)").unwrap();
+    assert!(runtime.has_key_listeners().unwrap(), "removing the one without capture left the one with it");
+    runtime.execute(&scope, "removeEventListener('keydown', down, { capture: true })").unwrap();
+    assert!(!runtime.has_key_listeners().unwrap());
+}
+
 fn scripts_use_todays_javascript<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
@@ -2278,6 +2302,11 @@ macro_rules! engine_tests {
             #[test]
             fn files_are_blobs_with_a_name() {
                 super::files_are_blobs_with_a_name::<$engine>();
+            }
+
+            #[test]
+            fn key_listeners_keep_a_script_running_as_long_as_they_listen() {
+                super::key_listeners_keep_a_script_running_as_long_as_they_listen::<$engine>();
             }
 
             #[test]
