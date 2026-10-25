@@ -9,12 +9,14 @@ import { setToStringTag } from './define.js'
 // `onSelect()`. What the script changes in `values` or in the components shows
 // in the panel.
 
-// The open palettes by their numbers, with the components as defined, for
-// `reset()`, and what was last reported of them:
+// The open palettes by their numbers, with what was last reported of them:
 const palettes = new Map()
 let lastId = 0
 
 export class Palette {
+  // The components as defined, for `reset()`:
+  #defaults
+
   constructor(title = '', components, values) {
     if (!components || typeof components !== 'object') {
       throw new TypeError('Invalid components: they must be an object.')
@@ -28,19 +30,13 @@ export class Palette {
         this.values[component.name] = getValue(component, component.value)
       }
     }
-    palettes.set(++lastId, {
-      palette: this,
-      defaults: getComponents(components),
-      reported: ''
-    })
+    this.#defaults = getComponents(components)
+    palettes.set(++lastId, { palette: this, reported: '' })
   }
 
   // Every component's value back to the one it was defined with.
   reset() {
-    const { defaults } = [...palettes.values()].find(
-      entry => entry.palette === this
-    )
-    for (const component of defaults) {
+    for (const component of this.#defaults) {
       const value = getValue(component, component.value)
       this.values[component.name] = value
       // Handlers read a component's value from its definition:

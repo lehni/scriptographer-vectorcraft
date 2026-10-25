@@ -261,7 +261,8 @@ fn palette_menus_and_reset<E: Engine>() {
             size: { type: 'number', label: 'Size', value: 1, units: 'point' },\n\
             line: { type: 'menu-separator' },\n\
             reset: { label: 'Reset', onSelect: function() { palette.reset(); console.log('reset', values.size, palette.components.size.value) } }\n\
-        }, values)";
+        }, values)\n\
+        globalThis.resetClosed = function() { values.size = 9; palette.reset(); console.log('closed', values.size) }";
     runtime.execute(&scope, script).unwrap();
     let components = &runtime.take_palettes().unwrap()[0]["components"];
     assert_eq!(components[0]["value"], 5, "the values given win over the definition's");
@@ -270,6 +271,9 @@ fn palette_menus_and_reset<E: Engine>() {
     runtime.palette_event(1, PaletteEvent::Click("reset".into())).unwrap();
     assert_eq!(runtime.take_output(), ["reset 1 1"], "back to the value it was defined with");
     assert_eq!(runtime.take_palettes().unwrap()[0]["components"][0]["value"], 1, "and the palette shows it");
+    runtime.palette_event(1, PaletteEvent::Close).unwrap();
+    runtime.execute(&scope, "resetClosed()").unwrap();
+    assert_eq!(runtime.take_output(), ["closed 1"], "a closed palette resets too");
 }
 
 macro_rules! engine_tests {
