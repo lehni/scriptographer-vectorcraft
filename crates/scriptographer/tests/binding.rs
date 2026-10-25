@@ -1133,6 +1133,51 @@ fn moved_items_take_their_symbols_along<E: Engine>() {
     assert_eq!((width(0), width(1)), (40.0, 20.0), "scaled in its own document only");
 }
 
+/// A copy a script makes in another document takes a copy of its symbol along too; an object the
+/// other document can't take from this one (a blend, which scripts see only as a `HostItem`)
+/// stays where it is, with an error.
+fn copies_take_their_symbols_along_and_host_items_stay<E: Engine>() {
+    let (mut s, a, b) = document();
+    let (first, _) = symbols(&mut s, a);
+    let c = s.execute("shape.rectangle", &json!({"x": 300, "y": 200, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({ "ids": [b.0, c] })).unwrap();
+    let blend = NodeId(s.execute("object.blend.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let [one, two] = [0, 1].map(|i| s.documents()[i].uid);
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    let bind = |runtime: &mut Runtime<E>, s: &Session, uid| {
+        let st = s.documents().iter().find(|d| d.uid == uid).unwrap();
+        runtime.bind(&scope, uid, st.doc.clone(), st.selection.clone()).unwrap();
+    };
+    bind(&mut runtime, &s, one);
+    runtime
+        .execute(
+            &scope,
+            &format!("globalThis.instance = paper.project.getItemByKey({})\nglobalThis.blend = paper.project.getItemByKey({})", first.0, blend.0),
+        )
+        .unwrap();
+    bind(&mut runtime, &s, two);
+    runtime
+        .execute(
+            &scope,
+            "instance.copyTo(paper.project.activeLayer)\n\
+             try { paper.project.activeLayer.addChild(blend) } catch (e) { console.log(e.message) }",
+        )
+        .unwrap();
+    assert_eq!(runtime.take_output(), ["Unable to add host items to the project of another host."]);
+    for patch in runtime.take_patches().unwrap() {
+        let index = s.documents().iter().position(|d| d.uid == patch.uid).unwrap();
+        s.set_active(index);
+        s.execute("document.patch", &patch.params).unwrap();
+    }
+    let (from, to) = (&s.documents()[0].doc, &s.documents()[1].doc);
+    assert!(from.node(first).is_some() && from.node(blend).is_some(), "the instance and the blend stay");
+    assert_eq!(to.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Box"], "the copy has its own symbol");
+    let copies = to.layers[0].children().unwrap();
+    assert!(matches!(copies.as_slice(), [copy] if matches!(&copy.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Box")), "{copies:?}");
+}
+
 /// A document that closes takes its project with it; the script goes on with the others.
 fn a_closed_documents_project_goes<E: Engine>() {
     let (mut s, _, _) = document();
@@ -1405,6 +1450,11 @@ macro_rules! engine_tests {
             #[test]
             fn moved_items_take_their_symbols_along() {
                 super::moved_items_take_their_symbols_along::<$engine>();
+            }
+
+            #[test]
+            fn copies_take_their_symbols_along_and_host_items_stay() {
+                super::copies_take_their_symbols_along_and_host_items_stay::<$engine>();
             }
 
             #[test]
