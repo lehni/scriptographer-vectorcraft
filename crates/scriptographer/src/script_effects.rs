@@ -163,9 +163,15 @@ impl<E: Engine> Runtime<E> {
                 match self.draw_effect(scope, &node, &effect, &input.path) {
                     Ok(output) => {
                         let mut appearance = (*node.appearance).clone();
-                        if let Some(params) = appearance.effects.get_mut(input.index).and_then(|e| e.params.as_object_mut()) {
-                            params.insert(INPUT.into(), json!(input.fingerprint));
-                            params.insert(OUTPUT.into(), serde_json::to_value(&output).unwrap_or_default());
+                        if let Some(effect) = appearance.effects.get_mut(input.index) {
+                            // A file may leave an effect's parameters out: what it drew needs a place.
+                            if !effect.params.is_object() {
+                                effect.params = json!({});
+                            }
+                            if let Some(params) = effect.params.as_object_mut() {
+                                params.insert(INPUT.into(), json!(input.fingerprint));
+                                params.insert(OUTPUT.into(), serde_json::to_value(&output).unwrap_or_default());
+                            }
                         }
                         node.appearance = appearance.into();
                         changed = true;
