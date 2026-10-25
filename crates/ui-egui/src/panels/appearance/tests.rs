@@ -174,7 +174,7 @@ fn a_script_effect_s_editor_follows_its_manifest() {
     use vectorcraft_effects::script;
     let manifest = json!({"id": "uiwobble", "name": "Wobble", "kind": "effect",
         "params": {"amount": {"type": "number", "min": 0, "max": 100, "default": 5, "label": "Amount", "unit": "pt"}}});
-    script::register(vectorcraft_plugins::Manifest::parse(manifest.to_string().as_bytes()).unwrap());
+    script::register(0, vectorcraft_plugins::Manifest::parse(manifest.to_string().as_bytes()).unwrap());
     let entries = crate::menus::menu_entries(&VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
     let entry = entries.iter().find(|e| e.path == ["Effect", "Scriptographer"] && e.label == "Wobble…").expect("effect listed");
     assert_eq!((entry.command.as_deref(), &entry.params), (Some("effect.dialog"), &json!({"effect": "script.uiwobble"})));
@@ -185,11 +185,11 @@ fn a_script_effect_s_editor_follows_its_manifest() {
     app.run("document.patch", json!({"replace": [node]})).unwrap();
     let texts = shown_texts(&mut app, &ctx);
     assert!(texts.iter().any(|s| s == "Amount") && texts.iter().any(|s| s == "5 pt"), "{texts:?}");
-    script::unregister("uiwobble");
+    script::unregister(0, "uiwobble");
     let texts = shown_texts(&mut app, &ctx);
     assert!(texts.iter().any(|s| s == "Amount"), "{texts:?}");
     assert!(!texts.iter().any(|s| s.starts_with('_') || s.contains("Output") || s.contains("Input")), "{texts:?}");
-    assert!(!crate::menus::menu_entries(&app).iter().any(|e| e.path == ["Effect", "Scriptographer"]));
+    assert!(!crate::menus::menu_entries(&app).iter().any(|e| e.params == json!({"effect": "script.uiwobble"})));
 }
 
 /// A plug-in effect's editor labels its parameters, shows their units and leaves out those whose

@@ -6,6 +6,7 @@
 //! the app adds to the newest undo step, as the edit that changed their input.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde_json::{Map, Value as Json, json};
 use vectorcraft_doc::{Appearance, Document, Node};
@@ -15,13 +16,21 @@ use vectorcraft_plugins::Manifest;
 
 use crate::{Call, Engine, Error, HostFunction, Runtime, Scope, Value, call_bundle};
 
-/// What a runtime keeps of the effects its scripts define: their types, the document it last drew
-/// them for, and the inputs they failed to draw, which it doesn't try again.
-#[derive(Default)]
+/// What a runtime keeps of the effects its scripts define: the runtime's number, which owns them in
+/// the app's list, their types, the document it last drew them for, and the inputs they failed to
+/// draw, which it doesn't try again.
 pub(crate) struct Defined {
+    owner: u64,
     pub(crate) types: Vec<String>,
     drawn: Option<Arc<Document>>,
     failed: Vec<String>,
+}
+
+impl Default for Defined {
+    fn default() -> Self {
+        static NEXT_OWNER: AtomicU64 = AtomicU64::new(1);
+        Self { owner: NEXT_OWNER.fetch_add(1, Ordering::Relaxed), types: Vec::new(), drawn: None, failed: Vec::new() }
+    }
 }
 
 /// The natives `js/src/effects.js` talks through: `define(type, label, parameters)`, the
@@ -37,10 +46,11 @@ fn define<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>])
     let text = |call: &mut dyn Call<H>, i: usize| call.to_string(args.get(i).unwrap_or(&Value::Undefined));
     let (kind, label, parameters) = (text(call, 0)?, text(call, 1)?, text(call, 2)?);
     let parameters: Json = serde_json::from_str(&parameters).unwrap_or(Json::Null);
-    script::register(manifest(&kind, &label, &parameters)?);
+    let manifest = manifest(&kind, &label, &parameters)?;
     let host = call.host()?;
     let mut host = host.borrow_mut();
     let defined = &mut host.script_effects;
+    script::register(defined.owner, manifest);
     defined.types.retain(|t| *t != kind);
     defined.types.push(kind);
     // Its objects draw anew with the effect as it is now:
@@ -52,15 +62,17 @@ fn define<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>])
 /// `forget(type)`: the effect is no longer listed.
 fn forget<H>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let kind = call.to_string(args.first().unwrap_or(&Value::Undefined))?;
-    script::unregister(&kind);
-    call.host()?.borrow_mut().script_effects.types.retain(|t| *t != kind);
+    let host = call.host()?;
+    let defined = &mut host.borrow_mut().script_effects;
+    script::unregister(defined.owner, &kind);
+    defined.types.retain(|t| *t != kind);
     Ok(Value::Undefined)
 }
 
 /// Lets go of the effects a runtime's scripts defined, once it ends.
 pub(crate) fn forget_all(defined: &Defined) {
     for kind in &defined.types {
-        script::unregister(kind);
+        script::unregister(defined.owner, kind);
     }
 }
 

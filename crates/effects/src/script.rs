@@ -21,7 +21,9 @@ pub const OUTPUT: &str = "_output";
 /// The parameter that holds the [`fingerprint`] of what the script drew it from.
 pub const INPUT: &str = "_input";
 
-static EFFECTS: RwLock<Vec<Arc<Manifest>>> = RwLock::new(Vec::new());
+/// The script effects, each with the number of the runtime that defined it. Runtimes that define
+/// the same type each keep theirs: the newest is the one listed.
+static EFFECTS: RwLock<Vec<(u64, Arc<Manifest>)>> = RwLock::new(Vec::new());
 static REVISION: AtomicU64 = AtomicU64::new(0);
 
 /// The script effect's type in `id` (`script.wobble` → `wobble`).
@@ -34,20 +36,21 @@ pub fn effect_id(kind: &str) -> String {
     format!("{PREFIX}{kind}")
 }
 
-/// Adds the script effect `manifest` describes, its id being its type, in place of one with the
-/// same type.
-pub fn register(manifest: Manifest) {
+/// Adds the script effect `manifest` describes, its id being its type, as the runtime `owner`'s, in
+/// place of the one it defined of that type before.
+pub fn register(owner: u64, manifest: Manifest) {
     let mut effects = EFFECTS.write().unwrap_or_else(|e| e.into_inner());
-    effects.retain(|m| m.id != manifest.id);
-    effects.push(Arc::new(manifest));
+    effects.retain(|(other, m)| *other != owner || m.id != manifest.id);
+    effects.push((owner, Arc::new(manifest)));
     REVISION.fetch_add(1, Ordering::Relaxed);
 }
 
-/// Removes the script effect of type `kind`, once its script ends.
-pub fn unregister(kind: &str) {
+/// Removes the runtime `owner`'s script effect of type `kind`, once its script ends: one another
+/// runtime defined of that type stays.
+pub fn unregister(owner: u64, kind: &str) {
     let mut effects = EFFECTS.write().unwrap_or_else(|e| e.into_inner());
     let count = effects.len();
-    effects.retain(|m| m.id != kind);
+    effects.retain(|(other, m)| *other != owner || m.id != kind);
     if effects.len() != count {
         REVISION.fetch_add(1, Ordering::Relaxed);
     }
@@ -55,13 +58,15 @@ pub fn unregister(kind: &str) {
 
 /// The script effects running scripts define, in the order they were defined.
 pub fn list() -> Vec<Arc<Manifest>> {
-    EFFECTS.read().unwrap_or_else(|e| e.into_inner()).clone()
+    let effects = EFFECTS.read().unwrap_or_else(|e| e.into_inner());
+    let newest = |at: usize, id: &str| effects.get(at + 1..).is_none_or(|later| !later.iter().any(|(_, m)| m.id == id));
+    effects.iter().enumerate().filter(|(at, (_, m))| newest(*at, &m.id)).map(|(_, (_, m))| m.clone()).collect()
 }
 
 /// The manifest of the script effect `id`, while its script runs.
 pub fn manifest(id: &str) -> Option<Arc<Manifest>> {
     let kind = script_type(id)?;
-    EFFECTS.read().unwrap_or_else(|e| e.into_inner()).iter().find(|m| m.id == kind).cloned()
+    EFFECTS.read().unwrap_or_else(|e| e.into_inner()).iter().rfind(|(_, m)| m.id == kind).map(|(_, m)| m.clone())
 }
 
 /// Changes whenever a script effect is defined or removed.

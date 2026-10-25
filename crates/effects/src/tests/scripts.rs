@@ -87,16 +87,32 @@ fn a_script_effects_input_is_the_geometry_after_the_effects_before_it() {
 #[test]
 fn script_effects_are_listed_while_their_script_runs() {
     let before = script::revision();
-    script::register(manifest("listed"));
+    script::register(1, manifest("listed"));
     assert_ne!(script::revision(), before);
     let info = effect_info("script.listed").unwrap();
     assert_eq!((info.label, info.menu), ("Wobble…", &["Effect", "Scriptographer"][..]));
     assert!(script_effects().iter().any(|e| e.id == "script.listed"));
     assert_eq!(new_effect("script.listed", &json!({})).unwrap().params, json!({"amount": 5.0}));
     assert_eq!(effect_manifest("script.listed").unwrap().name, "Wobble");
-    script::unregister("listed");
+    script::unregister(1, "listed");
     assert!(effect_info("script.listed").is_none());
     assert!(new_effect("script.listed", &json!({})).is_none());
     // Its effects stay geometry effects, which draw what they kept:
     assert!(is_geometry("script.listed"));
+}
+
+/// Two runtimes define the same type, as a script run again does before the runtime it replaces has
+/// ended: the newer one's is listed, once, and the type stays listed until both have ended.
+#[test]
+fn script_effects_stay_while_a_runtime_defines_them() {
+    script::register(1, manifest("redefined"));
+    script::register(2, manifest("redefined"));
+    assert_eq!(script::list().iter().filter(|m| m.id == "redefined").count(), 1);
+    script::unregister(1, "redefined");
+    assert!(effect_info("script.redefined").is_some(), "the second runtime's");
+    script::register(1, manifest("redefined"));
+    script::unregister(1, "redefined");
+    assert!(effect_info("script.redefined").is_some(), "the second runtime's, again");
+    script::unregister(2, "redefined");
+    assert!(effect_info("script.redefined").is_none());
 }
