@@ -10,7 +10,7 @@
 //! its heap, which every isolate then starts from: a context begins with the prelude done, without
 //! running it again.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::pin::pin;
 use std::rc::Rc;
 use std::sync::OnceLock;
@@ -21,6 +21,12 @@ use crate::{Call, Engine, Error, Host, HostFunction, Interrupt, Prelude, Value};
 type Handle = v8::Global<v8::Value>;
 type V8Host = Rc<RefCell<Host<Handle>>>;
 
+/// The most a thread's isolate holds: a script that needs more stops with an error, where V8
+/// would end the app.
+const HEAP_LIMIT: usize = 2 << 30;
+/// The room V8 gets past the limit to unwind the script it stops.
+const HEAP_UNWIND: usize = 64 << 20;
+
 thread_local! {
     /// The thread's isolate, shared by its runtimes.
     static ISOLATE: RefCell<Option<v8::OwnedIsolate>> = const { RefCell::new(None) };
@@ -29,6 +35,12 @@ thread_local! {
     /// in a slot of the context, whose state rusty_v8 frees from a GC finalizer: dropped
     /// runtimes' contexts crashed it now and then when they were collected.
     static CONTEXTS: RefCell<Vec<(v8::Global<v8::Context>, Rc<ContextData>)>> = const { RefCell::new(Vec::new()) };
+
+    /// The isolate's handle, for [`near_heap_limit`] to stop it with.
+    static HEAP_HANDLE: RefCell<Option<v8::IsolateHandle>> = const { RefCell::new(None) };
+
+    /// Whether the script stopped as the isolate ran out of memory, for its error.
+    static OUT_OF_MEMORY: Cell<bool> = const { Cell::new(false) };
 }
 
 /// The snapshot of the prelude, made with the first engine; none when V8 couldn't make one, and
@@ -95,15 +107,30 @@ fn with_isolate<R>(f: impl FnOnce(&mut v8::OwnedIsolate) -> Result<R, Error>) ->
         // A runtime's call into V8 never makes another one, so the isolate is never in use here.
         let mut cell = cell.try_borrow_mut().map_err(|_| Error::Script("the V8 isolate is in use".into()))?;
         f(cell.get_or_insert_with(|| {
+            let params = v8::CreateParams::default().heap_limits(0, HEAP_LIMIT);
             let params = match SNAPSHOT.get() {
-                Some(Some(snapshot)) => v8::CreateParams::default().snapshot_blob(snapshot.as_slice().into()),
-                _ => v8::CreateParams::default(),
+                Some(Some(snapshot)) => params.snapshot_blob(snapshot.as_slice().into()),
+                _ => params,
             };
             let mut isolate = v8::Isolate::new(params);
             isolate.set_promise_reject_callback(track_rejection);
+            HEAP_HANDLE.with(|handle| handle.replace(Some(isolate.thread_safe_handle())));
+            isolate.add_near_heap_limit_callback(near_heap_limit, std::ptr::null_mut());
             isolate
         }))
     })
+}
+
+/// Stops the script that runs as the isolate nears [`HEAP_LIMIT`], and gives V8 the room to unwind
+/// it.
+extern "C" fn near_heap_limit(_data: *mut std::ffi::c_void, current: usize, _initial: usize) -> usize {
+    HEAP_HANDLE.with(|handle| {
+        if let Some(handle) = handle.borrow().as_ref() {
+            handle.terminate_execution();
+        }
+    });
+    OUT_OF_MEMORY.set(true);
+    current.saturating_add(HEAP_UNWIND)
 }
 
 /// A snapshot of an isolate whose default context ran `prelude`, made on a thread of its own, whose
@@ -428,9 +455,11 @@ extern "C" fn track_rejection(message: v8::PromiseRejectMessage) {
 
 /// The exception caught by `scope`, as an error with the script's stack if it has one.
 fn exception(scope: &mut v8::PinnedRef<'_, v8::TryCatch<v8::HandleScope>>) -> Error {
-    let Some(exception) = scope.exception() else {
-        // V8 returns no exception when the script was terminated.
-        return Error::Script("the script was terminated".into());
+    // A terminated script's exception is V8's own, which reads `null`.
+    let exception = scope.exception().filter(|_| !scope.has_terminated());
+    let Some(exception) = exception else {
+        let reason = if OUT_OF_MEMORY.take() { "the script ran out of memory" } else { "the script was terminated" };
+        return Error::Script(reason.into());
     };
     let stack = scope.stack_trace().filter(|stack| stack.is_string());
     Error::Script(stack.unwrap_or(exception).to_rust_string_lossy(scope))
