@@ -418,3 +418,22 @@ fn keep_leaves_out_definitions_changed_since_the_callers_copy() {
     assert_eq!(tile(&s, "Tiles")[2], 80.0, "the newer change stays");
     assert_eq!(s.active().unwrap().doc.symbol("Box").unwrap().art.geometric_bounds().unwrap().x0, 50.0, "the rest applies");
 }
+
+/// A patch of a document behind the active one, as a script's timer makes: it's that document's
+/// undo step, and the active document stays active and as it was.
+#[test]
+fn a_document_behind_the_active_one_takes_a_patch() {
+    let (mut s, layer, [a, _, _]) = three_rectangles();
+    let behind = s.active().unwrap().uid;
+    s.execute("file.new", &json!({})).unwrap();
+    let front = s.active().unwrap().uid;
+    s.execute_in(behind, "document.patch", &json!({"remove": [a]})).unwrap();
+    assert_eq!(s.active().unwrap().uid, front, "the active document stays active");
+    assert!(s.active().unwrap().history.undo.is_empty(), "and has no undo step of it");
+    let index = s.documents().iter().position(|d| d.uid == behind).unwrap();
+    assert_eq!(s.documents()[index].history.undo.len(), 4, "three rectangles, and the patch");
+    s.set_active(index);
+    assert_eq!(children(&s, layer).len(), 2);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(children(&s, layer).len(), 3, "undone in its document");
+}

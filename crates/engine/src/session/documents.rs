@@ -76,6 +76,7 @@ impl Session {
             screens_hand_off: None,
             recovery: Default::default(),
             in_tool_actions: false,
+            in_background: false,
             previewing: false,
             envelope_defaults: None,
             liquify_stroke: None,

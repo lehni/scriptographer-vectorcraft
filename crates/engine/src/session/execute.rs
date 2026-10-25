@@ -129,6 +129,24 @@ impl Session {
         Ok(r)
     }
 
+    /// Execute a command in the open document `uid` as if it were the active one, which stays
+    /// active: for edits a document gets while another is in front, as a script's.
+    pub fn execute_in(&mut self, uid: u64, id: &str, params: &Value) -> Result<Value> {
+        let index = self.docs.iter().position(|d| d.uid == uid).ok_or(EngineError::NoDocument)?;
+        if self.active == Some(index) {
+            return self.execute(id, params);
+        }
+        let front = self.active.replace(index).and_then(|i| self.docs.get(i)).map(|d| d.uid);
+        let outer = std::mem::replace(&mut self.in_background, true);
+        let r = self.execute(id, params);
+        self.in_background = outer;
+        // By its uid, as the command may have opened or closed documents:
+        if let Some(i) = front.and_then(|uid| self.docs.iter().position(|d| d.uid == uid)) {
+            self.active = Some(i);
+        }
+        r
+    }
+
     /// Is the interface in Japanese? Then new type starts with em box top-to-top leading and em
     /// box centre character alignment (#432).
     pub fn japanese_interface(&self) -> bool {

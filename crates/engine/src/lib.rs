@@ -180,6 +180,9 @@ pub struct Session {
     /// While the active tool's actions run: their commands aren't "a command from outside the
     /// tool" ([`Session::after_command`]).
     pub(crate) in_tool_actions: bool,
+    /// While [`Session::execute_in`] runs a command in a document behind the active one: the active
+    /// tool, which works in the active document, stays out of it.
+    pub(crate) in_background: bool,
     /// While [`Session::preview`] runs its command: its edits are the interaction's own.
     previewing: bool,
     /// Envelope Options with no envelope selected: the options and fidelity new envelopes get
