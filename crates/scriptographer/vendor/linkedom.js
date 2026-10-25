@@ -1,4 +1,4 @@
-// linkedom 0.18.13 and its dependencies, bundled with esbuild 0.28.2 for PaperCraft: esbuild node_modules/linkedom/esm/index.js --bundle --format=iife --global-name=linkedom --platform=browser --legal-comments=inline. Licences: LICENSE-linkedom.txt.
+// linkedom 0.18.13 and its dependencies, bundled with esbuild 0.28.2 for Scriptographer: esbuild node_modules/linkedom/esm/index.js --bundle --format=iife --global-name=linkedom --platform=browser --legal-comments=inline. Licences: LICENSE-linkedom.txt.
 var linkedom = (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
