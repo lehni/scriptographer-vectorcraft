@@ -1097,6 +1097,42 @@ fn the_live_effects_example_adds_effects() {
     assert!(texts.iter().any(|(t, _)| t.contains("Preview bounds: -0.5, -0.5, 51, 41")), "{texts:?}");
 }
 
+/// An effect stored without parameters (a file may leave them out) is drawn like any other,
+/// where the script used to draw it again and again.
+#[test]
+fn an_effect_without_parameters_is_drawn_once() {
+    let (mut app, id) = app();
+    let temp = TempFolder::new("wobble-null");
+    crate::scripts::set_up_script_folders(&mut app, &temp.0, None);
+    let path = temp.0.join("Scripts").join("Wobble.js");
+    app.run("ui.runScript", json!({ "path": path.to_string_lossy() })).unwrap();
+    let ctx = egui::Context::default();
+    let mut now = 0.5;
+    let mut frame = |app: &mut VectorcraftApp| {
+        for _ in 0..3 {
+            now += 0.1;
+            crate::scripts::frame(app, &ctx, now);
+        }
+    };
+    frame(&mut app);
+    // As a file that leaves them out opens.
+    app.run("effect.apply", json!({ "effect": "script.wobble", "params": {}, "ids": [id] })).unwrap();
+    app.session
+        .edit("no parameters", |d, _| {
+            let node = d.node_mut(vectorcraft_doc::NodeId(id)).unwrap();
+            let mut appearance = (*node.appearance).clone();
+            appearance.effects[0].params = serde_json::Value::Null;
+            node.appearance = appearance.into();
+            Ok(())
+        })
+        .unwrap();
+    let params =
+        |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params.clone();
+    assert_eq!(params(&app), serde_json::Value::Null, "stored without parameters");
+    frame(&mut app);
+    assert!(params(&app).get("_output").is_some(), "the script drew it");
+}
+
 /// The Wobble example's effect is in Effect › Scriptographer while it runs. Applied, the script
 /// draws it, and what it drew is part of the edit that changed its input: one undo step each.
 #[test]
