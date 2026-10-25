@@ -585,7 +585,10 @@ impl Pen<'_> {
         let arc = ArcSegment::new(center, radii, start, sweep, rotation);
         let t = self.transform;
         let mut first = true;
-        for element in arc.path_elements(0.1) {
+        // To a tenth of a unit, or a millionth of the radius for huge ones: the pieces grow with
+        // the radius over the tolerance.
+        let tolerance = (radii.x.max(radii.y) * 1e-6).max(0.1);
+        for element in arc.path_elements(tolerance) {
             match element {
                 PathEl::MoveTo(p) => {
                     if first {
@@ -1617,8 +1620,24 @@ pub(crate) fn set_pattern_transform<H: Clone>(call: &mut dyn Call<H>, this: &Val
 
 #[cfg(test)]
 mod tests {
-    use super::{Effect, parse_filter};
+    use super::{Effect, Pen, parse_filter};
+    use vello_cpu::kurbo::{Affine, BezPath, Point, Vec2};
     use vello_cpu::peniko::Color;
+
+    /// An arc's pieces don't grow with its radius past what can be seen: one of a radius of 1e30
+    /// is a few dozen curves, where it was some 150,000 (and at 1e300 the process ran out of
+    /// memory); a small one is drawn to a tenth of a unit as before.
+    #[test]
+    fn huge_arcs_stay_a_few_curves() {
+        let pieces = |r: f64| {
+            let mut path = BezPath::new();
+            Pen { path: &mut path, transform: Affine::IDENTITY }.arc(Point::ZERO, Vec2::new(r, r), 0.0, 0.0, 7.0, false);
+            path.elements().len()
+        };
+        assert!(pieces(1e30) < 100, "{}", pieces(1e30));
+        assert!(pieces(1e300) < 100, "{}", pieces(1e300));
+        assert!(pieces(10.0) > 4, "a small circle is still drawn closely");
+    }
 
     #[test]
     fn filters_parse_as_browsers_read_them() {
