@@ -80,6 +80,19 @@ fn an_endless_loop_stops_when_interrupted() {
     assert!(settle(&mut s, &worker).is_some(), "it stopped with an error");
 }
 
+/// A script stopped while a host function calls back into it stops too, though it catches what
+/// that function throws.
+#[cfg(feature = "v8")]
+#[test]
+fn a_script_stopped_in_a_host_call_stops() {
+    let mut s = session();
+    let worker = spawn();
+    send(&s, &worker, Work::Execute("for (;;) { try { structuredClone({ get a() { for (;;) {} } }) } catch {} }".into()));
+    assert!(worker.recv(Duration::from_millis(200)).is_none(), "it loops");
+    worker.interrupt();
+    assert!(settle(&mut s, &worker).is_some(), "it stopped with an error");
+}
+
 /// A script that fills V8's heap stops with an error, where V8 would end the app.
 #[cfg(feature = "v8")]
 #[test]

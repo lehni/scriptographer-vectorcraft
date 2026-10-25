@@ -420,6 +420,8 @@ fn call_host<'s>(scope: &mut v8::PinScope<'s, '_>, args: v8::FunctionCallbackArg
     match value {
         // Nothing returned: `new` gives the object it made.
         Ok(value) => result.set(value),
+        // A stopped script goes on stopping: an exception thrown here could be caught.
+        Err(_) if scope.is_execution_terminating() => {}
         Err(error) => {
             let thrown = crate::exception::value(&mut V8Call { scope }, &error).and_then(|value| to_v8(scope, &value));
             let thrown = match thrown {
