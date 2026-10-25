@@ -547,14 +547,15 @@ fn replaced<H: Clone>(call: &mut dyn Call<H>, doc: &Document, original: &Node, c
     };
     node.visible = matches!(call.get(&change.item, "visible")?, Value::Bool(true));
     node.locked = matches!(call.get(&change.item, "locked")?, Value::Bool(true));
-    let mut json = node_json(&node)?;
     // Sent without its children, a container keeps the ones it has; a compound path's are its
-    // geometry.
-    if !matches!(node.kind, NodeKind::Compound { .. })
-        && let Some(key) = original.children().map(|_| children_key(&node))
-        && let Some(kind) = json.get_mut("kind").and_then(Json::as_object_mut)
-    {
-        kind.remove(key);
+    // geometry. Left out before writing, as a layer may hold many:
+    let is_container = !matches!(node.kind, NodeKind::Compound { .. }) && original.children().is_some();
+    if is_container && let Some(children) = node.children_mut() {
+        children.clear();
+    }
+    let mut json = node_json(&node)?;
+    if is_container && let Some(kind) = json.get_mut("kind").and_then(Json::as_object_mut) {
+        kind.remove(children_key(&node));
     }
     Ok(json)
 }
