@@ -1043,6 +1043,41 @@ fn a_script_picks_a_file() {
     assert_eq!(log, ["/tmp/picked.svg", "null"]);
 }
 
+/// A script that asks for a file again whenever the picker is cancelled can be stopped: once the
+/// user cancelled its picker, its next one asks first, in the app's dialog, where Stop stops it.
+#[test]
+fn a_script_that_keeps_asking_for_files_can_be_stopped() {
+    use crate::dialogs::script::FILE_KIND;
+    let (mut app, _) = app();
+    let shown = std::rc::Rc::new(std::cell::Cell::new(0));
+    let count = shown.clone();
+    app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| {
+        count.set(count.get() + 1);
+        None
+    }));
+    let path = tempfile_path::Path::new("for (;;) await Dialog.openFile()");
+    app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).unwrap();
+    let ctx = egui::Context::default();
+    let asks = |app: &mut VectorcraftApp| {
+        for frame in 1..10 {
+            crate::scripts::frame(app, &ctx, f64::from(frame));
+            if app.ui.dialog.as_ref().is_some_and(|d| d.kind == FILE_KIND) {
+                return true;
+            }
+        }
+        false
+    };
+    assert!(asks(&mut app), "the app asks before the next picker");
+    assert_eq!(shown.get(), 1, "the first picker showed at once");
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(shown.get(), 2, "Choose… shows the picker");
+    assert!(asks(&mut app), "and the app asks again");
+    app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.scripts.running_paths().is_empty(), "Stop stops the script");
+    assert_eq!(shown.get(), 2);
+}
+
 /// `showOpenFilePicker({ multiple: true })` shows the app's dialog for several files, with the
 /// script's file types; the paths picked answer it.
 #[test]

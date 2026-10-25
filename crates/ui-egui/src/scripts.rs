@@ -166,6 +166,10 @@ struct Running {
     queued: VecDeque<Work>,
     /// The dialog it waits on (`Dialog.alert`, `confirm`, `prompt`).
     asking: Option<Asking>,
+    /// Whether the user cancelled its last file dialog: its next one asks first, in the app's
+    /// dialog, which can stop it, as a script that asks again at once would otherwise keep the
+    /// user in the system's file picker, where the app's menus are out of reach.
+    cancelled_pick: bool,
     /// Its palettes (`new Palette`), as they show.
     palettes: Vec<PaletteView>,
     /// Whether it has palettes open, as its last work said: it then keeps running.
@@ -540,6 +544,7 @@ fn start(app: &VectorcraftApp, name: String, path: Option<PathBuf>, source: Stri
         busy: None,
         queued,
         asking: None,
+        cancelled_pick: false,
         busy_since: None,
         unresponsive: false,
         palettes: Vec::new(),
@@ -939,20 +944,24 @@ fn dialogs(app: &mut VectorcraftApp) {
         let Some(asking) = &mut script.asking else {
             continue;
         };
-        // Only one file picker opens at a time, so an open one is this script's. On the web a file
-        // dialog is first the app's, whose Choose… shows the browser's ([`pick`]).
-        let still_open = if is_pick(&asking.question) && cfg!(not(target_arch = "wasm32")) { picking } else { open == Some(script.id) };
-        if asking.shown && !still_open {
+        // Only one file picker opens at a time, so an open one is this script's. A file dialog may
+        // be the app's first, whose Choose… shows the picker ([`ask_to_pick`]).
+        let is_picking = is_pick(&asking.question) && cfg!(not(target_arch = "wasm32")) && picking;
+        if asking.shown && open != Some(script.id) && !is_picking {
+            script.cancelled_pick = is_pick(&asking.question);
             let cancelled = crate::dialogs::script::cancelled(&asking.question);
             reply(script, cancelled);
         } else if !asking.shown && show.is_none() && app.ui.dialog.is_none() && !picking {
             asking.shown = true;
-            show = Some((script.id, asking.question.clone()));
+            show = Some((script.id, asking.question.clone(), script.cancelled_pick));
         }
     }
     match show {
-        Some((id, question)) if is_pick(&question) => pick(app, id, &question),
-        Some((id, question)) => crate::dialogs::script::open(app, id, &question),
+        // On the web, browsers show their pickers only in a click, which Choose… is.
+        Some((id, question, asks_first)) if is_pick(&question) && (asks_first || cfg!(target_arch = "wasm32")) => ask_to_pick(app, id, &question),
+        #[cfg(not(target_arch = "wasm32"))]
+        Some((id, question, _)) if is_pick(&question) => pick(app, id, &question),
+        Some((id, question, _)) => crate::dialogs::script::open(app, id, &question),
         None => {}
     }
 }
@@ -962,11 +971,11 @@ fn is_pick(question: &Value) -> bool {
     matches!(question["type"].as_str(), Some("openFile" | "openFiles" | "saveFile" | "chooseDirectory"))
 }
 
-/// On the web: the app's dialog whose Choose… shows the browser's picker, as browsers show one only
-/// in a click ([`crate::dialogs::script::open_file`]). What the user picks there reaches the script
-/// as its next work ([`frame`]); Cancel answers the dialog as cancelled ([`dialogs`]).
-#[cfg(target_arch = "wasm32")]
-fn pick(app: &mut VectorcraftApp, id: u64, question: &Value) {
+/// The app's dialog whose Choose… shows the picker the script `id` asks for in `question`
+/// ([`crate::dialogs::script::open_file`]), and whose Stop stops the script. On the web, what the
+/// user picks reaches the script as its next work ([`frame`]). Cancel answers it as cancelled
+/// ([`dialogs`]).
+fn ask_to_pick(app: &mut VectorcraftApp, id: u64, question: &Value) {
     let name = app.scripts.running.iter().chain(&app.scripts.console).find(|s| s.id == id).map(|s| s.name.clone()).unwrap_or_default();
     crate::dialogs::script::open_file(app, id, &name, question);
 }
@@ -986,7 +995,7 @@ pub(crate) fn picking(app: &mut VectorcraftApp, id: u64) -> Box<dyn FnOnce(Picke
 /// file types. The path picked answers it (the paths, for several files, whose dialog has no file
 /// types); a picker closed without one answers it as cancelled ([`dialogs`]).
 #[cfg(not(target_arch = "wasm32"))]
-fn pick(app: &mut VectorcraftApp, id: u64, question: &Value) {
+pub(crate) fn pick(app: &mut VectorcraftApp, id: u64, question: &Value) {
     let kind = question["type"].as_str().unwrap_or_default().to_owned();
     let path = question["path"].as_str().map(PathBuf::from);
     // A folder to start in, or a file: its folder, and its name to suggest.
@@ -1023,6 +1032,7 @@ fn pick(app: &mut VectorcraftApp, id: u64, question: &Value) {
 /// The user's answer to the dialog the script `id` waits on.
 pub(crate) fn answer(app: &mut VectorcraftApp, id: u64, answer: Value) {
     if let Some(script) = app.scripts.running.iter_mut().chain(&mut app.scripts.console).find(|s| s.id == id && s.asking.is_some()) {
+        script.cancelled_pick = false;
         reply(script, answer);
     }
 }
