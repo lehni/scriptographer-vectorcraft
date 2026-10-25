@@ -152,7 +152,11 @@ fn panel_and_script_keys(app: &mut VectorcraftApp, ctx: &egui::Context) {
             crate::panels::scriptographer::keys(app, ctx);
         }
     }
-    // The Scriptographer Tool's script takes the plain keys it handles, ahead of their shortcuts.
+    // Scripts see the keys typed on the canvas on their `document`, and the Scriptographer Tool's
+    // script takes the plain keys it handles, ahead of their shortcuts.
+    if crate::panels::key_panel(app).is_none() {
+        crate::scripts::document_keys(app, ctx);
+    }
     crate::scripts::keys(app, ctx);
 }
 

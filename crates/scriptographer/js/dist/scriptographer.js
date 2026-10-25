@@ -70,6 +70,7 @@
     ErrorEvent: () => ErrorEvent,
     Event: () => Event,
     EventTarget: () => EventTarget,
+    KeyboardEvent: () => KeyboardEvent,
     MessageEvent: () => MessageEvent,
     ProgressEvent: () => ProgressEvent,
     PromiseRejectionEvent: () => PromiseRejectionEvent,
@@ -397,6 +398,30 @@
       setMembers(this, init, { promise: null, reason: void 0 });
     }
   };
+  var KeyboardEvent = class extends Event {
+    static {
+      __name(this, "KeyboardEvent");
+    }
+    constructor(type, init) {
+      super(...arguments);
+      setMembers(this, init, keyboardDefaults);
+    }
+    getModifierState(key) {
+      const { ctrlKey, shiftKey, altKey, metaKey } = getState(this);
+      return { Control: ctrlKey, Shift: shiftKey, Alt: altKey, Meta: metaKey }[key] ?? false;
+    }
+  };
+  var keyboardDefaults = {
+    key: "",
+    code: "",
+    location: 0,
+    repeat: false,
+    isComposing: false,
+    ctrlKey: false,
+    shiftKey: false,
+    altKey: false,
+    metaKey: false
+  };
   var fields = {
     [Event.name]: [
       "type",
@@ -415,7 +440,8 @@
     [CloseEvent.name]: ["wasClean", "code", "reason"],
     [ProgressEvent.name]: ["lengthComputable", "loaded", "total"],
     [ErrorEvent.name]: ["message", "filename", "lineno", "colno", "error"],
-    [PromiseRejectionEvent.name]: ["promise", "reason"]
+    [PromiseRejectionEvent.name]: ["promise", "reason"],
+    [KeyboardEvent.name]: Object.keys(keyboardDefaults)
   };
   for (const Class of [
     Event,
@@ -424,7 +450,8 @@
     CloseEvent,
     ProgressEvent,
     ErrorEvent,
-    PromiseRejectionEvent
+    PromiseRejectionEvent,
+    KeyboardEvent
   ]) {
     for (const name of fields[Class.name]) {
       inject(
@@ -439,6 +466,12 @@
     }
   }
   defineConstants(Event, phases);
+  defineConstants(KeyboardEvent, {
+    DOM_KEY_LOCATION_STANDARD: 0,
+    DOM_KEY_LOCATION_LEFT: 1,
+    DOM_KEY_LOCATION_RIGHT: 2,
+    DOM_KEY_LOCATION_NUMPAD: 3
+  });
   setToStringTag(
     EventTarget,
     Event,
@@ -447,7 +480,8 @@
     CloseEvent,
     ProgressEvent,
     ErrorEvent,
-    PromiseRejectionEvent
+    PromiseRejectionEvent,
+    KeyboardEvent
   );
   function defineEventHandlers(target, ...types2) {
     for (const type of types2) {
@@ -4842,12 +4876,71 @@
   var view;
   var dom = {
     get window() {
-      return view ??= natives.dom();
+      return view ??= loadView();
     },
     get document() {
-      return (view ??= natives.dom()).document;
+      return (view ??= loadView()).document;
     }
   };
+  var keyTypes = ["keydown", "keyup"];
+  var keyTargets = [];
+  function setupKeys() {
+    trackKeys(globalThis);
+    if (!natives.dom && globalThis.document) trackKeys(document);
+  }
+  __name(setupKeys, "setupKeys");
+  function hasKeyListeners() {
+    return keyTargets.some(
+      ({ target, listeners }) => keyTypes.some((type) => listeners.get(type).size > 0 || target[`on${type}`])
+    );
+  }
+  __name(hasKeyListeners, "hasKeyListeners");
+  function dispatchKey(type, init) {
+    const options = { ...init, bubbles: true, cancelable: true };
+    if (!natives.dom) {
+      document.dispatchEvent(new globalThis.KeyboardEvent(type, options));
+    } else {
+      const event = new KeyboardEvent(type, options);
+      if (view) {
+        const { document: document2 } = view;
+        const documentEvent = new view.Event(type, options);
+        for (const name in event) {
+          if (!(name in documentEvent)) documentEvent[name] = event[name];
+        }
+        documentEvent.getModifierState = (key) => event.getModifierState(key);
+        document2[`on${type}`]?.call(document2, documentEvent);
+        document2.dispatchEvent(documentEvent);
+        if (documentEvent.cancelBubble) return;
+      }
+      fire(globalThis, event);
+    }
+  }
+  __name(dispatchKey, "dispatchKey");
+  function loadView() {
+    const view2 = natives.dom();
+    void view2.addEventListener;
+    const { addEventListener, removeEventListener, dispatchEvent } = globalThis;
+    Object.assign(view2, { addEventListener, removeEventListener, dispatchEvent });
+    trackKeys(view2.document);
+    return view2;
+  }
+  __name(loadView, "loadView");
+  function trackKeys(target) {
+    const listeners = new Map(keyTypes.map((type) => [type, /* @__PURE__ */ new Set()]));
+    keyTargets.push({ target, listeners });
+    const { addEventListener, removeEventListener } = target;
+    inject(target, {
+      addEventListener(type, listener, options) {
+        listeners.get(type)?.add(listener);
+        return addEventListener.call(this, type, listener, options);
+      },
+      removeEventListener(type, listener, options) {
+        listeners.get(type)?.delete(listener);
+        return removeEventListener.call(this, type, listener, options);
+      }
+    });
+  }
+  __name(trackKeys, "trackKeys");
 
   // src/clipboard.js
   var Clipboard = class extends EventTarget {
@@ -8920,7 +9013,13 @@ ${value}\r
       removeEventListener: prototype.removeEventListener.bind(globalThis),
       dispatchEvent: prototype.dispatchEvent.bind(globalThis)
     });
-    defineEventHandlers2(globalThis, "unhandledrejection", "rejectionhandled");
+    defineEventHandlers2(
+      globalThis,
+      "unhandledrejection",
+      "rejectionhandled",
+      "keydown",
+      "keyup"
+    );
     Object.assign(natives, { notifyRejections });
   } else {
     reportRejections();
@@ -8998,4 +9097,6 @@ ${value}\r
   inject(globalThis, { Palette });
   Object.assign(natives, { takePalettes, hasPalettes, handlePaletteEvent });
   Object.assign(natives, { watchEffects, applyEffect });
+  setupKeys();
+  Object.assign(natives, { dispatchKey, hasKeyListeners });
 })();

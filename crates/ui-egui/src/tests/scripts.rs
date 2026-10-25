@@ -284,6 +284,36 @@ fn a_tool_script_gets_the_plain_keys() {
     assert_eq!(left, [key(egui::Key::V, egui::Modifiers::COMMAND)], "Cmd+V stays the app's");
 }
 
+/// A script that listens for keys on its `document` keeps running and gets the keys typed on the
+/// canvas, whose shortcuts still work; while a panel has the keyboard, it gets none.
+#[test]
+fn a_script_gets_the_keys_on_its_document() {
+    use egui::{Key, Modifiers};
+    let (mut app, id) = app();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    let path = tempfile_path::Path::new("document.addEventListener('keydown', e => console.log(e.key, e.code, e.metaKey))");
+    let result = app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).unwrap();
+    assert_eq!(result["running"], true, "its listener keeps it running");
+    let ctx = egui::Context::default();
+    let mut time = 1.0;
+    let mut press = |app: &mut VectorcraftApp, key, modifiers| {
+        let events = vec![egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers }];
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
+        out.textures_delta.clear();
+        time += 0.1;
+        crate::scripts::frame(app, &ctx, time);
+    };
+    let log = |app: &VectorcraftApp| app.scripts.log().iter().map(|l| l.text.clone()).collect::<Vec<_>>();
+    let before = left(&app, id);
+    press(&mut app, Key::ArrowRight, Modifiers::NONE);
+    press(&mut app, Key::Num1, Modifiers::NONE);
+    assert_eq!(log(&app), ["ArrowRight ArrowRight false", "1 Digit1 false"]);
+    assert_eq!(left(&app, id), before + 1.0, "the arrow still nudged the selection");
+    app.key_panel = Some((crate::panels::scriptographer::ID, app.frame_iteration()));
+    press(&mut app, Key::ArrowDown, Modifiers::NONE);
+    assert_eq!(log(&app).len(), 2, "the panel's keys aren't the document's");
+}
+
 /// A script that asks with `Dialog.prompt` waits for the answer while the app goes on, then works
 /// with the values given.
 #[test]

@@ -14,7 +14,7 @@ use std::time::Duration;
 use serde_json::Value as Json;
 use vectorcraft_doc::{Document, NodeId, Selection};
 
-use crate::{Engine, Error, Modifiers, MouseEvent, PaletteEvent, Patch, PlatformEngine, Runtime, Scope, Setup};
+use crate::{Engine, Error, Key, Modifiers, MouseEvent, PaletteEvent, Patch, PlatformEngine, Runtime, Scope, Setup};
 
 /// What the app asks a worker to do.
 pub enum Request {
@@ -45,6 +45,8 @@ pub enum Work {
     /// A key going down (`true`) or up for the script's tool: its name as Paper.js has it, and the
     /// character it types.
     Key(bool, String, Option<String>, Modifiers),
+    /// A key typed on the canvas, for the script's `document`.
+    DocumentKey(Key),
     /// What the user did in one of the script's palettes.
     Palette(u64, PaletteEvent),
     /// The user picked the script's tool (`true`), or another one.
@@ -75,9 +77,20 @@ pub enum Reply {
     Changes { uid: u64, patch: Option<Json>, base: Arc<Document>, before: BTreeSet<NodeId>, selected: BTreeSet<NodeId>, effects: bool },
     /// The work is done: what the script printed, its error if it threw, whether it has timers
     /// left, whether it made a tool, whether that tool handles keys, the palettes that are new or
-    /// changed (as [`crate::Runtime::take_palettes`] has them), whether it has palettes open, and
-    /// whether it set `script.keepAlive`.
-    Done { output: Vec<String>, error: Option<String>, running: bool, tool: bool, keys: bool, palettes: Vec<Json>, open: bool, keep_alive: bool },
+    /// changed (as [`crate::Runtime::take_palettes`] has them), whether it has palettes open,
+    /// whether it listens for keys on its `document` or `window`, and whether it set
+    /// `script.keepAlive`.
+    Done {
+        output: Vec<String>,
+        error: Option<String>,
+        running: bool,
+        tool: bool,
+        keys: bool,
+        palettes: Vec<Json>,
+        open: bool,
+        listening: bool,
+        keep_alive: bool,
+    },
 }
 
 /// One script's runtime, and the patches waiting for their ids, in the order they went.
@@ -146,6 +159,7 @@ impl<E: Engine> Script<E> {
                 .into_iter()
                 .try_for_each(|(event, point, modifiers, time)| self.runtime.mouse_event(&self.scope, event, point, modifiers, time)),
             Work::Key(down, key, character, modifiers) => self.runtime.key_event(&self.scope, down, &key, character.as_deref(), modifiers),
+            Work::DocumentKey(key) => self.runtime.document_key(&key),
             Work::Palette(id, event) => self.runtime.palette_event(id, event),
             Work::Activate(active) => self.runtime.activate_tool(&self.scope, active),
             Work::Handler(name) => self.runtime.call_handler(name).map(|_| ()),
@@ -206,12 +220,13 @@ impl<E: Engine> Script<E> {
             Err(e) => (Vec::new(), error.or(Some(e.to_string()))),
         };
         let (running, open) = (self.runtime.is_running(), self.runtime.has_palettes());
+        let listening = self.runtime.has_key_listeners().unwrap_or(false);
         let keep_alive = self.runtime.keep_alive().unwrap_or(false);
         let error = match self.runtime.keep_preferences() {
             Ok(()) => error,
             Err(e) => error.or(Some(e.to_string())),
         };
-        Reply::Done { output: self.runtime.take_output(), error, running, tool, keys, palettes, open, keep_alive }
+        Reply::Done { output: self.runtime.take_output(), error, running, tool, keys, palettes, open, listening, keep_alive }
     }
 }
 
@@ -253,6 +268,7 @@ impl Worker {
                             keys: false,
                             palettes: Vec::new(),
                             open: false,
+                            listening: false,
                             keep_alive: false,
                         });
                         return;
