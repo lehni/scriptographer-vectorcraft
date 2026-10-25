@@ -464,15 +464,18 @@ fn not_responding(app: &mut VectorcraftApp, now: f64) {
 }
 
 /// Calls the scripts' `handler` ([`vectorcraft_scriptographer::HANDLERS`]), where they define it.
+/// A script whose handler throws stops, as one does whose frame throws.
 pub(crate) fn notify(app: &mut VectorcraftApp, handler: &'static str) {
     let mut scripts = std::mem::take(&mut app.scripts.running);
     scripts.extend(app.scripts.console.take());
-    for script in &mut scripts {
+    scripts.retain_mut(|script| {
         script.queued.push_back(Work::Handler(handler));
-        if let Err(e) = pump(app, script, None, FRAME_WAIT) {
-            report(app, &script.name, &e);
+        let result = pump(app, script, None, FRAME_WAIT);
+        if let Err(e) = &result {
+            report(app, &script.name, e);
         }
-    }
+        result.is_ok()
+    });
     // The console is the one without a file.
     if let Some(i) = scripts.iter().position(|s| s.path.is_none()) {
         app.scripts.console = Some(scripts.remove(i));

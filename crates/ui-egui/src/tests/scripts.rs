@@ -284,6 +284,18 @@ fn a_tool_script_gets_the_plain_keys() {
     assert_eq!(left, [key(egui::Key::V, egui::Modifiers::COMMAND)], "Cmd+V stays the app's");
 }
 
+/// A script whose handler throws stops, as one whose frame throws does.
+#[test]
+fn a_script_whose_handler_throws_stops() {
+    let (mut app, _) = app();
+    let path = tempfile_path::Path::new("function onFrame() {}\nfunction onAppActivate() { throw new Error('no') }");
+    app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).unwrap();
+    assert!(app.scripts.is_running());
+    crate::scripts::notify(&mut app, "onAppActivate");
+    assert!(!app.scripts.is_running(), "it stopped");
+    assert!(app.scripts.log().iter().any(|l| l.error && l.text.contains("no")), "with its error");
+}
+
 /// A script that can't run, as no document is open, leaves the running ones running.
 #[test]
 fn a_script_without_a_document_stops_no_others() {
