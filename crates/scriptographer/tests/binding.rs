@@ -100,6 +100,34 @@ fn style_changes_keep_the_geometry<E: Engine>() {
     assert_eq!(anchors[1..], kept[1..], "the other points, their handles and kinds are exactly as they were");
 }
 
+/// An item the document can't hold is left out, with a message, and the rest of the turn's changes
+/// go in; later turns go on without it.
+fn an_item_the_document_cant_hold_is_left_out<E: Engine>() {
+    let (mut s, a, _) = document();
+    let st = s.active().unwrap();
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    let turn = |s: &mut Session, runtime: &mut Runtime<E>, script: &str| {
+        let st = s.active().unwrap();
+        runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
+        runtime.execute(&scope, script).unwrap();
+        for patch in runtime.take_patches().unwrap() {
+            let result = s.execute("document.patch", &patch.params).unwrap();
+            let st = s.active().unwrap();
+            runtime.apply_ids(patch, &result, st.doc.clone(), st.selection.clone(), false).unwrap();
+        }
+        runtime.take_output()
+    };
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
+    let output = turn(&mut s, &mut runtime, "new Raster({ size: [4, 4] })\nproject.activeLayer.firstChild.fillColor = 'red'");
+    assert_eq!(output.len(), 1, "{output:?}");
+    assert!(output[0].starts_with("The new Raster isn't in the document: "), "{}", output[0]);
+    assert_eq!(node(&s, a).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "the rest went in");
+    let output = turn(&mut s, &mut runtime, "new Path.Circle({ center: [50, 50], radius: 5 })\nproject.activeLayer.lastChild.bringToFront()");
+    assert_eq!(output, Vec::<String>::new(), "no message again");
+    assert_eq!(s.active().unwrap().doc.layers[0].children().unwrap().len(), 3, "the circle went in, beside the two rectangles");
+}
+
 /// `paintOrder` is the order of the top fill and stroke, both ways.
 fn paint_order_is_the_order_of_fill_and_stroke<E: Engine>() {
     let (mut s, a, _) = document();
@@ -1108,6 +1136,11 @@ macro_rules! engine_tests {
             #[test]
             fn style_changes_keep_the_geometry() {
                 super::style_changes_keep_the_geometry::<$engine>();
+            }
+
+            #[test]
+            fn an_item_the_document_cant_hold_is_left_out() {
+                super::an_item_the_document_cant_hold_is_left_out::<$engine>();
             }
 
             #[test]

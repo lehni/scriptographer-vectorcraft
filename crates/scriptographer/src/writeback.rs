@@ -130,6 +130,7 @@ pub(crate) fn patch<H: Clone>(
             let child = object(call, &children, &i.to_string())?;
             match call.get(&child, "key")? {
                 Value::Number(key) => slots.push(json!(key as u64)),
+                _ if is_unwritten(call, &child)? => {}
                 _ => {
                     let paper_id = number(call.get(&child, "id")?) as u64;
                     let k = news.new.get(&paper_id).ok_or_else(|| Error::Script("a new item is missing from the change log".into()))?;
@@ -243,15 +244,26 @@ struct News<H> {
 impl<H: Clone> News<H> {
     /// Inserts `item` into `parent` (an id, `null` or `{new: k}`) at `index`, and a group's or
     /// layer's new children after it. The children it holds, new or already in the document, are
-    /// its order list, so objects a script moved into a new group keep their ids.
-    fn add(&mut self, call: &mut dyn Call<H>, item: &H, parent: Json, index: Option<u64>) -> Result<(), Error> {
-        let k = self.insert.len();
-        let mut json = export(call, item)?;
-        let container = matches!(json.get(0).and_then(Json::as_str), Some("Group" | "Layer"));
-        if container && let Some(props) = json.get_mut(1).and_then(Json::as_object_mut) {
-            props.remove("children");
+    /// its order list, so objects a script moved into a new group keep their ids. Returns its index
+    /// among the inserts, or `None` for an item the document can't hold, which is left out.
+    fn add(&mut self, call: &mut dyn Call<H>, item: &H, parent: Json, index: Option<u64>) -> Result<Option<usize>, Error> {
+        if is_unwritten(call, item)? {
+            return Ok(None);
         }
-        let mut node = new_node(&json)?;
+        let k = self.insert.len();
+        // The rest of the script's changes go in without it, and it stays out from now on:
+        let (container, mut node) = match container_node(call, item) {
+            Ok(made) => made,
+            Err(e) => {
+                call.set(item, UNWRITTEN, &Value::Bool(true))?;
+                let class = call.get(item, "className")?;
+                let class = call.to_string(&class)?;
+                let reason = e.to_string();
+                let reason = reason.lines().next().unwrap_or_default();
+                call.host()?.borrow_mut().print(format!("The new {class} isn't in the document: {reason}"));
+                return Ok(None);
+            }
+        };
         if let NodeKind::Text(t) = &mut node.kind {
             let link = link(call, item)?;
             **t = text::written(None, None, (**t).clone(), link);
@@ -264,7 +276,7 @@ impl<H: Clone> News<H> {
         self.inserted.push(item.clone());
         self.new.insert(number(call.get(item, "id")?) as u64, k);
         if !container {
-            return Ok(());
+            return Ok(Some(k));
         }
         let children = object(call, item, "children")?;
         let count = number(call.get(&children, "length")?) as usize;
@@ -274,16 +286,35 @@ impl<H: Clone> News<H> {
             match call.get(&child, "key")? {
                 Value::Number(key) => slots.push(json!(key as u64)),
                 _ => {
-                    slots.push(json!({ "new": self.insert.len() }));
-                    self.add(call, &child, json!({ "new": k }), None)?;
+                    if let Some(added) = self.add(call, &child, json!({ "new": k }), None)? {
+                        slots.push(json!({ "new": added }));
+                    }
                 }
             }
         }
         if !slots.is_empty() {
             self.order.push(json!({ "parent": { "new": k }, "children": slots }));
         }
-        Ok(())
+        Ok(Some(k))
     }
+}
+
+/// The node of the new `item`, without its children, and whether it's a container, whose children
+/// go in after it.
+fn container_node<H: Clone>(call: &mut dyn Call<H>, item: &H) -> Result<(bool, Node), Error> {
+    let mut json = export(call, item)?;
+    let container = matches!(json.get(0).and_then(Json::as_str), Some("Group" | "Layer"));
+    if container && let Some(props) = json.get_mut(1).and_then(Json::as_object_mut) {
+        props.remove("children");
+    }
+    Ok((container, new_node(&json)?))
+}
+
+/// The property that marks an item the document can't hold, which write-back leaves out.
+const UNWRITTEN: &str = "_unwritten";
+
+fn is_unwritten<H: Clone>(call: &mut dyn Call<H>, item: &H) -> Result<bool, Error> {
+    Ok(matches!(call.get(item, UNWRITTEN)?, Value::Bool(true)))
 }
 
 fn is_text(class: &str) -> bool {
@@ -875,7 +906,7 @@ pub fn new_node(json: &Json) -> Result<Node, Error> {
             }
             node
         }
-        other => return Err(Error::Script(format!("a new {other} can't be added to the document yet"))),
+        _ => return Err(Error::Script("VectorCraft documents don't hold these yet".into())),
     };
     apply_attributes(&mut node, props, &Json::Null);
     node.name = props.get("name").and_then(Json::as_str).map(str::to_owned).or(node.name);
