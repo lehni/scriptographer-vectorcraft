@@ -367,9 +367,13 @@ pub(crate) fn export<H: Clone>(call: &mut dyn Call<H>, item: &H) -> Result<Json,
     })
 }
 
-/// A Paper.js object's own JSON, `exportJSON()` parsed.
+/// A Paper.js object's own JSON, `exportJSON()` parsed, its numbers rounded to 12 decimals: past
+/// what a document holds, unlike the 5 Paper.js writes by default, but short of the noise of float
+/// arithmetic (`0.19999999999999998`).
 pub(crate) fn exported<H: Clone>(call: &mut dyn Call<H>, object: &H) -> Result<Json, Error> {
-    match method(call, object, "exportJSON", &[])? {
+    let options = call.new_object()?;
+    call.set(&options, "precision", &Value::Number(12.0))?;
+    match method(call, object, "exportJSON", &[Value::Js(options)])? {
         Value::String(json) => serde_json::from_str(&json).map_err(|e| Error::Script(format!("exportJSON(): {e}"))),
         _ => Err(Error::Script("exportJSON() didn't return a string".into())),
     }
@@ -409,8 +413,8 @@ fn replaced<H: Clone>(call: &mut dyn Call<H>, doc: &Document, original: &Node, c
                 && let Some((now, matrix)) = instance(&props)
             {
                 *symbol = now;
-                // A transform unchanged but for the precision of Paper.js's JSON stays as it was:
-                if !is_close(&json!(matrix.as_coeffs()), &json!(xf.as_coeffs())) {
+                // A transform unchanged but for the precision of JSON stays as it was:
+                if !is_same_affine(&matrix, xf) {
                     *xf = matrix;
                 }
             }
@@ -496,11 +500,12 @@ pub fn apply(node: &mut Node, json: &Json, before: &Json) -> Result<(), Error> {
     let props = json.get(1).and_then(Json::as_object).ok_or_else(|| Error::Script("not an item's JSON".into()))?;
     let before_props = before.get(1).cloned().unwrap_or(Json::Null);
     let path = path_data(json, node.path_data())?;
-    // A live shape whose geometry a script changed is a plain path, as after any path edit.
+    // A live shape whose geometry a script changed is a plain path, as after any path edit. The
+    // points it didn't move stay exactly as they were:
     if let NodeKind::Path { path: p, live, .. } = &mut node.kind
-        && *p != path
+        && !is_same_path(p, &path)
     {
-        *p = path;
+        *p = changed_path(Some(p), path);
         *live = None;
     }
     let mut appearance = (*node.appearance).clone();
@@ -593,6 +598,45 @@ pub(crate) fn changed_paint(now: Option<&Json>, before: Option<&Json>) -> Option
     let now = read(now)?;
     let json = |paint: &Paint| serde_json::to_value(paint).unwrap_or_default();
     (!read(before).is_some_and(|before| is_close(&json(&now), &json(&before)))).then_some(now)
+}
+
+/// Are `a` and `b` the same geometry, but for the precision of floats that went through JSON?
+fn is_same_path(a: &PathData, b: &PathData) -> bool {
+    a.subpaths.len() == b.subpaths.len()
+        && a.subpaths.iter().zip(&b.subpaths).all(|(a, b)| {
+            a.closed == b.closed && a.anchors.len() == b.anchors.len() && a.anchors.iter().zip(&b.anchors).all(|(a, b)| is_same_anchor(a, b))
+        })
+}
+
+fn is_same_anchor(a: &Anchor, b: &Anchor) -> bool {
+    let is_close = |a: Point, b: Point| (a.x - b.x).abs().max((a.y - b.y).abs()) <= 1e-9 * a.x.abs().max(a.y.abs()).max(1.0);
+    is_close(a.p, b.p) && is_close(a.h_in, b.h_in) && is_close(a.h_out, b.h_out)
+}
+
+/// `path` as a script left it, written over `before`, the path it read: `before` where it's the
+/// same, and its anchors where a subpath has as many and an anchor is the same.
+pub(crate) fn changed_path(before: Option<&PathData>, mut path: PathData) -> PathData {
+    let Some(before) = before else {
+        return path;
+    };
+    if is_same_path(before, &path) {
+        return before.clone();
+    }
+    for (subpath, old) in path.subpaths.iter_mut().zip(&before.subpaths) {
+        if subpath.anchors.len() == old.anchors.len() {
+            for (anchor, old) in subpath.anchors.iter_mut().zip(&old.anchors) {
+                if is_same_anchor(anchor, old) {
+                    *anchor = *old;
+                }
+            }
+        }
+    }
+    path
+}
+
+/// Are `a` and `b` the same transform, but for the precision of floats that went through JSON?
+pub(crate) fn is_same_affine(a: &Affine, b: &Affine) -> bool {
+    a.as_coeffs().iter().zip(b.as_coeffs()).all(|(a, b)| (a - b).abs() <= 1e-9 * a.abs().max(1.0))
 }
 
 /// Are `a` and `b` the same, but for numbers within the precision of Paper.js's JSON?

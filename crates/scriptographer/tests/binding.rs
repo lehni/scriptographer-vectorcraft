@@ -78,6 +78,28 @@ fn writes_changes_back_as_one_undo_step<E: Engine>() {
     assert_eq!(s.execute("document.json", &json!({})).unwrap(), before, "one undo step undoes the script");
 }
 
+/// A change of style leaves the geometry as it was, live shape and smooth points too, also where
+/// its numbers aren't round; a moved point moves only itself, the others staying exactly where
+/// they were.
+fn style_changes_keep_the_geometry<E: Engine>() {
+    let (mut s, _, _) = document();
+    let ellipse = NodeId(
+        s.execute("shape.ellipse", &json!({"x": 10.123456789, "y": 20.987654321, "width": 33.333333333, "height": 17.777777777})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    let before = node(&s, ellipse);
+    run::<E>(&mut s, "project.activeLayer.lastChild.fillColor = 'red'");
+    let after = node(&s, ellipse);
+    assert_eq!(after.path_data(), before.path_data(), "the geometry is exactly as it was");
+    assert!(after.live_shape().is_some(), "and still a live ellipse");
+    run::<E>(&mut s, "project.activeLayer.lastChild.firstSegment.point.x += 1");
+    let (moved, kept) = (node(&s, ellipse), before.path_data().unwrap().subpaths[0].anchors.clone());
+    let anchors = &moved.path_data().unwrap().subpaths[0].anchors;
+    assert_eq!(anchors[0].p.x, kept[0].p.x + 1.0);
+    assert_eq!(anchors[1..], kept[1..], "the other points, their handles and kinds are exactly as they were");
+}
+
 /// `paintOrder` is the order of the top fill and stroke, both ways.
 fn paint_order_is_the_order_of_fill_and_stroke<E: Engine>() {
     let (mut s, a, _) = document();
@@ -1081,6 +1103,11 @@ macro_rules! engine_tests {
             #[test]
             fn writes_changes_back_as_one_undo_step() {
                 super::writes_changes_back_as_one_undo_step::<$engine>();
+            }
+
+            #[test]
+            fn style_changes_keep_the_geometry() {
+                super::style_changes_keep_the_geometry::<$engine>();
             }
 
             #[test]
