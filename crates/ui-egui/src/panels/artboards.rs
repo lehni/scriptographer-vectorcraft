@@ -21,6 +21,8 @@ use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 use crate::{VectorcraftApp, icons};
 
+pub const ID: &str = "artboards";
+
 /// The Artboard tool's Move Artwork with Artboard and Scale Artwork with Artboard options (#602) as
 /// check boxes: the Control bar ([`control_bar`]) and Properties show them while the tool is in use.
 pub(crate) fn art_options(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -326,18 +328,12 @@ pub(crate) fn toggle(app: &mut VectorcraftApp, i: usize, n: usize) {
     app.session.set_tool_option("selected", &json!(all));
 }
 
-/// Whether the panel has the keyboard: one of its rows was clicked, and in every frame since then
-/// the panel was drawn and the pointer was not pressed outside its list.
-fn has_keyboard(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
-    pstate::<Option<u64>>(ctx, "ab-keys").is_some_and(|f| f + 1 >= app.frame_iteration())
-}
-
 /// Whether Select All's shortcut selects every artboard ([`select_all`]) instead of the art: the
 /// panel has the keyboard and the Artboard tool is in use. [`crate::shortcuts::handle`] and
 /// [`crate::menus::invoke_from_system_menu`] read it before they run `select.all`, which they reach
 /// only while no text field has the keyboard.
-pub(crate) fn selects_all(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
-    app.session.tool_id() == "artboard" && has_keyboard(app, ctx)
+pub(crate) fn selects_all(app: &VectorcraftApp) -> bool {
+    app.session.tool_id() == "artboard" && super::key_panel(app) == Some(ID)
 }
 
 /// Ctrl/Cmd+A while [`selects_all`]: the Artboard tool selects every artboard, and the active
@@ -516,11 +512,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
         scrolled.inner_rect
     });
-    // Keyboard: the panel takes it with a click on a row and gives it up when the pointer is
-    // pressed outside the list or the panel is not drawn (`ab-keys`: the frame it last had it in).
-    let pressed_outside = ui.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !list_rect.contains(p)));
-    let keys = row_clicked || (has_keyboard(app, ui.ctx()) && !pressed_outside);
-    set_pstate(ui.ctx(), "ab-keys", keys.then_some(app.frame_iteration()));
+    super::keyboard_area(app, ui, ID, list_rect, row_clicked);
     let n = abs.len();
     widgets::bottom_bar(ui, |ui| {
         if widgets::icon_button_enabled(ui, "dc-rearrange", tl!("Rearrange All Artboards"), false, n > 1, 24.0).clicked() {

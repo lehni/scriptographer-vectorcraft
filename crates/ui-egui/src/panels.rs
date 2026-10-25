@@ -470,6 +470,21 @@ pub(crate) fn live_run(app: &mut VectorcraftApp, label: &str, cmd: &str, params:
     }
 }
 
+/// The panel that has the keyboard, ahead of the canvas and the shortcuts: the last one clicked
+/// into, while it is drawn. `None`: the canvas has it.
+pub(crate) fn key_panel(app: &VectorcraftApp) -> Option<&'static str> {
+    app.key_panel.filter(|(_, frame)| frame + 1 >= app.frame_iteration()).map(|(id, _)| id)
+}
+
+/// Panel `id`'s keyboard area, drawn this frame: a click on it (`clicked`) gives the panel the
+/// keyboard, which it keeps while it is drawn, until the pointer is pressed outside `area`.
+pub(crate) fn keyboard_area(app: &mut VectorcraftApp, ui: &Ui, id: &'static str, area: Rect, clicked: bool) {
+    if clicked || key_panel(app) == Some(id) {
+        let pressed_outside = ui.input(|i| i.pointer.any_pressed() && i.pointer.press_origin().is_some_and(|p| !area.contains(p)));
+        app.key_panel = (clicked || !pressed_outside).then_some((id, app.frame_iteration()));
+    }
+}
+
 /// Per-panel UI state kept in egui memory (not document state).
 pub(crate) fn pstate<T: Clone + Default + Send + Sync + 'static>(ctx: &egui::Context, key: &str) -> T {
     ctx.data(|d| d.get_temp::<T>(egui::Id::unique(("panel-state", key)))).unwrap_or_default()

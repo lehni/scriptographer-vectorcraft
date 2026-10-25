@@ -141,6 +141,21 @@ pub fn runs_a_shortcut(key: &str, code: &str, modifiers: Modifiers) -> bool {
     craft_keymap::Layout::default().candidates(&input).iter().any(|c| mirror.keymap.lookup(c, false, &Active::NONE) != craft_keymap::Lookup::None)
 }
 
+/// The keys typed outside a text field that a panel or a script takes ahead of the shortcuts. A
+/// panel that has the keys takes those it uses first; Escape gives them back to the canvas, where
+/// it does what it does there.
+fn panel_and_script_keys(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if let Some(panel) = crate::panels::key_panel(app) {
+        if ctx.input(|i| i.key_pressed(Key::Escape)) {
+            app.key_panel = None;
+        } else if panel == crate::panels::scriptographer::ID {
+            crate::panels::scriptographer::keys(app, ctx);
+        }
+    }
+    // The Scriptographer Tool's script takes the plain keys it handles, ahead of their shortcuts.
+    crate::scripts::keys(app, ctx);
+}
+
 /// Process one frame's events against the keymap at most once per context, viewport and frame, so
 /// reruns cannot fire a shortcut or tool key twice.
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
@@ -190,13 +205,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     let typing = ctx.egui_wants_keyboard_input();
-    // A panel that has the keys takes those it uses first.
-    if !typing && app.key_panel == Some(crate::panels::scriptographer::ID) {
-        crate::panels::scriptographer::keys(app, ctx);
-    }
-    // The Scriptographer Tool's script takes the plain keys it handles, ahead of their shortcuts.
     if !typing {
-        crate::scripts::keys(app, ctx);
+        panel_and_script_keys(app, ctx);
     }
     // Escape closes Edit Toolbar's drawer first (egui drops a drag from it on Escape already).
     if app.ui.tools_drawer && !typing && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
@@ -308,7 +318,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let hits = dispatch(app, ctx, |hit| !(hit.trigger.chord.is_plain() && types_text(hit.trigger.chord.key)));
     let ran = !hits.is_empty();
     for c in hits {
-        run_hit(app, ctx, &c);
+        run_hit(app, &c);
     }
     if settings_on_a_mac(app, ctx, mac(ctx)) || ran {
         return;
@@ -426,7 +436,7 @@ fn type_tool_input(app: &mut VectorcraftApp, ctx: &egui::Context, composing: boo
     // command key run commands: the rest type or edit.
     let hits = dispatch(app, ctx, |hit| hit.trigger.chord.mods.cmd);
     for c in hits {
-        run_hit(app, ctx, &c);
+        run_hit(app, &c);
     }
     settings_on_a_mac(app, ctx, mac(ctx));
 }
@@ -695,10 +705,10 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, accept: impl FnMut(&H
 }
 
 /// Runs what a shortcut is bound to: a tool, a panel (`window.panel {panel}`) or a command.
-fn run_hit(app: &mut VectorcraftApp, ctx: &egui::Context, c: &CommandRef) {
+fn run_hit(app: &mut VectorcraftApp, c: &CommandRef) {
     if let Some(tool) = c.id.strip_prefix("tool:") {
         app.select_tool(tool);
-    } else if c.id == "select.all" && crate::panels::artboards::selects_all(app, ctx) {
+    } else if c.id == "select.all" && crate::panels::artboards::selects_all(app) {
         // With the Artboard tool, Select All's keys after a click on an Artboards panel row select
         // every artboard instead of the art.
         crate::panels::artboards::select_all(app);

@@ -169,7 +169,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("transparency", "Transparency", "dc-transparency"),
     ("appearance", "Appearance", "dc-appearance"),
     ("graphicStyles", "Graphic Styles", "dc-graphic-styles"),
-    ("artboards", "Artboards", "dc-artboards"),
+    (crate::panels::artboards::ID, "Artboards", "dc-artboards"),
     ("transform", "Transform", "dc-transform-panel"),
     ("align", "Align", "dc-align"),
     ("pathfinder", "Pathfinder", "dc-pathfinder"),

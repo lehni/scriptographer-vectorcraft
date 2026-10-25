@@ -233,9 +233,9 @@ pub struct VectorcraftApp {
     pub recovery: recovery::Timer,
     /// The system's times of this frame's pointer events, where the platform knows them.
     pub pointer_times: canvas::PointerTimes,
-    /// The panel that has the keys it uses, since a click into it, ahead of the canvas and the
-    /// shortcuts; any other key works as always ([`panels::scriptographer::keys`]).
-    pub(crate) key_panel: Option<&'static str>,
+    /// The panel that has the keys it uses since a click into it, and the frame it was last drawn
+    /// in ([`panels::key_panel`]); any other key works as always.
+    pub(crate) key_panel: Option<(&'static str, u64)>,
     /// Modifiers the keyboard holds (from the host's input), given back after synthetic input.
     host_modifiers: egui::Modifiers,
     /// Key, text and clipboard events a floating panel's own OS window forwarded, for the main

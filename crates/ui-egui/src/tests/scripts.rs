@@ -1030,7 +1030,7 @@ fn the_panel_walks_its_tree_with_the_keys() {
         d.insert_temp(state("scriptographer-open"), std::collections::BTreeSet::from([folder.0.clone()]));
         d.insert_temp(state("scriptographer-selected"), Some(folder.0.join("a.js")));
     });
-    app.key_panel = Some(ID);
+    app.key_panel = Some((ID, app.frame_iteration()));
     let key = |app: &mut VectorcraftApp, key: Key, modifiers: Modifiers| {
         let events = vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }];
         let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
@@ -1077,7 +1077,7 @@ fn a_click_into_the_panel_gives_it_the_keys() {
     for events in click(row) {
         frame(&mut app, events);
     }
-    assert_eq!(app.key_panel, Some(crate::panels::scriptographer::ID));
+    assert_eq!(crate::panels::key_panel(&app), Some(crate::panels::scriptographer::ID));
     // The bottom bar, outside the tree.
     for events in click(egui::pos2(150.0, 395.0)) {
         frame(&mut app, events);

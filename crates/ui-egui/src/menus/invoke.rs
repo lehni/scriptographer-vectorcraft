@@ -87,7 +87,7 @@ pub(super) fn field_event(app: &mut VectorcraftApp, id: &str) -> Option<egui::Ev
 pub fn invoke_from_system_menu(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str, p: Value) {
     match focused_text_field(ctx).and_then(|f| Some((f, field_event(app, id)?))) {
         Some((field, e)) => to_field(ctx, field, e),
-        None if id == "select.all" && crate::panels::artboards::selects_all(app, ctx) => crate::panels::artboards::select_all(app),
+        None if id == "select.all" && crate::panels::artboards::selects_all(app) => crate::panels::artboards::select_all(app),
         None => invoke(app, id, p),
     }
 }
