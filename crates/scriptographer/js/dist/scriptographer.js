@@ -176,6 +176,9 @@
     addEventListener(type, callback, options) {
       if (callback && typeof callback === "object" || typeof callback === "function") {
         const { capture, once, passive, signal } = getOptions(options);
+        if (signal !== void 0 && !(signal instanceof globalThis.AbortSignal)) {
+          throw new TypeError(`Invalid signal: '${signal}', not an AbortSignal.`);
+        }
         if (!signal?.aborted) {
           type = String(type);
           let listeners = listenersByTarget.get(this);
@@ -193,7 +196,11 @@
               removed: false
             };
             listeners.push(listener);
-            signal?.addEventListener("abort", () => remove(this, listener));
+            if (signal) {
+              listener.signal = signal;
+              listener.abort = () => remove(this, listener);
+              signal.addEventListener("abort", listener.abort);
+            }
           }
         }
       }
@@ -541,7 +548,12 @@
       const { capture, once, passive, signal } = options;
       return { capture: !!capture, once: !!once, passive: !!passive, signal };
     } else {
-      return { capture: !!options, once: false, passive: false, signal: null };
+      return {
+        capture: !!options,
+        once: false,
+        passive: false,
+        signal: void 0
+      };
     }
   }
   __name(getOptions, "getOptions");
@@ -553,6 +565,7 @@
   __name(find, "find");
   function remove(target, listener) {
     listener.removed = true;
+    listener.signal?.removeEventListener("abort", listener.abort);
     const listeners = listenersByTarget.get(target);
     const index = listeners?.indexOf(listener) ?? -1;
     if (index >= 0) listeners.splice(index, 1);
