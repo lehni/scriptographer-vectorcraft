@@ -2168,6 +2168,44 @@ fn workers_run_scripts_on_their_threads<E: Engine>(name: &str) {
     std::fs::remove_dir_all(&folder).unwrap();
 }
 
+/// A worker that never yields stops with the script that started it, and one terminated as it
+/// starts never runs: each counts into a file, which must stop changing (V8's; Boa's scripts can't
+/// be interrupted).
+#[cfg(all(feature = "v8", not(target_arch = "wasm32")))]
+#[test]
+fn endless_workers_stop_with_their_script() {
+    let folder = std::env::temp_dir().join(format!("scriptographer-endless-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    std::fs::create_dir_all(&folder).unwrap();
+    let counter = |name: &str| {
+        let file = folder.join(format!("{name}.txt"));
+        let script = format!(
+            "const file = new LocalFile({:?});\n(async () => {{ for (let i = 1; ; i++) await file.write(String(i)) }})()",
+            file.to_string_lossy()
+        );
+        std::fs::write(folder.join(format!("{name}.js")), script).unwrap();
+        file
+    };
+    let (dropped, terminated) = (counter("dropped"), counter("terminated"));
+    let mut runtime = Runtime::<vectorcraft_scriptographer::V8>::new().unwrap();
+    runtime.set_script(&Setup { file: Some(folder.join("script.js").to_string_lossy().into_owned()), ..Setup::default() }).unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    runtime.execute(&scope, "new Worker('dropped.js')\nnew Worker('terminated.js').terminate()").unwrap();
+    let start = std::time::Instant::now();
+    while !dropped.exists() && start.elapsed() < std::time::Duration::from_secs(10) {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let _ = runtime.run_timers(start.elapsed().as_secs_f64() * 1000.0);
+    }
+    assert!(dropped.exists(), "the worker counts");
+    drop(runtime);
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    let count = std::fs::read_to_string(&dropped).unwrap_or_default();
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    assert_eq!(std::fs::read_to_string(&dropped).unwrap_or_default(), count, "it stopped with its script");
+    assert!(!terminated.exists(), "the worker terminated as it started never ran");
+    std::fs::remove_dir_all(&folder).unwrap();
+}
+
 /// A message transfers buffers too: the receiver gets their bytes, the sender's are detached.
 fn messages_transfer_buffers<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
