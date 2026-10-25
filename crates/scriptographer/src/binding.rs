@@ -80,7 +80,13 @@ impl<E: Engine> Runtime<E> {
             None => self.add_project(scope, uid, doc, selection)?,
         };
         self.host.borrow_mut().binding.active = Some(uid);
-        self.engine.with_call(|call| method(call, &project, "activate", &[]).map(|_| ()))
+        // Activating emits the projects' `deactivate` and `activate`, so only on a switch:
+        self.engine.with_call(|call| {
+            if !matches!(method(call, &project, "isActive", &[])?, Value::Bool(true)) {
+                method(call, &project, "activate", &[])?;
+            }
+            Ok(())
+        })
     }
 
     /// A project for the document `uid`: the scope's own for the first document, a new one with a
