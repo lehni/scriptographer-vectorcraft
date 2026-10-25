@@ -351,10 +351,11 @@ fn event_handlers_are_listeners<E: Engine>() {
              signal.onabort = () => false\n\
              console.log(log.join(', '), signal.dispatchEvent(new Event('abort', { cancelable: true })))\n\
              signal.onabort = null\n\
-             console.log(signal.onabort, signal.dispatchEvent(new Event('abort', { cancelable: true })))",
+             console.log(signal.onabort, signal.dispatchEvent(new Event('abort', { cancelable: true })))\n\
+             try { new EventTarget().addEventListener('x', () => {}, { signal: { aborted: false, addEventListener() {} } }) } catch (e) { console.log(e.name) }",
         )
         .unwrap();
-    assert_eq!(runtime.take_output(), ["first, handler true true, last false", "null true"]);
+    assert_eq!(runtime.take_output(), ["first, handler true true, last false", "null true", "TypeError"]);
 }
 
 /// `new ImageData(data, width[, height])` takes whole pixels that fill whole rows, as browsers do.
