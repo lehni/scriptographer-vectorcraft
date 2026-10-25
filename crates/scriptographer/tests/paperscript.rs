@@ -357,6 +357,20 @@ fn event_handlers_are_listeners<E: Engine>() {
     assert_eq!(runtime.take_output(), ["first, handler true true, last false", "null true"]);
 }
 
+/// `new ImageData(data, width[, height])` takes whole pixels that fill whole rows, as browsers do.
+fn image_data_takes_whole_rows<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    runtime
+        .execute(
+            &scope,
+            "const name = (...args) => { try { return new ImageData(...args).height } catch (e) { return e.name } }\n\
+             console.log(name(new Uint8ClampedArray(24), 3), name(new Uint8ClampedArray(8), 3), name(new Uint8ClampedArray(6), 1), name(new Uint8ClampedArray(0), 1), name(new Uint8ClampedArray(24), 3, 1))",
+        )
+        .unwrap();
+    assert_eq!(runtime.take_output(), ["2 IndexSizeError InvalidStateError InvalidStateError IndexSizeError"]);
+}
+
 fn scripts_use_todays_javascript<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
@@ -2435,6 +2449,11 @@ macro_rules! engine_tests {
             #[test]
             fn event_handlers_are_listeners() {
                 super::event_handlers_are_listeners::<$engine>();
+            }
+
+            #[test]
+            fn image_data_takes_whole_rows() {
+                super::image_data_takes_whole_rows::<$engine>();
             }
 
             #[test]

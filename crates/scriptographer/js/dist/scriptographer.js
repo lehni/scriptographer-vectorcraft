@@ -4566,14 +4566,22 @@
       checkArguments(arguments, 2, "ImageData");
       if (dataOrWidth instanceof Uint8ClampedArray) {
         const data = dataOrWidth;
+        const pixels = data.length / 4;
+        if (!Number.isInteger(pixels) || pixels === 0) {
+          throw new DOMException(
+            "Invalid ImageData: the data is not whole pixels of 4 bytes.",
+            "InvalidStateError"
+          );
+        }
         width = getSide(width);
-        height = height === void 0 ? data.length / 4 / width : getSide(height);
-        if (data.length !== width * height * 4) {
+        const rows = pixels / width;
+        if (!Number.isInteger(rows) || height !== void 0 && getSide(height) !== rows) {
           throw new DOMException(
             "Invalid ImageData: the data is not width \xD7 height \xD7 4 bytes.",
             "IndexSizeError"
           );
         }
+        height = rows;
         this.#data = data;
       } else {
         height = getSide(width);

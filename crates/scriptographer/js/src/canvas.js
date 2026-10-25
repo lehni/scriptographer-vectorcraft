@@ -377,14 +377,25 @@ export class ImageData {
     checkArguments(arguments, 2, 'ImageData')
     if (dataOrWidth instanceof Uint8ClampedArray) {
       const data = dataOrWidth
+      const pixels = data.length / 4
+      if (!Number.isInteger(pixels) || pixels === 0) {
+        throw new DOMException(
+          'Invalid ImageData: the data is not whole pixels of 4 bytes.',
+          'InvalidStateError'
+        )
+      }
       width = getSide(width)
-      height = height === undefined ? data.length / 4 / width : getSide(height)
-      if (data.length !== width * height * 4) {
+      const rows = pixels / width
+      if (
+        !Number.isInteger(rows) ||
+        height !== undefined && getSide(height) !== rows
+      ) {
         throw new DOMException(
           'Invalid ImageData: the data is not width × height × 4 bytes.',
           'IndexSizeError'
         )
       }
+      height = rows
       this.#data = data
     } else {
       // `(width, height)`:
