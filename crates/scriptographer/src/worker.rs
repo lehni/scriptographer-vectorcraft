@@ -18,12 +18,14 @@ use crate::{Engine, Error, Modifiers, MouseEvent, PaletteEvent, Patch, PlatformE
 
 /// What the app asks a worker to do.
 pub enum Request {
-    /// Catch up with the document, its active artboard and the style new art takes in the app (as
-    /// [`crate::host::current_style`] makes it), then do `work`.
-    Run { doc: Arc<Document>, selection: Selection, artboard: usize, style: Json, work: Work },
+    /// Make the document `uid` the active one, and catch up with it, its active artboard and the
+    /// style new art takes in the app (as [`crate::host::current_style`] makes it), then do `work`.
+    Run { uid: u64, doc: Arc<Document>, selection: Selection, artboard: usize, style: Json, work: Work },
     /// The answer to [`Reply::Changes`]: `document.patch`'s result, and the document after it.
     /// `behind` when the document had changed in other ways since the patch's base.
     Applied { result: Json, doc: Arc<Document>, selection: Selection, behind: bool },
+    /// The document `uid` closed: its project goes.
+    Closed(u64),
     /// The answer to [`Reply::Ask`].
     Answer(Json),
 }
@@ -65,11 +67,12 @@ pub enum Reply {
     /// answer ([`Request::Answer`]); the question as [`crate::Runtime::set_ask`] has it. On the
     /// web, the script goes on, and the answer comes as [`Work::Answer`] or [`Work::Picked`].
     Ask(Json),
-    /// What the script changed: a patch of `base`, the document it read (the app answers with
-    /// [`Request::Applied`]), and the objects selected in its project before and after. `effects`
-    /// when it's what the script's effects drew of objects whose input changed, which belongs to the
-    /// newest undo step, the edit that changed it ([`crate::Runtime::effect_outputs`]).
-    Changes { patch: Option<Json>, base: Arc<Document>, before: BTreeSet<NodeId>, selected: BTreeSet<NodeId>, effects: bool },
+    /// What the script changed in the document `uid`: a patch of `base`, the document it read (the
+    /// app answers with [`Request::Applied`]), and the objects selected in its project before and
+    /// after. `effects` when it's what the script's effects drew of objects whose input changed,
+    /// which belongs to the newest undo step, the edit that changed it
+    /// ([`crate::Runtime::effect_outputs`]).
+    Changes { uid: u64, patch: Option<Json>, base: Arc<Document>, before: BTreeSet<NodeId>, selected: BTreeSet<NodeId>, effects: bool },
     /// The work is done: what the script printed, its error if it threw, whether it has timers
     /// left, whether it made a tool, whether that tool handles keys, the palettes that are new or
     /// changed (as [`crate::Runtime::take_palettes`] has them), whether it has palettes open, and
@@ -77,55 +80,62 @@ pub enum Reply {
     Done { output: Vec<String>, error: Option<String>, running: bool, tool: bool, keys: bool, palettes: Vec<Json>, open: bool, keep_alive: bool },
 }
 
-/// One script's runtime, and the patch waiting for its ids.
+/// One script's runtime, and the patches waiting for their ids, in the order they went.
 struct Script<E: Engine> {
     runtime: Runtime<E>,
     scope: Scope<E::Handle>,
-    pending: Option<Patch<E::Handle>>,
-    /// The app's style, as last set as the project's current style: set again only when the app's
-    /// changes, so a style the script sets itself stays until then.
-    style: Json,
+    pending: std::collections::VecDeque<Patch<E::Handle>>,
+    /// The app's style, as last set as each document's project's current style: set again only
+    /// when the app's changes, so a style the script sets itself stays until then.
+    styles: Vec<(u64, Json)>,
 }
 
 impl<E: Engine> Script<E> {
-    /// A runtime whose view has the given size, for the script `setup` describes, bound to the
-    /// document.
-    fn new(size: (f64, f64), setup: &Setup, doc: Arc<Document>, selection: Selection) -> Result<Self, Error> {
+    /// A runtime whose view has the given size, for the script `setup` describes.
+    fn new(size: (f64, f64), setup: &Setup) -> Result<Self, Error> {
         let mut runtime = Runtime::<E>::new()?;
         runtime.set_script(setup)?;
         let scope = runtime.create_scope(size.0, size.1)?;
-        runtime.bind(&scope, doc, selection)?;
-        Ok(Self { runtime, scope, pending: None, style: Json::Null })
+        Ok(Self { runtime, scope, pending: Default::default(), styles: Vec::new() })
     }
 
     fn handle(&mut self, request: Request) -> Vec<Reply> {
         match request {
-            Request::Run { doc, selection, artboard, style, work } => {
-                self.runtime.set_artboard(artboard);
-                self.run(doc, selection, style, work)
-            }
+            Request::Run { uid, doc, selection, artboard, style, work } => self.run(uid, doc, selection, artboard, style, work),
             // An answer no dialog waits for.
             Request::Answer(_) => Vec::new(),
-            Request::Applied { result, doc, selection, behind } => match self.pending.take() {
-                Some(patch) => match self.runtime.apply_ids(&self.scope, patch, &result, doc, selection, behind) {
+            Request::Applied { result, doc, selection, behind } => match self.pending.pop_front() {
+                Some(patch) => match self.runtime.apply_ids(patch, &result, doc, selection, behind) {
                     Ok(()) => Vec::new(),
                     Err(e) => vec![self.done(Some(e.to_string()))],
                 },
                 None => Vec::new(),
             },
+            Request::Closed(uid) => {
+                self.styles.retain(|(other, _)| *other != uid);
+                match self.runtime.unbind(uid) {
+                    Ok(()) => Vec::new(),
+                    Err(e) => vec![self.done(Some(e.to_string()))],
+                }
+            }
         }
     }
 
-    /// Does `work` on the document, and replies what it changed, even when it threw, as a browser
-    /// keeps what a script did before an error.
-    fn run(&mut self, doc: Arc<Document>, selection: Selection, style: Json, work: Work) -> Vec<Reply> {
-        if style != self.style {
+    /// Does `work` with the document `uid` active, and replies what it changed, even when it
+    /// threw, as a browser keeps what a script did before an error.
+    fn run(&mut self, uid: u64, doc: Arc<Document>, selection: Selection, artboard: usize, style: Json, work: Work) -> Vec<Reply> {
+        if let Err(e) = self.runtime.bind(&self.scope, uid, doc, selection) {
+            return vec![self.done(Some(e.to_string()))];
+        }
+        self.runtime.set_artboard(artboard);
+        if !self.styles.iter().any(|(other, last)| *other == uid && *last == style) {
             if let Err(e) = self.runtime.set_current_style(&self.scope, &style) {
                 return vec![self.done(Some(e.to_string()))];
             }
-            self.style = style;
+            self.styles.retain(|(other, _)| *other != uid);
+            self.styles.push((uid, style));
         }
-        let before = match self.runtime.update(&self.scope, doc, selection).and_then(|()| self.runtime.selected_ids(&self.scope)) {
+        let before = match self.runtime.selected_ids(&self.scope) {
             Ok(before) => before,
             Err(e) => return vec![self.done(Some(e.to_string()))],
         };
@@ -148,8 +158,8 @@ impl<E: Engine> Script<E> {
         #[cfg(target_arch = "wasm32")]
         replies.extend(self.runtime.take_question().map(Reply::Ask));
         // The script's effects draw on a turn it changed nothing itself, from the document as it is:
-        let changes = match self.changes(before.clone()) {
-            Ok(None) => self.effect_changes(before),
+        let changes = match self.changes(uid, before.clone()) {
+            Ok(changes) if changes.is_empty() => self.effect_changes(uid, before).map(Vec::from_iter),
             changes => changes,
         };
         let changes = changes.map(|changes| replies.extend(changes));
@@ -157,26 +167,35 @@ impl<E: Engine> Script<E> {
         replies
     }
 
-    /// What the script changed, if anything.
-    fn changes(&mut self, before: BTreeSet<NodeId>) -> Result<Option<Reply>, Error> {
-        let patch = self.runtime.take_patch(&self.scope)?;
+    /// What the script changed in each document, the active one's (`uid`) first, with what it
+    /// selected there since `before`.
+    fn changes(&mut self, uid: u64, before: BTreeSet<NodeId>) -> Result<Vec<Reply>, Error> {
+        let patches = self.runtime.take_patches()?;
         let selected = self.runtime.selected_ids(&self.scope)?;
-        if patch.is_none() && selected == before {
-            return Ok(None);
+        let mut replies = Vec::with_capacity(patches.len() + 1);
+        // A selection the script changed in a document it changed nothing else in:
+        if selected != before && patches.first().is_none_or(|p| p.uid != uid) {
+            let base = self.runtime.document().ok_or_else(|| Error::Script("no document is bound".into()))?;
+            replies.push(Reply::Changes { uid, patch: None, base, before: before.clone(), selected: selected.clone(), effects: false });
         }
-        let base = self.runtime.document().ok_or_else(|| Error::Script("no document is bound".into()))?;
-        let params = patch.as_ref().map(|p| p.params.clone());
-        self.pending = patch;
-        Ok(Some(Reply::Changes { patch: params, base, before, selected, effects: false }))
+        for patch in patches {
+            // Only the active document's selection is the script's to change:
+            let (before, selected) = if patch.uid == uid { (before.clone(), selected.clone()) } else { Default::default() };
+            let (params, base) = (Some(patch.params.clone()), patch.base.clone());
+            replies.push(Reply::Changes { uid: patch.uid, patch: params, base, before, selected, effects: false });
+            self.pending.push_back(patch);
+        }
+        Ok(replies)
     }
 
-    /// What the script's effects drew of the objects whose input changed, if anything.
-    fn effect_changes(&mut self, selected: BTreeSet<NodeId>) -> Result<Option<Reply>, Error> {
+    /// What the script's effects drew of the objects whose input changed in the document `uid`, if
+    /// anything.
+    fn effect_changes(&mut self, uid: u64, selected: BTreeSet<NodeId>) -> Result<Option<Reply>, Error> {
         let Some(patch) = self.runtime.effect_outputs(&self.scope)? else {
             return Ok(None);
         };
         let base = self.runtime.document().ok_or_else(|| Error::Script("no document is bound".into()))?;
-        Ok(Some(Reply::Changes { patch: Some(patch), base, before: selected.clone(), selected, effects: true }))
+        Ok(Some(Reply::Changes { uid, patch: Some(patch), base, before: selected.clone(), selected, effects: true }))
     }
 
     fn done(&mut self, error: Option<String>) -> Reply {
@@ -210,8 +229,8 @@ pub struct Worker {
 #[cfg(not(target_arch = "wasm32"))]
 impl Worker {
     /// Starts a script's thread, with a runtime whose view has the given size, for the script
-    /// `setup` describes, on the document.
-    pub fn spawn(size: (f64, f64), setup: Setup, doc: Arc<Document>, selection: Selection) -> Result<Self, Error> {
+    /// `setup` describes.
+    pub fn spawn(size: (f64, f64), setup: Setup) -> Result<Self, Error> {
         let (requests, inbox) = std::sync::mpsc::channel::<Request>();
         let (outbox, replies) = std::sync::mpsc::channel();
         let interrupt = Arc::new(std::sync::Mutex::new(None));
@@ -222,7 +241,7 @@ impl Worker {
             .name("scriptographer script".into())
             .spawn(move || {
                 let inbox = std::rc::Rc::new(inbox);
-                let mut script = match Script::<PlatformEngine>::new(size, &setup, doc, selection) {
+                let mut script = match Script::<PlatformEngine>::new(size, &setup) {
                     Ok(script) => script,
                     Err(e) => {
                         // The app may have stopped the script already; then nobody listens.
@@ -293,7 +312,7 @@ impl Worker {
 
 #[cfg(not(target_arch = "wasm32"))]
 impl Worker {
-    /// Whether the script changed its project outside its work: never here, where its Promise
+    /// Whether the script changed a project outside its work: never here, where its Promise
     /// continuations run within its work (the web's run after it).
     pub fn has_changes(&self) -> bool {
         false
@@ -318,8 +337,8 @@ pub struct Worker {
 
 #[cfg(target_arch = "wasm32")]
 impl Worker {
-    pub fn spawn(size: (f64, f64), setup: Setup, doc: Arc<Document>, selection: Selection) -> Result<Self, Error> {
-        let script = Script::<PlatformEngine>::new(size, &setup, doc, selection)?;
+    pub fn spawn(size: (f64, f64), setup: Setup) -> Result<Self, Error> {
+        let script = Script::<PlatformEngine>::new(size, &setup)?;
         Ok(Self { script: std::cell::RefCell::new(script), replies: Default::default() })
     }
 
@@ -334,12 +353,9 @@ impl Worker {
         self.replies.try_borrow_mut().ok()?.pop_front()
     }
 
-    /// Whether the script changed its project outside its work, in a Promise continuation, which
+    /// Whether the script changed a project outside its work, in a Promise continuation, which
     /// the browser runs once the call into the script has returned: work then collects it.
     pub fn has_changes(&self) -> bool {
-        self.script.try_borrow_mut().is_ok_and(|mut script| {
-            let Script { runtime, scope, .. } = &mut *script;
-            runtime.has_changes(scope).unwrap_or(false)
-        })
+        self.script.try_borrow_mut().is_ok_and(|mut script| script.runtime.has_changes().unwrap_or(false))
     }
 }

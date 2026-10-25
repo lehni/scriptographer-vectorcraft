@@ -36,9 +36,9 @@ fn run<E: Engine>(s: &mut Session, script: &str) -> Vec<String> {
     let (doc, selection) = (st.doc.clone(), st.selection.clone());
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, doc, selection).unwrap();
+    runtime.bind(&scope, st.uid, doc, selection).unwrap();
     runtime.execute(&scope, script).unwrap();
-    if let Some(patch) = runtime.take_patch(&scope).unwrap() {
+    for patch in runtime.take_patches().unwrap() {
         s.execute("document.patch", &patch.params).unwrap();
     }
     runtime.take_output()

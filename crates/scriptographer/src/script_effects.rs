@@ -120,7 +120,7 @@ impl<E: Engine> Runtime<E> {
     pub fn effect_outputs(&mut self, scope: &Scope<E::Handle>) -> Result<Option<Json>, Error> {
         let (types, doc) = {
             let mut host = self.host.borrow_mut();
-            let Some(doc) = host.bound.as_ref().map(|b| b.doc.clone()) else {
+            let Some(doc) = host.binding.active().map(|b| b.doc.clone()) else {
                 return Ok(None);
             };
             let defined = &mut host.script_effects;

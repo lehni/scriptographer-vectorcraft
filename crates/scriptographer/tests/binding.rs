@@ -28,9 +28,9 @@ fn run<E: Engine>(s: &mut Session, script: &str) -> Vec<String> {
     let (doc, selection) = (st.doc.clone(), st.selection.clone());
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, doc, selection).unwrap();
+    runtime.bind(&scope, st.uid, doc, selection).unwrap();
     runtime.execute(&scope, script).unwrap();
-    if let Some(patch) = runtime.take_patch(&scope).unwrap() {
+    for patch in runtime.take_patches().unwrap() {
         s.execute("document.patch", &patch.params).unwrap();
     }
     runtime.take_output()
@@ -118,7 +118,7 @@ fn on_frame_keeps_changing_the_document<E: Engine>() {
     let st = s.active().unwrap();
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
     runtime.execute(&scope, "var item = project.activeLayer.firstChild\nfunction onFrame(event) { item.position += [10, 0] }").unwrap();
     assert!(runtime.is_running(), "onFrame keeps the script running");
     for now in [20.0, 40.0, 60.0] {
@@ -132,7 +132,7 @@ fn scripts_without_on_frame_stop<E: Engine>() {
     let st = s.active().unwrap();
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
     runtime.execute(&scope, "project.activeLayer.firstChild.position += [10, 0]").unwrap();
     runtime.run_timers(20.0).unwrap();
     assert!(!runtime.is_running(), "once the view has updated, nothing is left to run");
@@ -142,12 +142,12 @@ fn scripts_without_on_frame_stop<E: Engine>() {
 /// what they changed goes back.
 fn frame<E: Engine>(s: &mut Session, runtime: &mut Runtime<E>, scope: &vectorcraft_scriptographer::Scope<E::Handle>, now: f64) {
     let st = s.active().unwrap();
-    runtime.update(scope, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.bind(scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
     runtime.run_timers(now).unwrap();
-    if let Some(patch) = runtime.take_patch(scope).unwrap() {
+    for patch in runtime.take_patches().unwrap() {
         let result = s.execute("document.patch", &patch.params).unwrap();
         let st = s.active().unwrap();
-        runtime.apply_ids(scope, patch, &result, st.doc.clone(), st.selection.clone(), false).unwrap();
+        runtime.apply_ids(patch, &result, st.doc.clone(), st.selection.clone(), false).unwrap();
     }
 }
 
@@ -156,7 +156,7 @@ fn edits_made_while_a_script_runs_stay<E: Engine>() {
     let st = s.active().unwrap();
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
     runtime
         .execute(&scope, "var layer = project.activeLayer, item = layer.firstChild\nfunction onFrame(event) { item.position += [10, 0]; console.log(layer.children.length) }")
         .unwrap();
@@ -186,17 +186,17 @@ fn a_late_patch_leaves_what_changed_meanwhile<E: Engine>() {
     let base = st.doc.clone();
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, base.clone(), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, base.clone(), st.selection.clone()).unwrap();
     runtime.execute(&scope, "var a = project.activeLayer.firstChild\nconsole.log(a.nextSibling.segments[0].point.x)\na.position += [10, 0]").unwrap();
     assert_eq!(runtime.take_output(), ["50"], "the script read b");
-    let patch = runtime.take_patch(&scope).unwrap().unwrap();
+    let patch = runtime.take_patches().unwrap().remove(0);
     // Meanwhile, the user moves b.
     s.execute("object.move", &json!({"ids": [b.0], "dx": 100, "dy": 0})).unwrap();
     let mut params = patch.params.clone();
     params["keep"] = vectorcraft_engine::cmd::patch::changes_between(&base, &s.active().unwrap().doc);
     let result = s.execute("document.patch", &params).unwrap();
     let st = s.active().unwrap();
-    runtime.apply_ids(&scope, patch, &result, st.doc.clone(), st.selection.clone(), true).unwrap();
+    runtime.apply_ids(patch, &result, st.doc.clone(), st.selection.clone(), true).unwrap();
     assert_eq!(node(&s, a).geometric_bounds().unwrap().x0, 20.0, "the script's move of a applies");
     assert_eq!(node(&s, b).geometric_bounds().unwrap().x0, 150.0, "the user's move of b stays");
     runtime.execute(&scope, "console.log(project.activeLayer.lastChild.segments[0].point.x)").unwrap();
@@ -209,7 +209,7 @@ fn selection_goes_both_ways<E: Engine>() {
     let st = s.active().unwrap();
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
     runtime.execute(&scope, "console.log(project.selectedItems.length, project.selectedItems[0].key)").unwrap();
     assert_eq!(runtime.take_output(), [format!("1 {}", a.0)]);
     runtime.execute(&scope, "var layer = project.activeLayer\nlayer.firstChild.selected = false\nlayer.lastChild.selected = true").unwrap();
@@ -222,7 +222,7 @@ fn artboards_and_the_active_one<E: Engine>() {
     let st = s.active().unwrap();
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
     runtime.set_artboard(1);
     runtime
         .execute(
@@ -243,7 +243,7 @@ fn tool_scripts_get_pointer_events<E: Engine>() {
     let st = s.active().unwrap();
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
     runtime
         .execute(
             &scope,
@@ -269,7 +269,7 @@ fn tool_scripts_get_pointer_events<E: Engine>() {
     runtime.mouse_event(&scope, MouseEvent::Down, (-50.0, 500.0), Modifiers::default(), 0.07).unwrap();
     runtime.mouse_event(&scope, MouseEvent::Up, (-50.0, 500.0), Modifiers::default(), 0.08).unwrap();
     assert_eq!(runtime.take_output(), ["down 0 true", "drag 1000", "up 20 0.03 10", "down -50 false", "up -50 0.08 10"]);
-    let patch = runtime.take_patch(&scope).unwrap().unwrap();
+    let patch = runtime.take_patches().unwrap().remove(0);
     assert_eq!(patch.params["insert"].as_array().unwrap().len(), 1, "one drag event drew one circle");
 }
 
@@ -279,7 +279,7 @@ fn tool_scripts_get_key_events<E: Engine>() {
     let st = s.active().unwrap();
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
     runtime
         .execute(
             &scope,
@@ -300,7 +300,7 @@ fn scripts_without_handlers_have_no_tool<E: Engine>() {
     let st = s.active().unwrap();
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
     runtime.execute(&scope, "console.log(project.activeLayer.children.length)").unwrap();
     assert!(!runtime.has_tool(&scope).unwrap());
 }
@@ -312,16 +312,16 @@ fn edits_to_objects_a_script_made_reach_it<E: Engine>() {
     let st = s.active().unwrap();
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
     runtime
         .execute(&scope, "var circle = new Path.Circle({ center: [200, 150], radius: 10 })\nfunction onFrame() { circle.position += [1, 0]; console.log(circle.bounds.width) }")
         .unwrap();
     // The circle goes to the document and gets its id.
-    let patch = runtime.take_patch(&scope).unwrap().unwrap();
+    let patch = runtime.take_patches().unwrap().remove(0);
     let result = s.execute("document.patch", &patch.params).unwrap();
     let circle = result["ids"][0].as_u64().unwrap();
     let st = s.active().unwrap();
-    runtime.apply_ids(&scope, patch, &result, st.doc.clone(), st.selection.clone(), false).unwrap();
+    runtime.apply_ids(patch, &result, st.doc.clone(), st.selection.clone(), false).unwrap();
     // The user makes it twice as wide.
     s.execute("path.setAnchors", &json!({"id": circle, "subpaths": [{"anchors": [{"x": 180, "y": 150}, {"x": 200, "y": 140}, {"x": 220, "y": 150}, {"x": 200, "y": 160}], "closed": true}]})).unwrap();
     frame(&mut s, &mut runtime, &scope, 20.0);
@@ -335,12 +335,12 @@ fn items_moved_into_a_new_group<E: Engine>() {
     let st = s.active().unwrap();
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
     let write_back = |s: &mut Session, runtime: &mut Runtime<E>| {
-        let patch = runtime.take_patch(&scope).unwrap().unwrap();
+        let patch = runtime.take_patches().unwrap().remove(0);
         let result = s.execute("document.patch", &patch.params).unwrap();
         let st = s.active().unwrap();
-        runtime.apply_ids(&scope, patch, &result, st.doc.clone(), st.selection.clone(), false).unwrap();
+        runtime.apply_ids(patch, &result, st.doc.clone(), st.selection.clone(), false).unwrap();
     };
     runtime.execute(&scope, "new Path.Circle({ center: [200, 150], radius: 10 })").unwrap();
     write_back(&mut s, &mut runtime);
@@ -509,11 +509,11 @@ fn changed_patterns_reload<E: Engine>() {
     let st = s.active().unwrap();
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
     runtime.execute(&scope, "globalThis.pattern = project.activeLayer.firstChild.fillColor.pattern").unwrap();
     let mut doc = (*st.doc).clone();
     doc.patterns[0].tile = vectorcraft_geom::Rect::new(0.0, 0.0, 50.0, 25.0);
-    runtime.update(&scope, Arc::new(doc), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, Arc::new(doc), st.selection.clone()).unwrap();
     runtime.execute(&scope, "console.log(pattern === project.activeLayer.firstChild.fillColor.pattern, pattern.tile)").unwrap();
     assert_eq!(runtime.take_output(), ["true { x: 0, y: 0, width: 50, height: 25 }"]);
 }
@@ -648,12 +648,12 @@ fn failed_new_definitions_reload<E: Engine>() {
     let st = s.active().unwrap();
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
     runtime
         .execute(&scope, "globalThis.definition = new SymbolDefinition(new Path.Circle([0, 0], 5))\nnew SymbolItem(definition, [50, 50])")
         .unwrap();
-    let patch = runtime.take_patch(&scope).unwrap().unwrap();
-    runtime.apply_ids(&scope, patch, &json!({}), st.doc.clone(), st.selection.clone(), true).unwrap();
+    let patch = runtime.take_patches().unwrap().remove(0);
+    runtime.apply_ids(patch, &json!({}), st.doc.clone(), st.selection.clone(), true).unwrap();
     runtime.execute(&scope, "console.log(definition.key, definition.item.isEmpty())").unwrap();
     assert_eq!(runtime.take_output(), ["symbol/New Symbol true"]);
 }
@@ -827,19 +827,73 @@ fn changed_symbols_reload<E: Engine>() {
     let st = s.active().unwrap();
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(400.0, 300.0).unwrap();
-    runtime.bind(&scope, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
     runtime.execute(&scope, &format!("globalThis.first = project.getItemByKey({})\nglobalThis.definition = first.definition", first.0)).unwrap();
     let mut doc = (*st.doc).clone();
     let mut art = (*doc.symbols[0].art).clone();
     art.transform(Affine::scale(2.0), false);
     doc.symbols[0].art = Arc::new(art);
-    runtime.update(&scope, Arc::new(doc), st.selection.clone()).unwrap();
+    runtime.bind(&scope, st.uid, Arc::new(doc), st.selection.clone()).unwrap();
     runtime
         .execute(&scope, "console.log(definition === first.definition, first.bounds.width, first.bounds.height, project.activeLayer.bounds)")
         .unwrap();
     // The art of 40 × 40 with its stroke of 1, stretched by 1.5, and the layer measured again
     // around both instances, now 60 × 40 (without strokes) at their centres, 25, 20 and 200, 150:
     assert_eq!(runtime.take_output(), ["true 61.5 41 { x: -5, y: 0, width: 235, height: 170 }"]);
+}
+
+/// Two documents in one runtime: each is a project of the scope, the active one `paper.project`.
+/// An item of the first reads the first document after the second became active, and the changes
+/// in each go back as a patch of their own document.
+fn each_document_is_a_project<E: Engine>() {
+    let (mut s, a, _) = document();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+    let [first, second] = [0, 1].map(|i| s.documents()[i].uid);
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    let bind = |runtime: &mut Runtime<E>, s: &Session, uid| {
+        let st = s.documents().iter().find(|d| d.uid == uid).unwrap();
+        runtime.bind(&scope, uid, st.doc.clone(), st.selection.clone()).unwrap();
+    };
+    bind(&mut runtime, &s, first);
+    runtime.execute(&scope, "globalThis.layer = paper.project.activeLayer").unwrap();
+    bind(&mut runtime, &s, second);
+    runtime
+        .execute(
+            &scope,
+            "console.log(paper.projects.length, paper.project === layer.project, paper.project.activeLayer.children.length, layer.children.length)\n\
+             layer.firstChild.position += [10, 0]\n\
+             paper.project.activeLayer.firstChild.remove()",
+        )
+        .unwrap();
+    assert_eq!(runtime.take_output(), ["2 false 1 2"], "the first document's layer reads the first document");
+    let patches = runtime.take_patches().unwrap();
+    assert_eq!(patches.iter().map(|p| p.uid).collect::<Vec<_>>(), [second, first], "the active document's patch comes first");
+    for patch in patches {
+        let index = s.documents().iter().position(|d| d.uid == patch.uid).unwrap();
+        s.set_active(index);
+        s.execute("document.patch", &patch.params).unwrap();
+    }
+    assert!(s.documents()[1].doc.layers[0].children().unwrap().is_empty(), "the ellipse went from the second document");
+    let moved = s.documents()[0].doc.node(a).unwrap().geometric_bounds().unwrap();
+    assert_eq!(moved.x0, 20.0, "the rectangle moved in the first");
+}
+
+/// A document that closes takes its project with it; the script goes on with the others.
+fn a_closed_documents_project_goes<E: Engine>() {
+    let (mut s, _, _) = document();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let [first, second] = [0, 1].map(|i| s.documents()[i].uid);
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    for uid in [first, second] {
+        let st = s.documents().iter().find(|d| d.uid == uid).unwrap();
+        runtime.bind(&scope, uid, st.doc.clone(), st.selection.clone()).unwrap();
+    }
+    runtime.unbind(first).unwrap();
+    runtime.execute(&scope, "console.log(paper.projects.length, paper.project.activeLayer.children.length)").unwrap();
+    assert_eq!(runtime.take_output(), ["1 0"]);
 }
 
 macro_rules! engine_tests {
@@ -1043,6 +1097,16 @@ macro_rules! engine_tests {
             #[test]
             fn untouched_scripts_change_nothing() {
                 super::untouched_scripts_change_nothing::<$engine>();
+            }
+
+            #[test]
+            fn each_document_is_a_project() {
+                super::each_document_is_a_project::<$engine>();
+            }
+
+            #[test]
+            fn a_closed_documents_project_goes() {
+                super::a_closed_documents_project_goes::<$engine>();
             }
         }
     };

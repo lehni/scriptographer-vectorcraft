@@ -52,10 +52,11 @@ impl<H: Clone> Change<H> {
     }
 }
 
-/// The patch for `changes` and `definitions`, made against `doc`, or `None` when they change
-/// nothing.
+/// The patch of the document `uid` for `changes` and `definitions`, made against `doc`, or `None`
+/// when they change nothing.
 pub(crate) fn patch<H: Clone>(
     call: &mut dyn Call<H>,
+    uid: u64,
     doc: &Arc<Document>,
     changes: Vec<Change<H>>,
     definitions: &[H],
@@ -157,7 +158,7 @@ pub(crate) fn patch<H: Clone>(
         return Ok(None);
     }
     params.insert("label".into(), json!("Script"));
-    Ok(Some(Patch::new(Json::Object(params), inserted, created)))
+    Ok(Some(Patch::new(uid, doc.clone(), Json::Object(params), inserted, created)))
 }
 
 /// Gives each new definition of `definitions`, which have no key yet, its name in the document and
