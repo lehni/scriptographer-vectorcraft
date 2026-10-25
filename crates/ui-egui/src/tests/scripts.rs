@@ -707,6 +707,24 @@ fn init_scripts_run_by_themselves() {
     assert_eq!(names, ["Tools", "a.js"], "and the Tools folder shows no __init__");
 }
 
+/// The `__init__` scripts are found among as many entries as the panel lists, so a scripts folder
+/// that holds a large tree doesn't hold up the app.
+#[test]
+fn init_scripts_are_found_among_the_entries_the_panel_lists() {
+    let (mut app, _) = app();
+    let folder = TempFolder::new("init-many");
+    std::fs::write(folder.0.join("__init__.js"), "script.keepAlive = true\nconsole.log('first')").unwrap();
+    for i in 0..crate::scripts::MAX_ENTRIES {
+        std::fs::write(folder.0.join(format!("a{i:05}.txt")), "").unwrap();
+    }
+    std::fs::create_dir_all(folder.0.join("z")).unwrap();
+    std::fs::write(folder.0.join("z").join("__init__.js"), "console.log('past them')").unwrap();
+    app.ui.scriptographer_folders = vec![folder.script_folder("Many")];
+    crate::scripts::frame(&mut app, &egui::Context::default(), 0.0);
+    let log: Vec<&str> = app.scripts.log().iter().map(|l| l.text.as_str()).collect();
+    assert!(log.contains(&"first") && !log.contains(&"past them"), "{log:?}");
+}
+
 /// `script.preferences` keeps what a script puts there for its next run, as in Scriptographer:
 /// Paper.js's objects too, in the app's storage folder.
 #[test]

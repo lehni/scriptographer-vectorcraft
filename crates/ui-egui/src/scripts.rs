@@ -53,7 +53,7 @@ const LOG_LINES: usize = 1000;
 
 /// How far into the scripts folder the panel looks, and how many entries it lists at most.
 const MAX_DEPTH: usize = 8;
-const MAX_ENTRIES: usize = 5000;
+pub(crate) const MAX_ENTRIES: usize = 5000;
 
 /// The scripts that keep running, the console, and what they printed.
 #[derive(Default)]
@@ -334,8 +334,9 @@ fn list(folder: &Path, depth: usize, count: &mut usize) -> Vec<Entry> {
     entries
 }
 
-/// The `__init__` scripts in `folder` and the folders in it, sorted by name.
-fn init_scripts(folder: &Path, depth: usize) -> Vec<PathBuf> {
+/// The `__init__` scripts in `folder` and the folders in it, sorted by name, among the first
+/// [`MAX_ENTRIES`] entries, as the panel lists them.
+fn init_scripts(folder: &Path, depth: usize, count: &mut usize) -> Vec<PathBuf> {
     let Ok(read) = std::fs::read_dir(folder) else {
         return Vec::new();
     };
@@ -343,9 +344,13 @@ fn init_scripts(folder: &Path, depth: usize) -> Vec<PathBuf> {
     paths.sort();
     let mut found = Vec::new();
     for path in paths {
+        if *count >= MAX_ENTRIES {
+            break;
+        }
+        *count += 1;
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         if path.is_dir() && !name.starts_with('.') && depth < MAX_DEPTH {
-            found.extend(init_scripts(&path, depth + 1));
+            found.extend(init_scripts(&path, depth + 1, count));
         } else if name.starts_with("__init__") && path.extension().is_some_and(|e| EXTS.iter().any(|x| e.eq_ignore_ascii_case(x))) {
             found.push(path);
         }
@@ -551,7 +556,8 @@ pub(crate) fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
     if app.session.active().is_some() && app.scripts.initialized.as_ref() != Some(&app.ui.scriptographer_folders) {
         let folders = app.ui.scriptographer_folders.clone();
         app.scripts.initialized = Some(folders.clone());
-        for path in folders.iter().filter(|f| f.visible).flat_map(|f| init_scripts(Path::new(&f.path), 0)) {
+        let mut count = 0;
+        for path in folders.iter().filter(|f| f.visible).flat_map(|f| init_scripts(Path::new(&f.path), 0, &mut count)) {
             // A failing script says so in the log.
             let _ = run(app, &json!({ "path": path.to_string_lossy() }));
         }
