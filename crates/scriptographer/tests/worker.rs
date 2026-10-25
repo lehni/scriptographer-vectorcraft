@@ -94,6 +94,16 @@ fn a_made_up_change_list_is_an_error() {
     assert!(settle(&mut s, &worker).is_some(), "an error");
 }
 
+/// Stopped before its runtime is made, a script stops as soon as it runs, where the stop was lost.
+#[test]
+fn a_script_stopped_as_it_starts_stops() {
+    let mut s = session();
+    let worker = spawn();
+    worker.interrupt();
+    send(&s, &worker, Work::Execute("while (true) {}".into()));
+    assert!(settle(&mut s, &worker).is_some(), "it stopped with an error");
+}
+
 /// A dialog waits on the script's thread for the app's answer.
 #[test]
 fn a_dialog_waits_for_the_answer() {

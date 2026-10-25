@@ -23,6 +23,43 @@ pub enum Value<H> {
 /// catch.
 pub type Interrupt = Box<dyn Fn() + Send + Sync>;
 
+/// What stops a script on another thread: nothing while its runtime is made, then the runtime's
+/// [`Interrupt`]. Asked to stop before then, it stops as it starts.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) enum Stop {
+    Starting { asked: bool },
+    Running(Interrupt),
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Stop {
+    pub(crate) fn new() -> std::sync::Arc<std::sync::Mutex<Self>> {
+        std::sync::Arc::new(std::sync::Mutex::new(Self::Starting { asked: false }))
+    }
+
+    /// Stops what the script runs now, or the script as it starts.
+    pub(crate) fn stop(slot: &std::sync::Mutex<Self>) {
+        match &mut *slot.lock().unwrap_or_else(|e| e.into_inner()) {
+            Self::Running(interrupt) => interrupt(),
+            Self::Starting { asked } => *asked = true,
+        }
+    }
+
+    /// Gives `slot` the runtime's `interrupt` (none where the engine has none): whether it was
+    /// asked to stop already, which it then does.
+    pub(crate) fn started(slot: &std::sync::Mutex<Self>, interrupt: Option<Interrupt>) -> bool {
+        let mut slot = slot.lock().unwrap_or_else(|e| e.into_inner());
+        let asked = matches!(*slot, Self::Starting { asked: true });
+        if let Some(interrupt) = interrupt {
+            if asked {
+                interrupt();
+            }
+            *slot = Self::Running(interrupt);
+        }
+        asked
+    }
+}
+
 /// A Rust function that scripts can call, with `this` and the arguments. Errors are thrown in the
 /// script as `Error`s.
 pub type HostFunction<H> = fn(&mut dyn Call<H>, &Value<H>, &[Value<H>]) -> Result<Value<H>, Error>;
