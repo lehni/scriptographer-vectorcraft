@@ -7,12 +7,17 @@ use std::io::Write;
 use flate2::write::{DeflateEncoder, GzDecoder, GzEncoder, ZlibEncoder};
 use flate2::{Compression, Decompress, FlushDecompress, Status};
 
+use brotli::{BrotliResult, BrotliState, HeapAlloc, HuffmanCode};
+
 use crate::{Call, Engine, Error, HostFunction, Value};
 
 /// The most a chunk may decompress to, in bytes: more fails the stream.
 const MOST: usize = 512 * 1024 * 1024;
 /// How much a decoder makes at a time.
 const PART: usize = 64 * 1024;
+
+/// brotli's decoder, which makes what it decodes into the room it's given.
+type BrotliDecoder = BrotliState<HeapAlloc<u8>, HeapAlloc<u32>, HeapAlloc<HuffmanCode>>;
 
 /// A stream's codec, writing what it makes into its `Vec`.
 enum Codec {
@@ -23,7 +28,8 @@ enum Codec {
     Gunzip(GzDecoder<Vec<u8>>),
     /// deflate and deflate-raw, and whether their data ended.
     Inflate(Box<Decompress>, bool),
-    Unbrotli(Box<brotli::DecompressorWriter<Vec<u8>>>),
+    /// brotli, and whether its data ended.
+    Unbrotli(Box<BrotliDecoder>, bool),
 }
 
 /// A stream's codec, by the stream's number.
@@ -43,18 +49,7 @@ pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E:
 fn open<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let format = call.to_string(args.first().unwrap_or(&Value::Undefined))?;
     let decompress = matches!(args.get(1), Some(Value::Bool(true)));
-    let level = Compression::default();
-    let codec = match (format.as_str(), decompress) {
-        ("gzip", false) => Codec::Gzip(GzEncoder::new(Vec::new(), level)),
-        ("deflate", false) => Codec::Deflate(ZlibEncoder::new(Vec::new(), level)),
-        ("deflate-raw", false) => Codec::DeflateRaw(DeflateEncoder::new(Vec::new(), level)),
-        ("brotli", false) => Codec::Brotli(Box::new(brotli::CompressorWriter::new(Vec::new(), PART, 6, 22))),
-        ("gzip", true) => Codec::Gunzip(GzDecoder::new(Vec::new())),
-        ("deflate", true) => Codec::Inflate(Box::new(Decompress::new(true)), false),
-        ("deflate-raw", true) => Codec::Inflate(Box::new(Decompress::new(false)), false),
-        ("brotli", true) => Codec::Unbrotli(Box::new(brotli::DecompressorWriter::new(Vec::new(), PART))),
-        _ => return Err(Error::Type(format!("Unsupported compression format: '{format}'."))),
-    };
+    let codec = Codec::open(&format, decompress).ok_or_else(|| Error::Type(format!("Unsupported compression format: '{format}'.")))?;
     let host = call.host()?;
     let mut host = host.borrow_mut();
     host.next_coder = host.next_coder.wrapping_add(1);
@@ -112,6 +107,25 @@ fn close<H>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Resu
 }
 
 impl Codec {
+    /// The codec of `format`, that compresses or `decompress`es; `None` for a format it doesn't know.
+    fn open(format: &str, decompress: bool) -> Option<Self> {
+        let level = Compression::default();
+        Some(match (format, decompress) {
+            ("gzip", false) => Codec::Gzip(GzEncoder::new(Vec::new(), level)),
+            ("deflate", false) => Codec::Deflate(ZlibEncoder::new(Vec::new(), level)),
+            ("deflate-raw", false) => Codec::DeflateRaw(DeflateEncoder::new(Vec::new(), level)),
+            ("brotli", false) => Codec::Brotli(Box::new(brotli::CompressorWriter::new(Vec::new(), PART, 6, 22))),
+            ("gzip", true) => Codec::Gunzip(GzDecoder::new(Vec::new())),
+            ("deflate", true) => Codec::Inflate(Box::new(Decompress::new(true)), false),
+            ("deflate-raw", true) => Codec::Inflate(Box::new(Decompress::new(false)), false),
+            ("brotli", true) => {
+                let decoder = BrotliState::new(HeapAlloc::new(0), HeapAlloc::new(0), HeapAlloc::new(HuffmanCode::default()));
+                Codec::Unbrotli(Box::new(decoder), false)
+            }
+            _ => return None,
+        })
+    }
+
     /// Writes `bytes` through the codec, and takes what it made of them; on a failure, with what
     /// it made before.
     fn write(&mut self, mut bytes: &[u8]) -> Result<Vec<u8>, (Vec<u8>, Error)> {
@@ -124,7 +138,7 @@ impl Codec {
                 Self::Brotli(c) => c.write(bytes),
                 // What it decodes waits in it until it's flushed:
                 Self::Gunzip(c) => c.write(bytes).and_then(|count| c.flush().map(|()| count)),
-                Self::Unbrotli(c) => c.write(bytes),
+                Self::Unbrotli(decoder, ended) => unbrotli_part(decoder, ended, bytes, &mut made),
                 Self::Inflate(inflate, ended) => inflate_part(inflate, ended, bytes, &mut made),
             };
             match written {
@@ -156,8 +170,7 @@ impl Codec {
             Self::DeflateRaw(c) => Some(c.get_mut()),
             Self::Brotli(c) => Some(c.get_mut()),
             Self::Gunzip(c) => Some(c.get_mut()),
-            Self::Unbrotli(c) => Some(c.get_mut()),
-            Self::Inflate(..) => None,
+            Self::Inflate(..) | Self::Unbrotli(..) => None,
         }
     }
 
@@ -169,9 +182,8 @@ impl Codec {
             Self::DeflateRaw(c) => c.finish().map_err(invalid),
             Self::Brotli(c) => Ok(c.into_inner()),
             Self::Gunzip(c) => c.finish().map_err(invalid),
-            Self::Unbrotli(c) => c.into_inner().map_err(|_| invalid("the data ended early")),
-            Self::Inflate(_, true) => Ok(Vec::new()),
-            Self::Inflate(_, false) => Err(invalid("the data ended early")),
+            Self::Inflate(_, true) | Self::Unbrotli(_, true) => Ok(Vec::new()),
+            Self::Inflate(_, false) | Self::Unbrotli(_, false) => Err(invalid("the data ended early")),
         }
     }
 }
@@ -192,7 +204,52 @@ fn inflate_part(inflate: &mut Decompress, ended: &mut bool, bytes: &[u8], made: 
     Ok(taken(inflate))
 }
 
+/// Decodes the brotli `bytes` into `made`, a part at a time, until the data ends: how many it took,
+/// none once it `ended`. It stops past [`MOST`], however much more the data would make.
+fn unbrotli_part(decoder: &mut BrotliDecoder, ended: &mut bool, bytes: &[u8], made: &mut Vec<u8>) -> std::io::Result<usize> {
+    let (mut available_in, mut taken) = (bytes.len(), 0);
+    let mut part = vec![0; PART];
+    while !*ended {
+        let (mut available_out, mut written, mut total) = (PART, 0, 0);
+        let result =
+            brotli::BrotliDecompressStream(&mut available_in, &mut taken, bytes, &mut available_out, &mut written, &mut part, &mut total, decoder);
+        made.extend_from_slice(part.get(..written).unwrap_or_default());
+        if made.len() > MOST {
+            return Err(std::io::Error::other("the data decompresses to too much"));
+        }
+        match result {
+            BrotliResult::ResultSuccess => *ended = true,
+            BrotliResult::NeedsMoreOutput => {}
+            BrotliResult::NeedsMoreInput => break,
+            BrotliResult::ResultFailure => return Err(std::io::Error::other("invalid brotli data")),
+        }
+    }
+    Ok(taken)
+}
+
 /// The `TypeError` a stream fails with on data it can't decode.
 fn invalid(error: impl std::fmt::Display) -> Error {
     Error::Type(format!("Invalid compressed data: {error}."))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use super::{Codec, MOST, PART};
+
+    /// A brotli bomb (data that decompresses to more than [`MOST`]) fails once it has made that
+    /// much, where the whole of what it decompressed to was made first.
+    #[test]
+    fn a_brotli_bomb_stops_at_the_limit() {
+        let mut bomb = brotli::CompressorWriter::new(Vec::new(), PART, 1, 22);
+        let zeros = vec![0u8; 1 << 20];
+        for _ in 0..(MOST >> 20) + 8 {
+            bomb.write_all(&zeros).unwrap();
+        }
+        let bomb = bomb.into_inner();
+        let Some(mut codec) = Codec::open("brotli", true) else { panic!("brotli decodes") };
+        assert!(codec.write(&bomb).is_err(), "too much");
+        assert!(codec.made().map_or(0, |m| m.len()) <= MOST + PART, "it stopped at the limit");
+    }
 }
