@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 use crate::message_port::{Ends, Message, message, receive};
-use crate::{Call, Engine, Error, HostFunction, Interrupt, Runtime, Setup, Value};
+use crate::{Call, Engine, Error, HostFunction, Runtime, Setup, Stop, Value};
 
 /// How long a worker waits for a message before it runs its timers.
 const FRAME: Duration = Duration::from_millis(16);
@@ -90,25 +90,6 @@ struct Shared {
 
 /// The shared workers that run.
 static SHARED: Mutex<Vec<Shared>> = Mutex::new(Vec::new());
-
-/// What stops a worker's script: nothing while it starts, then its runtime's interrupt; or that it
-/// was stopped before it ran.
-enum Stop {
-    Starting,
-    Running(Interrupt),
-    Stopped,
-}
-
-impl Stop {
-    /// Stops the script, or keeps it from running when it hasn't started yet.
-    fn stop(slot: &Mutex<Self>) {
-        let mut slot = slot.lock().unwrap_or_else(|e| e.into_inner());
-        if let Self::Running(interrupt) = &*slot {
-            interrupt();
-        }
-        *slot = Self::Stopped;
-    }
-}
 
 /// A worker its parent started, or a shared worker the script connected to: its number, the
 /// function its `Worker` or `SharedWorker` receives with, its thread's channels, what stops its
@@ -184,7 +165,7 @@ fn start<E: Engine>(call: &mut dyn Call<E::Handle>, _this: &Value<E::Handle>, ar
     let (sent, from) = channel();
     let link = Arc::new(());
     let outbox = Outbox::new(sent, &link);
-    let interrupt = Arc::new(Mutex::new(Stop::Starting));
+    let interrupt = Stop::new();
     let kind = Kind::Dedicated(private_directory);
     spawn::<E>(key, name, Setup { language, cache, ..Setup::default() }, inbox, outbox, interrupt.clone(), kind)?;
     add_child(call, Child { number: 0, receive: receive.clone(), to, from, interrupt, _link: link, shared: false })
@@ -256,7 +237,7 @@ fn connect<E: Engine>(call: &mut dyn Call<E::Handle>, _this: &Value<E::Handle>, 
             }
         }
     }
-    let interrupt = Arc::new(Mutex::new(Stop::Starting));
+    let interrupt = Stop::new();
     let to = match (to, ends) {
         (Some(to), _) => to,
         (None, Some(ends)) => {
@@ -297,14 +278,8 @@ fn run<E: Engine>(
         let mut runtime = Runtime::<E>::new().map_err(|e| e.to_string())?;
         let file = url::Url::parse(&key).is_err().then(|| key.clone());
         runtime.set_script(&Setup { file, ..setup }).map_err(|e| e.to_string())?;
-        {
-            let mut slot = interrupt.lock().unwrap_or_else(|e| e.into_inner());
-            if matches!(*slot, Stop::Stopped) {
-                return Err("the worker was terminated".into());
-            }
-            if let Some(stop) = runtime.interrupt() {
-                *slot = Stop::Running(stop);
-            }
+        if Stop::started(interrupt, runtime.interrupt()) {
+            return Err("the worker was terminated".into());
         }
         if let Kind::Dedicated(directory) = &kind {
             runtime.host.borrow_mut().private_directory.clone_from(directory);

@@ -63,6 +63,8 @@ use std::rc::Rc;
 
 pub use binding::Patch;
 pub use dialog::Ask;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use engine::Stop;
 pub use engine::{Call, Engine, HostFunction, Interrupt, Prelude, Value};
 #[cfg(feature = "boa")]
 pub use engines::boa::Boa;

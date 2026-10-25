@@ -244,8 +244,8 @@ impl<E: Engine> Script<E> {
 pub struct Worker {
     requests: std::sync::mpsc::Sender<Request>,
     replies: std::sync::mpsc::Receiver<Reply>,
-    /// Stops the script mid-run, once its runtime is made, where the engine can.
-    interrupt: Arc<std::sync::Mutex<Option<crate::Interrupt>>>,
+    /// Stops the script mid-run, or as its runtime starts, where the engine can.
+    interrupt: Arc<std::sync::Mutex<crate::Stop>>,
     /// Set when the worker is dropped: the requests still queued are left.
     stopped: Arc<std::sync::atomic::AtomicBool>,
 }
@@ -257,7 +257,7 @@ impl Worker {
     pub fn spawn(size: (f64, f64), setup: Setup) -> Result<Self, Error> {
         let (requests, inbox) = std::sync::mpsc::channel::<Request>();
         let (outbox, replies) = std::sync::mpsc::channel();
-        let interrupt = Arc::new(std::sync::Mutex::new(None));
+        let interrupt = crate::Stop::new();
         let stopped = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let (shared, is_stopped) = (interrupt.clone(), stopped.clone());
         let is_stopped = move || is_stopped.load(std::sync::atomic::Ordering::SeqCst);
@@ -283,9 +283,7 @@ impl Worker {
                         return;
                     }
                 };
-                if let Ok(mut slot) = shared.lock() {
-                    *slot = script.runtime.interrupt();
-                }
+                crate::Stop::started(&shared, script.runtime.interrupt());
                 // A dialog asks the app, and waits for its answer; what else the app sends
                 // meanwhile (a document that closed) waits for the script's work to end. Stopped,
                 // the script throws.
@@ -334,11 +332,7 @@ impl Worker {
     /// Stops what the script runs now, where the engine can (V8): it throws, and its `Done` says
     /// so. Boa scripts run on until they return.
     pub fn interrupt(&self) {
-        if let Ok(slot) = self.interrupt.lock()
-            && let Some(interrupt) = slot.as_ref()
-        {
-            interrupt();
-        }
+        crate::Stop::stop(&self.interrupt);
     }
 }
 
