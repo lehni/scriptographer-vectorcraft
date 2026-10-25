@@ -1699,6 +1699,34 @@ fn the_console_writes_as_browsers_do<E: Engine>() {
     );
 }
 
+/// The console writes what has no `toString()`, or one that throws, by its members, typed arrays,
+/// maps and sets by their items, and DOM objects by their getters.
+fn the_console_writes_any_value<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    runtime
+        .execute(
+            &scope,
+            "console.log(Object.assign(Object.create(null), { a: 1 }), { toString() { throw new Error('no') } })\n\
+             console.log(new Uint8Array([1, 2, 3]), new Map([['a', 1]]), new Set([1, 2]), async function* stream() {})\n\
+             console.log(new DOMPoint(1, 2))\n\
+             console.log(new Float64Array(150))\n\
+             console.log(new DOMException('Gone.', 'NotFoundError'))",
+        )
+        .unwrap();
+    let output = runtime.take_output();
+    assert_eq!(
+        output[..3],
+        [
+            "{a: 1} {toString: ƒ toString()}",
+            "Uint8Array(3) [1, 2, 3] Map(1) {'a' => 1} Set(2) {1, 2} ƒ stream()",
+            "DOMPoint {x: 1, y: 2, z: 0, w: 1}"
+        ]
+    );
+    assert!(output[3].starts_with("Float64Array(150) [0, 0,") && output[3].ends_with(", 0, … 50 more]"), "{}", output[3]);
+    assert!(output[4].starts_with("NotFoundError: Gone."), "{}", output[4]);
+}
+
 fn structured_clone_copies_as_browsers_do<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
@@ -2622,6 +2650,11 @@ macro_rules! engine_tests {
             #[test]
             fn animation_frames_run_once_a_frame() {
                 super::animation_frames_run_once_a_frame::<$engine>();
+            }
+
+            #[test]
+            fn the_console_writes_any_value() {
+                super::the_console_writes_any_value::<$engine>();
             }
 
             #[test]
