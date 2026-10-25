@@ -383,10 +383,12 @@ pub(crate) fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
     let result = execute(app, &mut script, RUN_WAIT);
     let changed = !Arc::ptr_eq(&before, &app.session.doc().map_err(|e| e.to_string())?.doc);
     let (working, running, tool) = (script.busy.is_some(), script.timers, script.tool);
-    if result? {
+    if result == Ok(true) {
         app.scripts.running.push(script);
     }
+    // A tool script that failed is no longer the tool's:
     app.scripts.tidy();
+    result?;
     if working {
         return Ok(json!({ "started": true }));
     }

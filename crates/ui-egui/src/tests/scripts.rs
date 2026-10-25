@@ -284,6 +284,15 @@ fn a_tool_script_gets_the_plain_keys() {
     assert_eq!(left, [key(egui::Key::V, egui::Modifiers::COMMAND)], "Cmd+V stays the app's");
 }
 
+/// A tool script that throws as its tool is picked is no longer the Scriptographer Tool's.
+#[test]
+fn a_tool_script_that_fails_is_no_longer_the_tools() {
+    let (mut app, _) = app();
+    let path = tempfile_path::Path::new("function onMouseDown() {}\ntool.onActivate = function() { throw new Error('no') }");
+    assert!(app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).is_err());
+    assert_eq!(app.scripts.tool(), None);
+}
+
 /// A script whose handler throws stops, as one whose frame throws does.
 #[test]
 fn a_script_whose_handler_throws_stops() {
