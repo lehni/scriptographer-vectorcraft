@@ -157,7 +157,7 @@ fn usage<H>(call: &mut dyn Call<H>, _this: &Value<H>, _args: &[Value<H>]) -> Res
     let (directory, storage) = {
         let host = call.host()?;
         let host = host.borrow();
-        (host.private_directory.clone(), host.local_storage.file().map(Path::to_path_buf))
+        (host.private_directory.clone(), host.local_storage.with(|s| s.file().map(Path::to_path_buf)))
     };
     let mut bytes = storage.and_then(|file| std::fs::metadata(file).ok()).map_or(0, |m| m.len());
     // What's in its folder, up to a million entries, links not followed:
