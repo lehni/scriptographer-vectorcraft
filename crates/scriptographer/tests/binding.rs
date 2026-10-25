@@ -895,9 +895,14 @@ fn a_closed_documents_project_goes<E: Engine>() {
         let st = s.documents().iter().find(|d| d.uid == uid).unwrap();
         runtime.bind(&scope, uid, st.doc.clone(), st.selection.clone()).unwrap();
     }
+    runtime.execute(&scope, "paper.projects[0].activeLayer.firstChild.remove()").unwrap();
+    let patch = runtime.take_patches().unwrap().remove(0);
     runtime.unbind(first).unwrap();
     runtime.execute(&scope, "console.log(paper.projects.length, paper.project.activeLayer.children.length)").unwrap();
     assert_eq!(runtime.take_output(), ["1 0"]);
+    // Its patch's result comes after it closed, and the script takes nothing of it:
+    let st = s.active().unwrap();
+    runtime.apply_ids(patch, &json!({}), st.doc.clone(), st.selection.clone(), true).unwrap();
 }
 
 macro_rules! engine_tests {
