@@ -329,8 +329,7 @@ impl VectorcraftApp {
                     self.status(e);
                 }
             } else {
-                // Quitting with nothing unsaved: no copies to leave behind.
-                vectorcraft_engine::cmd::recovery::forget_all(&mut self.session);
+                unsaved::quit(self);
             }
         }
         if let Some(wait) = recovery::frame(self, now) {

@@ -284,6 +284,21 @@ fn a_tool_script_gets_the_plain_keys() {
     assert_eq!(left, [key(egui::Key::V, egui::Modifiers::COMMAND)], "Cmd+V stays the app's");
 }
 
+/// The window's close button runs the scripts' `onShutdown`, as Quit does.
+#[test]
+fn the_close_button_shuts_the_scripts_down() {
+    let (mut app, _) = app();
+    let path = tempfile_path::Path::new("script.keepAlive = true\nfunction onFrame() {}\nfunction onShutdown() { console.log('shut down') }");
+    app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).unwrap();
+    app.session.active_mut().unwrap().mark_saved();
+    let ctx = egui::Context::default();
+    let close = egui::ViewportInfo { events: vec![egui::ViewportEvent::Close], ..Default::default() };
+    let raw = egui::RawInput { viewports: std::iter::once((egui::ViewportId::ROOT, close)).collect(), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| app.logic(ui.ctx()));
+    out.textures_delta.clear();
+    assert!(app.scripts.log().iter().any(|l| l.text == "shut down"));
+}
+
 /// A tool script that throws as its tool is picked is no longer the Scriptographer Tool's.
 #[test]
 fn a_tool_script_that_fails_is_no_longer_the_tools() {
