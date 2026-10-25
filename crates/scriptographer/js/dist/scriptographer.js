@@ -8551,10 +8551,11 @@ ${value}\r
     }
     start() {
       if (this.#number !== null) {
-        natives.port.start(
-          this.#number,
-          ({ type, data, ports }) => this.dispatchEvent(new MessageEvent(type, { data, ports }))
-        );
+        natives.port.start(this.#number, ({ type, data, ports }) => {
+          if (this.#number !== null) {
+            this.dispatchEvent(new MessageEvent(type, { data, ports }));
+          }
+        });
       }
     }
     close() {
@@ -8612,6 +8613,7 @@ ${value}\r
       __name(this, "Worker");
     }
     #number;
+    #isTerminated = false;
     constructor(url, { type = "classic", name = "" } = {}) {
       super();
       if (type === "module") {
@@ -8633,17 +8635,21 @@ ${value}\r
       );
     }
     terminate() {
+      this.#isTerminated = true;
       natives.worker.terminate(this.#number);
     }
-    // What the worker sent: `{ type, data, ports }` or `{ type: 'error', message }`.
+    // What the worker sent: `{ type, data, ports }` or `{ type: 'error', message }`,
+    // none of it once it's terminated.
     #receive({ type, data, ports, message }) {
-      if (type === "error") {
-        const event = new ErrorEvent("error", { message, cancelable: true });
-        if (this.dispatchEvent(event)) {
-          console.error(`Uncaught (in worker) ${message}`);
+      if (!this.#isTerminated) {
+        if (type === "error") {
+          const event = new ErrorEvent("error", { message, cancelable: true });
+          if (this.dispatchEvent(event)) {
+            console.error(`Uncaught (in worker) ${message}`);
+          }
+        } else {
+          this.dispatchEvent(new MessageEvent(type, { data, ports }));
         }
-      } else {
-        this.dispatchEvent(new MessageEvent(type, { data, ports }));
       }
     }
   };

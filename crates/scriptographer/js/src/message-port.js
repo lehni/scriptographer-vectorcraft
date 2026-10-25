@@ -72,9 +72,12 @@ export class MessagePort extends EventTarget {
 
   start() {
     if (this.#number !== null) {
-      natives.port.start(this.#number, ({ type, data, ports }) =>
-        this.dispatchEvent(new MessageEvent(type, { data, ports }))
-      )
+      // What arrives once the port closed or was sent isn't its own:
+      natives.port.start(this.#number, ({ type, data, ports }) => {
+        if (this.#number !== null) {
+          this.dispatchEvent(new MessageEvent(type, { data, ports }))
+        }
+      })
     }
   }
 
