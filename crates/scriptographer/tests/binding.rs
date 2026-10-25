@@ -1052,6 +1052,39 @@ fn a_switch_tells_the_projects<E: Engine>() {
     assert_eq!(runtime.take_output(), ["deactivate 1", "activate 0 1"]);
 }
 
+/// An item a script moves to another document's project leaves its own document and is new in
+/// the other, where no other object changes.
+fn items_move_between_documents<E: Engine>() {
+    let (mut s, a, b) = document();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+    let [first, second] = [0, 1].map(|i| s.documents()[i].uid);
+    let before = s.documents()[1].doc.layers[0].children().unwrap().clone();
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    let bind = |runtime: &mut Runtime<E>, s: &Session, uid| {
+        let st = s.documents().iter().find(|d| d.uid == uid).unwrap();
+        runtime.bind(&scope, uid, st.doc.clone(), st.selection.clone()).unwrap();
+    };
+    bind(&mut runtime, &s, first);
+    runtime.execute(&scope, "globalThis.rectangle = paper.project.activeLayer.lastChild").unwrap();
+    bind(&mut runtime, &s, second);
+    runtime.execute(&scope, "paper.project.activeLayer.addChild(rectangle)").unwrap();
+    for patch in runtime.take_patches().unwrap() {
+        let index = s.documents().iter().position(|d| d.uid == patch.uid).unwrap();
+        s.set_active(index);
+        s.execute("document.patch", &patch.params).unwrap();
+    }
+    let layer = |s: &Session, i: usize| s.documents()[i].doc.layers[0].children().unwrap().clone();
+    assert_eq!(layer(&s, 0).iter().map(|n| n.id).collect::<Vec<_>>(), [a], "the rectangle left the first document");
+    let moved = layer(&s, 1);
+    assert_eq!(moved.len(), 2);
+    assert_eq!(moved[0], before[0], "the ellipse is as it was");
+    assert_ne!(moved[1].id, before[0].id, "the rectangle is new in the second document");
+    let bounds = moved[1].geometric_bounds().unwrap();
+    assert_eq!((bounds.x0, bounds.y0, bounds.width(), bounds.height()), (50.0, 10.0, 30.0, 20.0), "where it was: {b:?}");
+}
+
 /// A document that closes takes its project with it; the script goes on with the others.
 fn a_closed_documents_project_goes<E: Engine>() {
     let (mut s, _, _) = document();
@@ -1314,6 +1347,11 @@ macro_rules! engine_tests {
             #[test]
             fn a_switch_tells_the_projects() {
                 super::a_switch_tells_the_projects::<$engine>();
+            }
+
+            #[test]
+            fn items_move_between_documents() {
+                super::items_move_between_documents::<$engine>();
             }
 
             #[test]
