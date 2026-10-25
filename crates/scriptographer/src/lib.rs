@@ -217,7 +217,7 @@ pub struct Host<H> {
     /// What `structuredClone()` uses of the realm.
     clone_classes: Option<clone::Classes<H>>,
     /// The script's `localStorage` and `sessionStorage`, and what their proxies use.
-    local_storage: storage::Storage,
+    local_storage: storage::Local,
     session_storage: storage::Storage,
     /// The language the app gave the script ([`Setup`]), which its workers have too.
     language: Option<String>,
@@ -318,7 +318,7 @@ impl<H> Default for Host<H> {
             global: None,
             shared: None,
             clone_classes: None,
-            local_storage: storage::Storage::default(),
+            local_storage: storage::Local::default(),
             session_storage: storage::Storage::default(),
             language: None,
             cache: None,
@@ -662,7 +662,7 @@ impl<E: Engine> Runtime<E> {
         {
             let mut host = self.host.borrow_mut();
             if let (Some(folder), Some(file)) = (storage, file) {
-                host.local_storage = storage::Storage::kept_in(storage::Storage::file_for(folder, std::path::Path::new(file)));
+                host.local_storage = storage::Local::kept_in(storage::Storage::file_for(folder, std::path::Path::new(file)));
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     host.private_directory = Some(storage::Storage::directory_for(folder, std::path::Path::new(file)));
@@ -692,8 +692,8 @@ impl<E: Engine> Runtime<E> {
             call.set(&script, "file", &file)?;
             call.set(&script, "directory", &directory)?;
             call.set(&script, "keepAlive", &Value::Bool(false))?;
-            let preferences = match &self.host.borrow().local_storage.preferences {
-                kept @ serde_json::Value::Object(_) => kept.clone(),
+            let preferences = match self.host.borrow().local_storage.with(|s| s.preferences.clone()) {
+                kept @ serde_json::Value::Object(_) => kept,
                 _ => serde_json::json!({}),
             };
             // As Paper.js serializes them, so they come back as Colors, Points…
@@ -720,7 +720,7 @@ impl<E: Engine> Runtime<E> {
             dialog::to_json(call, &globals, &preferences).map(Some)
         })?;
         if let Some(preferences) = preferences {
-            self.host.borrow_mut().local_storage.keep_preferences(preferences);
+            self.host.borrow().local_storage.with(|s| s.keep_preferences(preferences));
         }
         Ok(())
     }

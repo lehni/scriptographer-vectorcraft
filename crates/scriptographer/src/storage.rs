@@ -2,11 +2,13 @@
 //! its own, as a web page's is its origin's, and lasts: it's kept in a JSON file in the folder the
 //! app gives ([`Runtime::set_script`](crate::Runtime::set_script)), named for the script's path,
 //! with its `script.preferences`, written when either changed, at most once a second while the
-//! script runs and when it ends. A script without a file or a folder, and `sessionStorage`, keep
-//! theirs while the script runs. Each holds up to 5 MB, as browsers allow. Scripts reach them
-//! through `js/src/storage.js`.
+//! script runs and when it ends. The runtimes of a script share it while any of them runs, as the
+//! pages of an origin do, so one that runs it again has what the last one kept. A script without a
+//! file or a folder, and `sessionStorage`, keep theirs while the script runs. Each holds up to
+//! 5 MB, as browsers allow. Scripts reach them through `js/src/storage.js`.
 
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 
 use crate::{Call, Engine, Error, HostFunction, Value};
 
@@ -35,17 +37,56 @@ pub(crate) struct Storage {
     file: Option<PathBuf>,
     /// Whether it changed since it was last written.
     changed: bool,
-    /// When it was last written, in the runtime's milliseconds.
+}
+
+/// A runtime's `localStorage`: the storage it shares with the other runtimes of its script, and
+/// when it last wrote it, in its own milliseconds.
+#[derive(Default)]
+pub(crate) struct Local {
+    storage: Arc<Mutex<Storage>>,
     written: f64,
 }
 
-impl Storage {
-    /// The storage kept in `file`, with what's there: none when it can't be read.
-    pub(crate) fn kept_in(file: PathBuf) -> Storage {
-        let Kept { items, preferences } = std::fs::read(&file).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
-        Storage { items, preferences, file: Some(file), changed: false, written: f64::NEG_INFINITY }
+impl Local {
+    /// The storage kept in `file`: the one the script's other runtimes have, while one does, else
+    /// what's in the file, none when it can't be read.
+    pub(crate) fn kept_in(file: PathBuf) -> Self {
+        static KEPT: Mutex<Vec<(PathBuf, Weak<Mutex<Storage>>)>> = Mutex::new(Vec::new());
+        let mut kept = lock(&KEPT);
+        kept.retain(|(_, storage)| storage.strong_count() > 0);
+        let shared = kept.iter().find(|(kept, _)| *kept == file).and_then(|(_, storage)| storage.upgrade());
+        let storage = shared.unwrap_or_else(|| {
+            let Kept { items, preferences } = std::fs::read(&file).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
+            let storage = Arc::new(Mutex::new(Storage { items, preferences, file: Some(file.clone()), changed: false }));
+            kept.push((file, Arc::downgrade(&storage)));
+            storage
+        });
+        Self { storage, written: f64::NEG_INFINITY }
     }
 
+    pub(crate) fn with<R>(&self, f: impl FnOnce(&mut Storage) -> R) -> R {
+        f(&mut lock(&self.storage))
+    }
+
+    /// Writes the items and preferences to their file, when they changed and (unless `now` is
+    /// `None`, at the end) this runtime's last write is long enough ago. The script goes on with
+    /// its items when that fails.
+    pub(crate) fn write(&mut self, now: Option<f64>) -> Result<(), String> {
+        let mut storage = lock(&self.storage);
+        if !storage.changed || now.is_some_and(|now| now - self.written < WRITE_INTERVAL) {
+            return Ok(());
+        }
+        self.written = now.unwrap_or(self.written);
+        storage.write()
+    }
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    // What a thread that panicked left is still a storage's state:
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+impl Storage {
     /// Keeps `preferences`, when they changed.
     pub(crate) fn keep_preferences(&mut self, preferences: serde_json::Value) {
         if self.preferences != preferences {
@@ -99,15 +140,11 @@ impl Storage {
         self.items.iter().map(|(k, v)| k.encode_utf16().count() + v.encode_utf16().count()).sum()
     }
 
-    /// Writes the items and preferences to their file, when they changed and (unless `now` is `None`, at the end)
-    /// the last write is long enough ago. The script goes on with its items when that fails.
-    pub(crate) fn write(&mut self, now: Option<f64>) -> Result<(), String> {
+    /// Writes the items and preferences to their file, where it's kept.
+    fn write(&mut self) -> Result<(), String> {
         let Some(file) = &self.file else {
             return Ok(());
         };
-        if !self.changed || now.is_some_and(|now| now - self.written < WRITE_INTERVAL) {
-            return Ok(());
-        }
         let kept = Kept { items: self.items.clone(), preferences: self.preferences.clone() };
         let result = serde_json::to_vec(&kept).map_err(|e| e.to_string()).and_then(|json| {
             if let Some(folder) = file.parent() {
@@ -120,7 +157,6 @@ impl Storage {
         });
         let result = result.map_err(|e| format!("localStorage: couldn't write {}: {e}", file.display()));
         self.changed = false;
-        self.written = now.unwrap_or(self.written);
         result
     }
 }
@@ -167,7 +203,7 @@ pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E:
 fn with<H, R>(call: &mut dyn Call<H>, args: &[Value<H>], f: impl FnOnce(&mut Storage) -> R) -> Result<R, Error> {
     let host = call.host()?;
     let mut host = host.borrow_mut();
-    Ok(f(if matches!(args.first(), Some(Value::Bool(true))) { &mut host.session_storage } else { &mut host.local_storage }))
+    Ok(if matches!(args.first(), Some(Value::Bool(true))) { f(&mut host.session_storage) } else { host.local_storage.with(f) })
 }
 
 fn text<H>(call: &mut dyn Call<H>, args: &[Value<H>], n: usize) -> Result<String, Error> {

@@ -1701,6 +1701,30 @@ fn geometry_classes_are_the_browsers<E: Engine>() {
     );
 }
 
+/// A script run again while its last runtime still ends has what that one kept: its runtimes share
+/// its `localStorage` and preferences, as the pages of an origin share theirs.
+fn a_scripts_runtimes_share_its_storage<E: Engine>(name: &str) {
+    let folder = std::env::temp_dir().join(format!("scriptographer-shared-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    let setup =
+        Setup { file: Some(folder.join("script.js").to_string_lossy().into_owned()), storage: Some(folder.join("storage")), ..Setup::default() };
+    let start = || {
+        let mut runtime = Runtime::<E>::new().unwrap();
+        runtime.set_script(&setup).unwrap();
+        let scope = runtime.create_scope(800.0, 600.0).unwrap();
+        (runtime, scope)
+    };
+    let (mut first, scope) = start();
+    first.execute(&scope, "localStorage.count = 1\nscript.preferences.count = 1").unwrap();
+    first.keep_preferences().unwrap();
+    // Before the first one writes anything:
+    let (mut second, scope) = start();
+    second.execute(&scope, "console.log(localStorage.count, script.preferences.count)").unwrap();
+    assert_eq!(second.take_output(), ["1 1"]);
+    drop((first, second));
+    std::fs::remove_dir_all(&folder).unwrap();
+}
+
 fn local_storage_and_preferences_last_and_session_storage_doesnt<E: Engine>(name: &str) {
     let folder = std::env::temp_dir().join(format!("scriptographer-storage-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&folder);
@@ -2850,6 +2874,11 @@ macro_rules! engine_tests {
             #[test]
             fn geometry_classes_are_the_browsers() {
                 super::geometry_classes_are_the_browsers::<$engine>();
+            }
+
+            #[test]
+            fn a_scripts_runtimes_share_its_storage() {
+                super::a_scripts_runtimes_share_its_storage::<$engine>(stringify!($module));
             }
 
             #[test]
