@@ -104,6 +104,25 @@ fn timeouts_run_once<E: Engine>() {
     assert!(!runtime.is_running(), "nothing is left once the timeouts ran");
 }
 
+/// Timers pass their extra arguments to their callback, and take their delay as a number, as in
+/// browsers.
+fn timers_take_arguments_and_delays_as_numbers<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    runtime
+        .execute(
+            &scope,
+            "setTimeout((a, b) => print(a + b), '50', 1, 2)\n\
+             var id = setInterval(word => { print(word); clearInterval(id) }, 100, 'tick')",
+        )
+        .unwrap();
+    runtime.run_timers(20.0).unwrap();
+    assert!(runtime.take_output().is_empty(), "the string delay counts");
+    runtime.run_timers(50.0).unwrap();
+    runtime.run_timers(100.0).unwrap();
+    assert_eq!(runtime.take_output(), ["3", "tick"]);
+}
+
 /// A timer that throws fails the turn, but the others due then still run, as in browsers.
 fn a_throwing_timer_keeps_the_others<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
@@ -2839,6 +2858,11 @@ macro_rules! engine_tests {
             #[test]
             fn turns_come_when_timers_are_due() {
                 super::turns_come_when_timers_are_due::<$engine>();
+            }
+
+            #[test]
+            fn timers_take_arguments_and_delays_as_numbers() {
+                super::timers_take_arguments_and_delays_as_numbers::<$engine>();
             }
 
             #[test]

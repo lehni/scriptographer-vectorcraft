@@ -237,6 +237,8 @@ pub struct Host<H> {
 struct Interval<H> {
     id: u32,
     callback: H,
+    /// The arguments after the delay, which the callback gets.
+    args: Vec<Value<H>>,
     delay: f64,
     due: f64,
     /// An interval's, which runs again; else a timeout's, which runs once.
@@ -554,7 +556,7 @@ impl<E: Engine> Runtime<E> {
                 host.print(e);
             }
             for interval in host.intervals.iter_mut().filter(|interval| interval.due <= now) {
-                due.push(interval.callback.clone());
+                due.push((interval.callback.clone(), interval.args.clone()));
                 // Keep the cadence, but don't catch up on intervals missed while the host was busy.
                 interval.due += interval.delay;
                 if interval.due <= now {
@@ -588,8 +590,8 @@ impl<E: Engine> Runtime<E> {
             locks::poll(call)?;
             // A callback that throws fails the turn, but the others still run, as in browsers.
             let mut failed = None;
-            for callback in due {
-                failed = failed.or(call.call(&callback, &Value::Undefined, &[]).err());
+            for (callback, args) in due {
+                failed = failed.or(call.call(&callback, &Value::Undefined, &args).err());
             }
             for (_, callback) in frames {
                 failed = failed.or(call.call(&callback, &Value::Undefined, &[Value::Number(now)]).err());
@@ -1029,22 +1031,25 @@ fn install_globals<E: Engine>(engine: &mut E) -> Result<(), Error> {
     })
 }
 
-/// `setInterval(callback, delay)` when it `repeats`, else `setTimeout(callback, delay)`.
+/// `setInterval(callback, delay, ...args)` when it `repeats`, else `setTimeout(callback, delay,
+/// ...args)`.
 pub(crate) fn set_timer<H: Clone>(call: &mut dyn Call<H>, args: &[Value<H>], repeats: bool) -> Result<Value<H>, Error> {
     let Some(Value::Js(callback)) = args.first() else {
         let name = if repeats { "setInterval" } else { "setTimeout" };
         return Err(Error::Script(format!("{name}: the callback is not a function")));
     };
     let delay = match args.get(1) {
-        Some(Value::Number(delay)) if delay.is_finite() => delay.max(0.0),
-        _ => 0.0,
+        Some(delay) => call.to_number(delay)?,
+        None => 0.0,
     };
+    let delay = if delay.is_finite() { delay.max(0.0) } else { 0.0 };
+    let args = args.get(2..).unwrap_or_default().to_vec();
     let host = call.host()?;
     let mut host = host.borrow_mut();
     let id = host.next_interval_id.wrapping_add(1);
     host.next_interval_id = id;
     let due = host.now + delay;
-    host.intervals.push(Interval { id, callback: callback.clone(), delay, due, repeats });
+    host.intervals.push(Interval { id, callback: callback.clone(), args, delay, due, repeats });
     Ok(Value::Number(f64::from(id)))
 }
 
