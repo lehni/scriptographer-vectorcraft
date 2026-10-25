@@ -200,17 +200,11 @@ impl<E: Engine> Runtime<E> {
     /// The objects selected in `scope`'s project, as the script left them.
     pub fn selected_ids(&mut self, scope: &Scope<E::Handle>) -> Result<BTreeSet<NodeId>, Error> {
         self.engine.with_call(|call| {
+            // In one call, as it may be large:
             let project = object(call, &scope.0, "project")?;
-            let items = object(call, &project, "selectedItems")?;
-            let count = number(call.get(&items, "length")?) as usize;
-            let mut ids = BTreeSet::new();
-            for i in 0..count {
-                let item = object(call, &items, &i.to_string())?;
-                if let Value::Number(key) = call.get(&item, "key")? {
-                    ids.insert(NodeId(key as u64));
-                }
-            }
-            Ok(ids)
+            let keys = crate::call_bundle(call, "getSelectedKeys", &[Value::Js(project)])?;
+            let keys: Vec<f64> = serde_json::from_str(&call.to_string(&keys)?).map_err(|e| Error::Script(format!("reading the selection: {e}")))?;
+            Ok(keys.into_iter().map(|key| NodeId(key as u64)).collect())
         })
     }
 

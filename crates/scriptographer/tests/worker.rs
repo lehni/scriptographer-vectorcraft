@@ -113,6 +113,26 @@ fn adding_to_a_big_layer_is_quick() {
     assert!(start.elapsed() < Duration::from_millis(100), "{:?}", start.elapsed());
 }
 
+/// A frame costs little while many objects are selected: the script's selection is read in one
+/// call. About five times as long without (13 ms).
+#[test]
+fn frames_with_a_big_selection_are_quick() {
+    let mut s = session();
+    for i in 0..20000 {
+        s.execute("shape.ellipse", &json!({"x": (i % 200) * 5, "y": (i / 200) * 5, "width": 4, "height": 3})).unwrap();
+    }
+    s.execute("select.all", &json!({})).unwrap();
+    let worker = spawn();
+    send(&s, &worker, Work::Execute("var count = project.selectedItems.length\nfunction onFrame() {}".into()));
+    assert_eq!(settle(&mut s, &worker), None);
+    send_at(&s, &worker, 20.0, Work::Frame);
+    assert_eq!(settle(&mut s, &worker), None);
+    let start = std::time::Instant::now();
+    send_at(&s, &worker, 40.0, Work::Frame);
+    assert_eq!(settle(&mut s, &worker), None);
+    assert!(start.elapsed() < Duration::from_millis(8), "{:?}", start.elapsed());
+}
+
 /// A script that fills V8's heap stops with an error, where V8 would end the app.
 #[cfg(feature = "v8")]
 #[test]

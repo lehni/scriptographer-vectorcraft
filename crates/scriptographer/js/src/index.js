@@ -193,3 +193,13 @@ Object.assign(natives, { watchEffects, applyEffect })
 // waits for them:
 setupKeys()
 Object.assign(natives, { dispatchKey, hasKeyListeners })
+// What it reads a project's selection with, in one call, as it may be large:
+Object.assign(natives, { getSelectedKeys })
+
+function getSelectedKeys(project) {
+  return JSON.stringify(
+    project.selectedItems
+      .map(item => item.key)
+      .filter(key => Number.isFinite(key))
+  )
+}

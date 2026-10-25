@@ -9226,4 +9226,11 @@ ${value}\r
   Object.assign(natives, { watchEffects, applyEffect });
   setupKeys();
   Object.assign(natives, { dispatchKey, hasKeyListeners });
+  Object.assign(natives, { getSelectedKeys });
+  function getSelectedKeys(project) {
+    return JSON.stringify(
+      project.selectedItems.map((item) => item.key).filter((key) => Number.isFinite(key))
+    );
+  }
+  __name(getSelectedKeys, "getSelectedKeys");
 })();
