@@ -16,6 +16,7 @@ import { natives } from './natives.js'
 
 export class Worker extends EventTarget {
   #number
+  #isTerminated = false
 
   constructor(url, { type = 'classic', name = '' } = {}) {
     super()
@@ -37,20 +38,24 @@ export class Worker extends EventTarget {
   }
 
   terminate() {
+    this.#isTerminated = true
     natives.worker.terminate(this.#number)
   }
 
-  // What the worker sent: `{ type, data, ports }` or `{ type: 'error', message }`.
+  // What the worker sent: `{ type, data, ports }` or `{ type: 'error', message }`,
+  // none of it once it's terminated.
   #receive({ type, data, ports, message }) {
-    if (type === 'error') {
-      // Unless a handler prevents it, the error shows in the console too, as in
-      // browsers.
-      const event = new ErrorEvent('error', { message, cancelable: true })
-      if (this.dispatchEvent(event)) {
-        console.error(`Uncaught (in worker) ${message}`)
+    if (!this.#isTerminated) {
+      if (type === 'error') {
+        // Unless a handler prevents it, the error shows in the console too, as
+        // in browsers.
+        const event = new ErrorEvent('error', { message, cancelable: true })
+        if (this.dispatchEvent(event)) {
+          console.error(`Uncaught (in worker) ${message}`)
+        }
+      } else {
+        this.dispatchEvent(new MessageEvent(type, { data, ports }))
       }
-    } else {
-      this.dispatchEvent(new MessageEvent(type, { data, ports }))
     }
   }
 }

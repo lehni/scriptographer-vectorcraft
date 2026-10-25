@@ -2201,6 +2201,34 @@ fn message_channels_join_ports_in_a_script_and_across_workers<E: Engine>(name: &
     std::fs::remove_dir_all(&folder).unwrap();
 }
 
+/// Messages that arrive once a port closed, or its worker was terminated, in the same turn too,
+/// aren't delivered, as in browsers.
+fn closed_ports_and_terminated_workers_hear_no_more<E: Engine>() {
+    // One for each engine's test, which run at once:
+    let folder = std::env::temp_dir().join(format!("scriptographer-terminated-{}-{:?}", std::process::id(), std::thread::current().id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(folder.join("chatty.js"), "postMessage(1)\npostMessage(2)\npostMessage(3)").unwrap();
+    let mut runtime = Runtime::<E>::new().unwrap();
+    runtime.set_script(&Setup { file: Some(folder.join("script.js").to_string_lossy().into_owned()), ..Setup::default() }).unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    runtime
+        .execute(
+            &scope,
+            "const worker = new Worker('chatty.js')\n\
+             worker.onmessage = event => { console.log('worker', event.data); worker.terminate() }\n\
+             const { port1, port2 } = new MessageChannel()\n\
+             port2.onmessage = event => { console.log('port', event.data); port2.close() }\n\
+             port1.postMessage('a')\n\
+             port1.postMessage('b')",
+        )
+        .unwrap();
+    run_until_done(&mut runtime);
+    let mut output = runtime.take_output();
+    output.sort();
+    assert_eq!(output, ["port a", "worker 1"]);
+    std::fs::remove_dir_all(&folder).unwrap();
+}
+
 fn font_faces_give_canvases_fonts_by_the_scripts_names<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
@@ -2786,6 +2814,11 @@ macro_rules! engine_tests {
             #[test]
             fn canvases_encode_transfer_and_stay_opaque() {
                 super::canvases_encode_transfer_and_stay_opaque::<$engine>();
+            }
+
+            #[test]
+            fn closed_ports_and_terminated_workers_hear_no_more() {
+                super::closed_ports_and_terminated_workers_hear_no_more::<$engine>();
             }
 
             #[test]
