@@ -93,6 +93,26 @@ fn a_script_stopped_in_a_host_call_stops() {
     assert!(settle(&mut s, &worker).is_some(), "it stopped with an error");
 }
 
+/// A frame that adds an item to a layer of many costs little: the layer is written without its
+/// children, which it keeps.
+#[test]
+fn adding_to_a_big_layer_is_quick() {
+    let mut s = session();
+    let worker = spawn();
+    let script = "for (var i = 0; i < 40000; i++) new Path.Circle([i % 200 * 5, Math.floor(i / 200) * 5], 2)\n\
+                  function onFrame() { new Path.Circle([0, 0], 1) }";
+    send(&s, &worker, Work::Execute(script.into()));
+    assert_eq!(settle(&mut s, &worker), None);
+    // The first frame reads the layer's children into the project:
+    send_at(&s, &worker, 20.0, Work::Frame);
+    assert_eq!(settle(&mut s, &worker), None);
+    let start = std::time::Instant::now();
+    send_at(&s, &worker, 40.0, Work::Frame);
+    assert_eq!(settle(&mut s, &worker), None);
+    // Six times as long without (150 ms):
+    assert!(start.elapsed() < Duration::from_millis(100), "{:?}", start.elapsed());
+}
+
 /// A script that fills V8's heap stops with an error, where V8 would end the app.
 #[cfg(feature = "v8")]
 #[test]
