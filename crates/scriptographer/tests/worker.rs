@@ -74,6 +74,15 @@ fn an_endless_loop_stops_when_interrupted() {
     assert!(settle(&mut s, &worker).is_some(), "it stopped with an error");
 }
 
+/// A change list whose length a script made up ends its work with an error, not the app.
+#[test]
+fn a_made_up_change_list_is_an_error() {
+    let mut s = session();
+    let worker = spawn();
+    send(&s, &worker, Work::Execute("project.activeLayer.firstChild.position.x += 1\nproject.takeChanges = () => ({ length: 1e18 })".into()));
+    assert!(settle(&mut s, &worker).is_some(), "an error");
+}
+
 /// A dialog waits on the script's thread for the app's answer.
 #[test]
 fn a_dialog_waits_for_the_answer() {

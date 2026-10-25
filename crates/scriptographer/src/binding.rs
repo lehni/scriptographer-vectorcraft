@@ -229,7 +229,8 @@ impl<E: Engine> Runtime<E> {
             for (uid, project, doc) in documents {
                 let changes = handle(method(call, &project, "takeChanges", &[])?, "takeChanges()")?;
                 let count = number(call.get(&changes, "length")?);
-                let (mut list, mut definitions) = (Vec::with_capacity(count as usize), Vec::new());
+                // Not sized by `count`, which the script may have made up.
+                let (mut list, mut definitions) = (Vec::new(), Vec::new());
                 for i in 0..count as usize {
                     let entry = object(call, &changes, &i.to_string())?;
                     match call.get(&entry, "item")? {
