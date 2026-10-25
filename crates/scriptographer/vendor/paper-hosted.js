@@ -1,5 +1,5 @@
 /*!
- * Paper.js v0.16.0-feature/hosted-move - The Swiss Army Knife of Vector Graphics Scripting.
+ * Paper.js v0.16.0-HEAD - The Swiss Army Knife of Vector Graphics Scripting.
  * http://paperjs.org/
  *
  * Copyright (c) 2011 - 2020, Jürg Lehni & Jonathan Puckey
@@ -894,7 +894,7 @@ var PaperScope = Base.extend({
 		}
 	},
 
-	version: "0.16.0-feature/hosted-move",
+	version: "0.16.0-HEAD",
 
 	getProject: function() {
 		return this._project;
