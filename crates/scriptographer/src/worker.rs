@@ -53,6 +53,9 @@ pub enum Work {
     Activate(bool),
     /// Calls the script's handler of that name, one of [`crate::HANDLERS`], when it has one.
     Handler(&'static str),
+    /// Nothing but the document the work comes with, the document `uid`: the script catches up
+    /// with it, and its project becomes the active one, as the user switches documents.
+    Switch(u64),
     /// The user's answer to the oldest of the script's dialogs, on the web, where the script didn't
     /// wait for it ([`crate::Runtime::answer`]).
     #[cfg(target_arch = "wasm32")]
@@ -175,6 +178,7 @@ impl<E: Engine> Script<E> {
             Work::Palette(id, event) => self.runtime.palette_event(id, event),
             Work::Activate(active) => self.runtime.activate_tool(&self.scope, active),
             Work::Handler(name) => self.runtime.call_handler(name).map(|_| ()),
+            Work::Switch(_) => Ok(()),
             #[cfg(target_arch = "wasm32")]
             Work::Answer(answer) => self.runtime.answer(&answer),
             #[cfg(target_arch = "wasm32")]
