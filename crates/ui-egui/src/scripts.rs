@@ -75,6 +75,8 @@ pub struct Scripts {
     pointer: Option<(u64, Vec<Pointer>)>,
     /// The open documents as of the last frame (`DocState::uid`), to tell the scripts which closed.
     documents: Vec<u64>,
+    /// The active document as of the last frame, to tell the scripts when the user switches.
+    active: Option<u64>,
     /// The scripts folders whose `__init__` scripts ran.
     initialized: Option<Vec<ScriptFolder>>,
     /// The tool script the Scriptographer Tool button stands for: the last one run, until it fails.
@@ -155,6 +157,8 @@ struct Running {
     effects: bool,
     /// The document as the script last had it.
     seen: Option<Arc<Document>>,
+    /// The document its last work went to (`DocState::uid`).
+    uid: Option<u64>,
     /// The work it was sent and hasn't finished.
     busy: Option<Kind>,
     /// Since when, on the app's clock, it has been working without a break, or since the user
@@ -210,6 +214,7 @@ enum Kind {
     Palette,
     Activate,
     Handler,
+    Switch,
     /// An answer to a dialog, on the web.
     #[cfg(target_arch = "wasm32")]
     Answer,
@@ -541,6 +546,7 @@ fn start(app: &VectorcraftApp, name: String, path: Option<PathBuf>, source: Stri
         wake: None,
         effects: false,
         seen: None,
+        uid: None,
         busy: None,
         queued,
         asking: None,
@@ -597,6 +603,22 @@ pub(crate) fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
             script.worker.send(Request::Closed(*uid));
         }
     }
+    // A switch to another document reaches the scripts as it happens: those that last worked in
+    // the one left catch up with it, then all switch, so its project's `onDeactivate` and the
+    // other's `onActivate` fire.
+    let active = app.session.active().map(|d| d.uid);
+    if let (Some(left), Some(now)) = (app.scripts.active, active)
+        && left != now
+    {
+        let is_open = documents.contains(&left);
+        for script in app.scripts.running.iter_mut().chain(&mut app.scripts.console) {
+            if is_open && script.uid == Some(left) {
+                script.queued.push_back(Work::Switch(left));
+            }
+            script.queued.push_back(Work::Switch(now));
+        }
+    }
+    app.scripts.active = active;
     app.scripts.documents = documents;
     if app.scripts.running.is_empty() && app.scripts.console.is_none() {
         return;
@@ -694,7 +716,11 @@ fn is_behind(app: &VectorcraftApp, script: &Running) -> bool {
 
 /// Sends `work` to the script at `now` (milliseconds since it started), with the active document.
 fn send(app: &mut VectorcraftApp, script: &mut Running, now: f64, work: Work) -> Result<(), String> {
-    let index = app.session.active_index().ok_or("no document is open")?;
+    let index = match &work {
+        Work::Switch(uid) => app.session.documents().iter().position(|d| d.uid == *uid),
+        _ => app.session.active_index(),
+    };
+    let index = index.ok_or("no document is open")?;
     let state = app.session.documents().get(index).ok_or("no document is open")?;
     let (uid, doc, selection) = (state.uid, state.doc.clone(), state.selection.clone());
     // The document's view has its active artboard, the script's `project.activeArtboard`.
@@ -706,6 +732,7 @@ fn send(app: &mut VectorcraftApp, script: &mut Running, now: f64, work: Work) ->
         Work::Palette(..) => Kind::Palette,
         Work::Activate(_) => Kind::Activate,
         Work::Handler(_) => Kind::Handler,
+        Work::Switch(_) => Kind::Switch,
         #[cfg(target_arch = "wasm32")]
         Work::Answer(_) | Work::Picked(_) => Kind::Answer,
         Work::Mouse(events) => {
@@ -720,6 +747,7 @@ fn send(app: &mut VectorcraftApp, script: &mut Running, now: f64, work: Work) ->
     let text = app.session.new_type_style();
     let style = vectorcraft_scriptographer::host::current_style(&paint.fill, &paint.stroke, paint.stroke_width, &text.fill);
     script.seen = Some(doc.clone());
+    script.uid = Some(uid);
     script.worker.send(Request::Run { uid, doc, selection, artboard, style, now, work });
     Ok(())
 }

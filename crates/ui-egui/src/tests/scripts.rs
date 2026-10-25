@@ -381,6 +381,31 @@ fn a_script_without_a_document_stops_no_others() {
     assert!(app.scripts.is_running(), "the animation still runs");
 }
 
+/// A switch to another document reaches the scripts as it happens: the project of the document
+/// left has caught up with it, what the user selected there too, when its `onDeactivate` fires,
+/// and switching back fires its `onActivate`.
+#[test]
+fn a_document_switch_reaches_the_scripts_as_it_happens() {
+    let (mut app, id) = app();
+    let path = tempfile_path::Path::new(
+        "var first = project\n\
+         first.onDeactivate = function() { console.log('left with', first.selectedItems.length, 'selected') }\n\
+         first.onActivate = function() { console.log('back') }\n\
+         document.addEventListener('keydown', function() {})",
+    );
+    app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).unwrap();
+    let ctx = egui::Context::default();
+    crate::scripts::frame(&mut app, &ctx, 1.0);
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    app.run("file.new", json!({})).unwrap();
+    crate::scripts::frame(&mut app, &ctx, 1.1);
+    let log = |app: &VectorcraftApp| app.scripts.log().iter().map(|l| l.text.clone()).collect::<Vec<_>>();
+    assert_eq!(log(&app), ["left with 1 selected"]);
+    app.session.set_active(0);
+    crate::scripts::frame(&mut app, &ctx, 1.2);
+    assert_eq!(log(&app), ["left with 1 selected", "back"]);
+}
+
 /// A script that listens for keys on its `document` keeps running and gets the keys typed on the
 /// canvas, whose shortcuts still work; while a panel has the keyboard, it gets none.
 #[test]
