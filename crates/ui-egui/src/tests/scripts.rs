@@ -1097,6 +1097,35 @@ fn the_live_effects_example_adds_effects() {
     assert!(texts.iter().any(|(t, _)| t.contains("Preview bounds: -0.5, -0.5, 51, 41")), "{texts:?}");
 }
 
+/// An effect draws, and changes nothing else: what its `onApply` makes goes nowhere, and what it
+/// does to `event.item` doesn't reach the object.
+#[test]
+fn an_effect_changes_nothing_but_what_it_draws() {
+    let (mut app, id) = app();
+    let path = tempfile_path::Path::new(
+        "new Effect({ type: 'meddle', label: 'Meddle', parameters: {}, onApply: function(event) {\n\
+             new Path.Circle({ center: [300, 300], radius: 5 })\n\
+             event.item.name = 'meddled'\n\
+             return event.art\n\
+         } })\n\
+         script.keepAlive = true",
+    );
+    app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).unwrap();
+    let ctx = egui::Context::default();
+    for i in 0..3 {
+        crate::scripts::frame(&mut app, &ctx, 0.5 + f64::from(i) * 0.1);
+    }
+    app.run("effect.apply", json!({ "effect": "script.meddle", "params": {}, "ids": [id] })).unwrap();
+    for i in 0..3 {
+        crate::scripts::frame(&mut app, &ctx, 1.0 + f64::from(i) * 0.1);
+    }
+    let doc = app.session.doc().unwrap().doc.clone();
+    let node = doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+    assert!(node.appearance.effects[0].params.get("_output").is_some(), "the effect is drawn");
+    assert_eq!(doc.layers[0].children().unwrap().len(), 1, "with no circle beside it");
+    assert_ne!(node.name.as_deref(), Some("meddled"), "and the object's name as it was");
+}
+
 /// An effect stored without parameters (a file may leave them out) is drawn like any other,
 /// where the script used to draw it again and again.
 #[test]
