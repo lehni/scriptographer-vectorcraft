@@ -37,11 +37,11 @@ export function hasKeyListeners() {
 
 // Fire the key `type` (`keydown`, `keyup`) with the `KeyboardEvent` members of
 // `init` at the document, from where it bubbles up to the window, as in a
-// browser.
+// browser. Whether a listener prevented its default.
 export function dispatchKey(type, init) {
   const options = { ...init, bubbles: true, cancelable: true }
   if (!natives.dom) {
-    document.dispatchEvent(new globalThis.KeyboardEvent(type, options))
+    return !document.dispatchEvent(new globalThis.KeyboardEvent(type, options))
   } else {
     // linkedom's document takes its own events only, which bubble up to its
     // window but not on to the global object, so it gets one of its own, with
@@ -56,9 +56,10 @@ export function dispatchKey(type, init) {
       documentEvent.getModifierState = key => event.getModifierState(key)
       document[`on${type}`]?.call(document, documentEvent)
       document.dispatchEvent(documentEvent)
-      if (documentEvent.cancelBubble) return
+      if (documentEvent.defaultPrevented) event.preventDefault()
+      if (documentEvent.cancelBubble) return event.defaultPrevented
     }
-    fire(globalThis, event)
+    return !fire(globalThis, event)
   }
 }
 

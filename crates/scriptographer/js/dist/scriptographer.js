@@ -4898,7 +4898,7 @@
   function dispatchKey(type, init) {
     const options = { ...init, bubbles: true, cancelable: true };
     if (!natives.dom) {
-      document.dispatchEvent(new globalThis.KeyboardEvent(type, options));
+      return !document.dispatchEvent(new globalThis.KeyboardEvent(type, options));
     } else {
       const event = new KeyboardEvent(type, options);
       if (view) {
@@ -4910,9 +4910,10 @@
         documentEvent.getModifierState = (key) => event.getModifierState(key);
         document2[`on${type}`]?.call(document2, documentEvent);
         document2.dispatchEvent(documentEvent);
-        if (documentEvent.cancelBubble) return;
+        if (documentEvent.defaultPrevented) event.preventDefault();
+        if (documentEvent.cancelBubble) return event.defaultPrevented;
       }
-      fire(globalThis, event);
+      return !fire(globalThis, event);
     }
   }
   __name(dispatchKey, "dispatchKey");

@@ -80,6 +80,8 @@ pub struct Scripts {
     /// Whether the Scriptographer Tool is the active tool: the canvas then sends its pointer events to
     /// the tool script.
     tool_active: bool,
+    /// The keys typed on the canvas that wait for the scripts listening for them, in order.
+    held: VecDeque<Held>,
     /// What the user picked in the browser for a script's file dialog, by script, as the picker
     /// answers, later (the web: [`pick`]).
     #[cfg(target_arch = "wasm32")]
@@ -89,6 +91,15 @@ pub struct Scripts {
 /// What the browser's picker gave a script's file dialog: nothing when the user cancelled.
 #[cfg(target_arch = "wasm32")]
 type Picked = Option<vectorcraft_scriptographer::Picked>;
+
+/// A key typed on the canvas, with the text it types, while the scripts listening for it on their
+/// `document` answer whether a listener prevented its default: the app then leaves it.
+struct Held {
+    events: Vec<egui::Event>,
+    /// The ids of the scripts yet to answer.
+    owing: Vec<u64>,
+    prevented: bool,
+}
 
 /// A line of script output.
 pub struct LogLine {
@@ -153,6 +164,8 @@ struct Running {
     open: bool,
     /// Whether it listens for keys on its `document` or `window`: it then keeps running too.
     listening: bool,
+    /// Its answers to the keys sent to its `document` ([`Held`]), in order, until matched.
+    answers: VecDeque<bool>,
     /// Whether it set `script.keepAlive`: it then goes on when another script runs.
     keep_alive: bool,
 }
@@ -500,6 +513,7 @@ fn start(app: &VectorcraftApp, name: String, path: Option<PathBuf>, source: Stri
         palettes: Vec::new(),
         open: false,
         listening: false,
+        answers: VecDeque::new(),
         keep_alive: false,
     })
 }
@@ -574,7 +588,7 @@ pub(crate) fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
         app.scripts.console = Some(console);
     }
     not_responding(app, now);
-    if app.scripts.is_running() {
+    if app.scripts.is_running() || !app.scripts.held.is_empty() {
         ctx.request_repaint();
     }
 }
@@ -674,6 +688,7 @@ fn settle(app: &mut VectorcraftApp, script: &mut Running, wait: Duration) -> Opt
                     failed.get_or_insert(e);
                 }
             }
+            Reply::Key { prevented } => script.answers.push_back(prevented),
             Reply::Ask(question) => {
                 script.asking = Some(Asking { question, shown: false });
                 // The script waits for the answer; on the web it went on, and its work ends.
@@ -1054,27 +1069,88 @@ pub(crate) fn keys(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
-/// Sends the keys typed on the canvas to every running script's `document`, as `KeyboardEvent`s.
-/// They stay in the frame's input, for the tool script and the shortcuts.
+/// Sends the keys typed on the canvas to the `document` of the scripts listening for them, as
+/// `KeyboardEvent`s, and holds them back from the app until those answered: a key a listener
+/// prevented the default of goes no further. The app waits for the answers for as long as a frame
+/// waits for a script ([`FRAME_WAIT`]); keys a busy script hasn't answered then wait for later
+/// frames, as do the keys typed after them.
 pub(crate) fn document_keys(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let keys: Vec<Key> = ctx.input(|i| {
-        i.events
-            .iter()
-            .filter_map(|e| match e {
-                egui::Event::Key { key, physical_key, pressed, repeat, modifiers } => {
-                    let (name, code) = dom_key(*key, physical_key.unwrap_or(*key), modifiers.shift);
-                    let modifiers = Modifiers { shift: modifiers.shift, control: modifiers.ctrl, alt: modifiers.alt, meta: modifiers.mac_cmd };
-                    Some(Key { down: *pressed, key: name, code, repeat: *repeat, modifiers })
+    let listening: Vec<u64> = app.scripts.running.iter().chain(&app.scripts.console).filter(|s| s.listening).map(|s| s.id).collect();
+    if listening.is_empty() && app.scripts.held.is_empty() {
+        return;
+    }
+    let events = ctx.input_mut(|i| std::mem::take(&mut i.events));
+    let mut kept = Vec::with_capacity(events.len());
+    let mut typed = false;
+    for event in events {
+        match event {
+            egui::Event::Key { key, physical_key, pressed, repeat, modifiers } if !listening.is_empty() => {
+                let (name, code) = dom_key(key, physical_key.unwrap_or(key), modifiers.shift);
+                let modifiers = Modifiers { shift: modifiers.shift, control: modifiers.ctrl, alt: modifiers.alt, meta: modifiers.mac_cmd };
+                let work = Key { down: pressed, key: name, code, repeat, modifiers };
+                for script in app.scripts.running.iter_mut().chain(&mut app.scripts.console).filter(|s| s.listening) {
+                    script.queued.push_back(Work::DocumentKey(work.clone()));
                 }
-                _ => None,
-            })
-            .collect()
-    });
-    if !keys.is_empty() {
-        for script in app.scripts.running.iter_mut().chain(&mut app.scripts.console) {
-            script.queued.extend(keys.iter().cloned().map(Work::DocumentKey));
+                app.scripts.held.push_back(Held { events: vec![event], owing: listening.clone(), prevented: false });
+                typed = pressed;
+            }
+            // The text a key types goes with it:
+            egui::Event::Text(_) if typed => {
+                if let Some(held) = app.scripts.held.back_mut() {
+                    held.events.push(event);
+                }
+            }
+            _ => {
+                typed = false;
+                kept.push(event);
+            }
         }
     }
+    answer_keys(app);
+    // The keys answered go on, ahead of the frame's other input:
+    let mut events = Vec::new();
+    while app.scripts.held.front().is_some_and(|h| h.owing.is_empty()) {
+        if let Some(held) = app.scripts.held.pop_front()
+            && !(held.prevented && held.events.iter().any(|e| matches!(e, egui::Event::Key { pressed: true, .. })))
+        {
+            events.extend(held.events);
+        }
+    }
+    events.append(&mut kept);
+    ctx.input_mut(|i| i.events = events);
+}
+
+/// Lets the scripts that owe answers to held keys work on them for up to [`FRAME_WAIT`] each, and
+/// matches their answers with the keys; a script that failed or stopped owes none.
+fn answer_keys(app: &mut VectorcraftApp) {
+    let mut scripts = std::mem::take(&mut app.scripts.running);
+    scripts.extend(app.scripts.console.take());
+    scripts.retain_mut(|script| {
+        if app.scripts.held.iter().any(|h| h.owing.contains(&script.id))
+            && let Err(e) = pump(app, script, None, FRAME_WAIT)
+        {
+            report(app, &script.name, &e);
+            return false;
+        }
+        for held in &mut app.scripts.held {
+            if held.owing.contains(&script.id)
+                && let Some(prevented) = script.answers.pop_front()
+            {
+                held.owing.retain(|id| *id != script.id);
+                held.prevented |= prevented;
+            }
+        }
+        true
+    });
+    for held in &mut app.scripts.held {
+        held.owing.retain(|id| scripts.iter().any(|s| s.id == *id));
+    }
+    // The console is the one without a file.
+    if let Some(i) = scripts.iter().position(|s| s.path.is_none()) {
+        app.scripts.console = Some(scripts.remove(i));
+    }
+    scripts.append(&mut app.scripts.running);
+    app.scripts.running = scripts;
 }
 
 /// A key's `key` and the `code` of the `physical` key, as the UI Events standard names them: `a`
