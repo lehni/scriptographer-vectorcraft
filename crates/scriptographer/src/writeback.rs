@@ -52,6 +52,22 @@ impl<H: Clone> Change<H> {
     }
 }
 
+/// The compound path with a key that `change` is a change of: a change of its children, or of a path
+/// without a key in it.
+fn compound_owner<H: Clone>(call: &mut dyn Call<H>, change: &Change<H>) -> Result<Option<(NodeId, H)>, Error> {
+    if change.class == "CompoundPath" && change.flags & change::CHILDREN != 0 {
+        return Ok(change.key.map(|id| (id, change.item.clone())));
+    }
+    if change.key.is_none()
+        && let Value::Js(parent) = call.get(&change.item, "parent")?
+        && matches!(call.get(&parent, "className")?, Value::String(class) if class == "CompoundPath")
+        && let Value::Number(key) = call.get(&parent, "key")?
+    {
+        return Ok(Some((NodeId(key as u64), parent)));
+    }
+    Ok(None)
+}
+
 /// The patch of the document `uid` for `changes` and `definitions`, made against `doc`, or `None`
 /// when they change nothing.
 pub(crate) fn patch<H: Clone>(
@@ -69,8 +85,15 @@ pub(crate) fn patch<H: Clone>(
     let mut replace = Vec::new();
     let mut news = News { insert: Vec::new(), inserted: Vec::new(), new: HashMap::new(), order: Vec::new() };
     let mut parents = Vec::new();
+    // A compound path's children are its geometry: a change of one, or of which it has, is the
+    // compound's.
+    let mut compounds = Vec::new();
     let (mut replaced_ids, mut texts) = (Vec::new(), Vec::new());
     for change in &changes {
+        if let Some(compound) = compound_owner(call, change)? {
+            compounds.push(compound);
+            continue;
+        }
         match change.key {
             Some(id) if !change.inserted => {
                 if change.flags & change::INSERTION != 0 {
@@ -104,6 +127,13 @@ pub(crate) fn patch<H: Clone>(
                 news.add(call, &change.item, json!(parent_key), Some(index))?;
             }
             None => {}
+        }
+    }
+    for (id, item) in compounds {
+        if !replaced_ids.contains(&id) {
+            let change = Change::read(call, item, change::CONTENT)?;
+            replace.push(replaced(call, doc, node(doc, id)?, &change)?);
+            replaced_ids.push(id);
         }
     }
     // The items linked with changed text go with it, whether Paper.js reports them or not.
@@ -506,11 +536,13 @@ fn replaced<H: Clone>(call: &mut dyn Call<H>, doc: &Document, original: &Node, c
     node.visible = matches!(call.get(&change.item, "visible")?, Value::Bool(true));
     node.locked = matches!(call.get(&change.item, "locked")?, Value::Bool(true));
     let mut json = node_json(&node)?;
-    if let Some(key) = original.children().map(|_| children_key(&node)) {
-        // Sent without its children, a container keeps the ones it has.
-        if let Some(kind) = json.get_mut("kind").and_then(Json::as_object_mut) {
-            kind.remove(key);
-        }
+    // Sent without its children, a container keeps the ones it has; a compound path's are its
+    // geometry.
+    if !matches!(node.kind, NodeKind::Compound { .. })
+        && let Some(key) = original.children().map(|_| children_key(&node))
+        && let Some(kind) = json.get_mut("kind").and_then(Json::as_object_mut)
+    {
+        kind.remove(key);
     }
     Ok(json)
 }
@@ -561,11 +593,13 @@ pub fn apply(node: &mut Node, json: &Json, before: &Json) -> Result<(), Error> {
     let path = path_data(json, node.path_data())?;
     // A live shape whose geometry a script changed is a plain path, as after any path edit. The
     // points it didn't move stay exactly as they were:
-    if let NodeKind::Path { path: p, live, .. } = &mut node.kind
-        && !is_same_path(p, &path)
-    {
-        *p = changed_path(Some(p), path);
-        *live = None;
+    match &mut node.kind {
+        NodeKind::Path { path: p, live, .. } if !is_same_path(p, &path) => {
+            *p = changed_path(Some(p), path);
+            *live = None;
+        }
+        NodeKind::Compound { children, .. } => write_compound(children, path),
+        _ => {}
     }
     let mut appearance = (*node.appearance).clone();
     apply_style(&mut appearance, props, &before_props);
@@ -657,6 +691,31 @@ pub(crate) fn changed_paint(now: Option<&Json>, before: Option<&Json>) -> Option
     let now = read(now)?;
     let json = |paint: &Paint| serde_json::to_value(paint).unwrap_or_default();
     (!read(before).is_some_and(|before| is_close(&json(&now), &json(&before)))).then_some(now)
+}
+
+/// The subpaths of `path` over the paths of a compound path, `children`, as many to each as it
+/// has, so they keep their ids and the anchors that didn't change; where there are more or fewer
+/// than they hold, all of them go to the first.
+fn write_compound(children: &mut Vec<Arc<Node>>, path: PathData) {
+    let counts: Vec<usize> = children.iter().map(|c| c.path_data().map_or(0, |p| p.subpaths.len())).collect();
+    let mut subpaths = path.subpaths.into_iter();
+    if counts.iter().sum::<usize>() == subpaths.len() {
+        for (child, count) in children.iter_mut().zip(counts) {
+            let now = PathData::new(subpaths.by_ref().take(count).collect());
+            if let NodeKind::Path { path, live, .. } = &mut Arc::make_mut(child).kind
+                && !is_same_path(path, &now)
+            {
+                *path = changed_path(Some(path), now);
+                *live = None;
+            }
+        }
+    } else if let Some(first) = children.first_mut() {
+        if let NodeKind::Path { path, live, .. } = &mut Arc::make_mut(first).kind {
+            *path = PathData::new(subpaths.collect());
+            *live = None;
+        }
+        children.truncate(1);
+    }
 }
 
 /// Are `a` and `b` the same geometry, but for the precision of floats that went through JSON?
