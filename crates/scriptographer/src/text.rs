@@ -21,7 +21,7 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect};
 
 use crate::Error;
 use crate::host::{color, path_json};
-use crate::writeback::{changed_paint, path_data};
+use crate::writeback::{changed_paint, changed_path, is_same_affine, path_data};
 
 /// The frames of the thread `id` is a frame of, in order.
 pub fn thread(doc: &Document, id: NodeId) -> Option<&[NodeId]> {
@@ -255,9 +255,13 @@ pub fn text_object(json: &Json, before: Option<(&TextObject, &[bool])>) -> Resul
     // defaults:
     let settings = completed(props, settings_defaults());
     let changed = |key: &str| settings.get(key).filter(|v| Some(*v) != old.get(key));
-    t.xf = matrix(props.get("matrix"));
+    // A transform unchanged but for the precision of JSON stays as it was:
+    let xf = matrix(props.get("matrix"));
+    if before.is_none() || !is_same_affine(&xf, &t.xf) {
+        t.xf = xf;
+    }
     t.vertical = props.get("orientation").and_then(Json::as_str) == Some("vertical");
-    let text_path = |before: Option<&PathData>| props.get("textPath").map(|p| path_data(p, before)).transpose();
+    let text_path = |before: Option<&PathData>| props.get("textPath").map(|p| Ok(changed_path(before, path_data(p, before)?))).transpose();
     match json.get(0).and_then(Json::as_str) {
         Some("AreaText") => {
             let before = match &t.kind {

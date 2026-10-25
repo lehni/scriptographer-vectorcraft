@@ -247,6 +247,19 @@ fn a_threads_frames_reload_together() {
     assert!(flags(next).is_some_and(|f| f & host_flags::CONTENT_CHANGED != 0), "the other frame reloads: {:?}", columns.keys);
 }
 
+/// An edit of a text's content leaves its transform and its frame as they were, to the last bit.
+fn a_content_edit_keeps_the_transform_and_frame<E: Engine>() {
+    let (mut s, _, point, area) = document();
+    // Turned in the app, its transform is as precise as floats are:
+    s.execute("select.set", &json!({ "ids": [point.0, area.0] })).unwrap();
+    s.execute("object.transformEach", &json!({ "rotate": 33.3 })).unwrap();
+    let (xf, frame) = (text(&s, point).xf, text(&s, area).kind);
+    run::<E>(&mut s, &format!("project.getItemByKey({}).content = 'Changed'\nproject.getItemByKey({}).content = 'Also changed'", point.0, area.0));
+    assert_eq!(text(&s, point).runs[0].text, "Changed");
+    assert_eq!(text(&s, point).xf, xf);
+    assert_eq!(text(&s, area).kind, frame);
+}
+
 fn writes_text_back_as_one_undo_step<E: Engine>() {
     let (mut s, _, point, _) = document();
     let before = s.execute("document.json", &json!({})).unwrap();
@@ -476,6 +489,11 @@ macro_rules! engine_tests {
             #[test]
             fn a_changed_frame_keeps_the_story() {
                 super::a_changed_frame_keeps_the_story::<$engine>();
+            }
+
+            #[test]
+            fn a_content_edit_keeps_the_transform_and_frame() {
+                super::a_content_edit_keeps_the_transform_and_frame::<$engine>();
             }
 
             #[test]
