@@ -824,8 +824,8 @@ impl<E: Engine> Runtime<E> {
     }
 
     /// Fires `key` at the script's `document`, from where it bubbles up to its `window`, as in a
-    /// browser: `keydown` or `keyup`.
-    pub fn document_key(&mut self, key: &Key) -> Result<(), Error> {
+    /// browser: `keydown` or `keyup`. Whether a listener prevented its default.
+    pub fn document_key(&mut self, key: &Key) -> Result<bool, Error> {
         self.engine.with_call(|call| {
             let init = call.new_object()?;
             call.set(&init, "key", &Value::String(key.key.clone()))?;
@@ -835,7 +835,7 @@ impl<E: Engine> Runtime<E> {
                 call.set(&init, name, &Value::Bool(value))?;
             }
             let kind = if key.down { "keydown" } else { "keyup" };
-            call_bundle(call, "dispatchKey", &[Value::String(kind.into()), Value::Js(init)]).map(|_| ())
+            Ok(matches!(call_bundle(call, "dispatchKey", &[Value::String(kind.into()), Value::Js(init)])?, Value::Bool(true)))
         })
     }
 

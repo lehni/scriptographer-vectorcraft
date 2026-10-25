@@ -314,6 +314,46 @@ fn a_script_gets_the_keys_on_its_document() {
     assert_eq!(log(&app).len(), 2, "the panel's keys aren't the document's");
 }
 
+/// A key a script's listener prevents the default of doesn't reach the app's shortcuts; the
+/// others do, once the script answered: keys typed while it works wait for it, in order.
+#[test]
+fn a_script_prevents_the_keys_it_handles() {
+    use egui::{Key, Modifiers};
+    let (mut app, id) = app();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    let path = tempfile_path::Path::new(
+        "document.addEventListener('keydown', e => {\n\
+         if (e.key == 'ArrowRight') e.preventDefault()\n\
+         if (e.key == 'ArrowDown') { var end = Date.now() + 500; while (Date.now() < end) {} }\n\
+         })",
+    );
+    app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).unwrap();
+    let ctx = egui::Context::default();
+    let mut time = 1.0;
+    let mut frame = |app: &mut VectorcraftApp, keys: &[Key]| {
+        let events = keys
+            .iter()
+            .map(|&key| egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE })
+            .collect();
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
+        out.textures_delta.clear();
+        time += 0.1;
+        crate::scripts::frame(app, &ctx, time);
+    };
+    let x = left(&app, id);
+    frame(&mut app, &[Key::ArrowRight]);
+    assert_eq!(left(&app, id), x, "the script prevented the nudge");
+    frame(&mut app, &[Key::ArrowLeft]);
+    assert_eq!(left(&app, id), x - 1.0, "not this one");
+    // The script takes half a second over ArrowDown, so it and the keys after it wait:
+    frame(&mut app, &[Key::ArrowDown, Key::ArrowLeft]);
+    assert_eq!(left(&app, id), x - 1.0, "the keys wait for the script");
+    for _ in 0..20 {
+        frame(&mut app, &[]);
+    }
+    assert_eq!(left(&app, id), x - 2.0, "and go on once it answered");
+}
+
 /// A script that works for a while is asked about, as browsers ask about a page that hangs: Wait
 /// asks again later, the question goes once the script is done, and Stop stops a stuck one.
 #[test]

@@ -75,6 +75,9 @@ pub enum Reply {
     /// which belongs to the newest undo step, the edit that changed it
     /// ([`crate::Runtime::effect_outputs`]).
     Changes { uid: u64, patch: Option<Json>, base: Arc<Document>, before: BTreeSet<NodeId>, selected: BTreeSet<NodeId>, effects: bool },
+    /// The script's answer to a [`Work::DocumentKey`], before its `Done`: whether a listener
+    /// prevented the key's default (`false` when one threw).
+    Key { prevented: bool },
     /// The work is done: what the script printed, its error if it threw, whether it has timers
     /// left, whether it made a tool, whether that tool handles keys, the palettes that are new or
     /// changed (as [`crate::Runtime::take_palettes`] has them), whether it has palettes open,
@@ -152,6 +155,7 @@ impl<E: Engine> Script<E> {
             Ok(before) => before,
             Err(e) => return vec![self.done(Some(e.to_string()))],
         };
+        let mut prevented = None;
         let result = match work {
             Work::Execute(source) => self.runtime.execute(&self.scope, &source),
             Work::Frame(now) => self.runtime.run_timers(now),
@@ -159,7 +163,11 @@ impl<E: Engine> Script<E> {
                 .into_iter()
                 .try_for_each(|(event, point, modifiers, time)| self.runtime.mouse_event(&self.scope, event, point, modifiers, time)),
             Work::Key(down, key, character, modifiers) => self.runtime.key_event(&self.scope, down, &key, character.as_deref(), modifiers),
-            Work::DocumentKey(key) => self.runtime.document_key(&key),
+            Work::DocumentKey(key) => {
+                let result = self.runtime.document_key(&key);
+                prevented = Some(result.as_ref().is_ok_and(|prevented| *prevented));
+                result.map(|_| ())
+            }
             Work::Palette(id, event) => self.runtime.palette_event(id, event),
             Work::Activate(active) => self.runtime.activate_tool(&self.scope, active),
             Work::Handler(name) => self.runtime.call_handler(name).map(|_| ()),
@@ -177,6 +185,7 @@ impl<E: Engine> Script<E> {
             changes => changes,
         };
         let changes = changes.map(|changes| replies.extend(changes));
+        replies.extend(prevented.map(|prevented| Reply::Key { prevented }));
         replies.push(self.done(result.and(changes).err().map(|e| e.to_string())));
         replies
     }

@@ -40,6 +40,7 @@ fn settle(s: &mut Session, worker: &Worker) -> Option<String> {
                 worker.send(Request::Applied { result, doc: st.doc.clone(), selection: st.selection.clone(), behind: false });
             }
             Reply::Done { error, .. } => return error,
+            Reply::Key { .. } => {}
             Reply::Ask(question) => panic!("unexpected dialog: {question}"),
         }
     }

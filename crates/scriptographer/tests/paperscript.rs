@@ -285,7 +285,7 @@ fn keys_reach_the_document_and_the_window<E: Engine>() {
         )
         .unwrap();
     assert!(runtime.has_key_listeners().unwrap(), "a listener keeps the script running");
-    runtime.document_key(&key(false)).unwrap();
+    assert!(!runtime.document_key(&key(false)).unwrap(), "nothing prevented its default");
     assert_eq!(runtime.take_output(), ["up true A KeyA true true"]);
     runtime.execute(&scope, "removeEventListener('keyup', up)").unwrap();
     assert!(!runtime.has_key_listeners().unwrap(), "without it, the script ends");
@@ -301,8 +301,13 @@ fn keys_reach_the_document_and_the_window<E: Engine>() {
     runtime.document_key(&key(true)).unwrap();
     assert_eq!(runtime.take_output(), ["true", "document A KeyA true true", "onkeydown false", "window A"]);
     runtime.execute(&scope, "document.addEventListener('keydown', e => e.stopPropagation())").unwrap();
-    runtime.document_key(&key(true)).unwrap();
+    assert!(!runtime.document_key(&key(true)).unwrap());
     assert_eq!(runtime.take_output(), ["document A KeyA true true"], "stopped on the document");
+    runtime.execute(&scope, "document.addEventListener('keydown', e => e.preventDefault())").unwrap();
+    assert!(runtime.document_key(&key(true)).unwrap(), "prevented on the document");
+    runtime.execute(&scope, "addEventListener('keyup', e => e.preventDefault())").unwrap();
+    assert!(runtime.document_key(&key(false)).unwrap(), "and on the window");
+    runtime.take_output();
 }
 
 fn scripts_use_todays_javascript<E: Engine>() {
