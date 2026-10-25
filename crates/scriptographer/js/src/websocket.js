@@ -1,5 +1,5 @@
 import { Blob, getBufferBytes, getBytes } from './blob.js'
-import { checkArguments, defineConstants, setToStringTag } from './define.js'
+import { checkArguments, defineConstants, defineInterfaces } from './define.js'
 import {
   CloseEvent,
   Event,
@@ -171,4 +171,4 @@ export class WebSocket extends EventTarget {
 
 defineConstants(WebSocket, states)
 defineEventHandlers(WebSocket.prototype, 'open', 'message', 'error', 'close')
-setToStringTag(WebSocket)
+defineInterfaces(WebSocket)

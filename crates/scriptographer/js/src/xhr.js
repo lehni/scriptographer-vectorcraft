@@ -4,7 +4,7 @@ import {
   checkInternal,
   defineConstants,
   internal,
-  setToStringTag
+  defineInterfaces
 } from './define.js'
 import { dom } from './dom.js'
 import {
@@ -443,7 +443,11 @@ defineEventHandlers(
   'loadend'
 )
 defineEventHandlers(XMLHttpRequest.prototype, 'readystatechange')
-setToStringTag(XMLHttpRequestEventTarget, XMLHttpRequestUpload, XMLHttpRequest)
+defineInterfaces(
+  XMLHttpRequestEventTarget,
+  XMLHttpRequestUpload,
+  XMLHttpRequest
+)
 
 function fireProgress(target, type, loaded = 0, total = 0) {
   target.dispatchEvent(

@@ -1,4 +1,4 @@
-import { checkArguments, setToStringTag } from './define.js'
+import { checkArguments, defineInterfaces } from './define.js'
 import {
   EventTarget,
   MessageEvent,
@@ -49,4 +49,4 @@ export class BroadcastChannel extends EventTarget {
 }
 
 defineEventHandlers(BroadcastChannel.prototype, 'message', 'messageerror')
-setToStringTag(BroadcastChannel)
+defineInterfaces(BroadcastChannel)

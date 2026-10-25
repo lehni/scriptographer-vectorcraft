@@ -1,4 +1,4 @@
-import { setToStringTag } from './define.js'
+import { defineInterfaces } from './define.js'
 import { getDirectoryHandle } from './file-system.js'
 import { natives } from './natives.js'
 
@@ -32,4 +32,4 @@ export class StorageManager {
   }
 }
 
-setToStringTag(StorageManager)
+defineInterfaces(StorageManager)

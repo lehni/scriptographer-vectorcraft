@@ -1,4 +1,4 @@
-import { internal, checkInternal, setToStringTag } from './define.js'
+import { internal, checkInternal, defineInterfaces } from './define.js'
 import { natives } from './natives.js'
 
 // `navigator.locks` for scripts outside a browser: the Web Locks of all of the
@@ -111,7 +111,7 @@ export class LockManager {
   }
 }
 
-setToStringTag(Lock, LockManager)
+defineInterfaces(Lock, LockManager)
 
 // A name as the runtime keeps it, its UTF-16 code units in hex, so it stays as
 // it is, unpaired surrogates too, and back:

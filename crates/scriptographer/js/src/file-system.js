@@ -1,5 +1,5 @@
 import { Blob, File, getBufferBytes } from './blob.js'
-import { checkInternal, internal, setToStringTag } from './define.js'
+import { checkInternal, internal, defineInterfaces } from './define.js'
 import { getBody } from './fetch.js'
 import { getType } from './local-file.js'
 import { natives } from './natives.js'
@@ -201,7 +201,7 @@ export class FileSystemWritableFileStream {
   }
 }
 
-setToStringTag(
+defineInterfaces(
   FileSystemHandle,
   FileSystemFileHandle,
   FileSystemDirectoryHandle,

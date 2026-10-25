@@ -1,5 +1,5 @@
 import { File, readBytes } from './blob.js'
-import { setToStringTag } from './define.js'
+import { defineInterfaces } from './define.js'
 import { getBody } from './fetch.js'
 import { getHandlePath } from './file-system.js'
 import { natives } from './natives.js'
@@ -153,7 +153,7 @@ export class LocalFile extends File {
   }
 }
 
-setToStringTag(LocalFile)
+defineInterfaces(LocalFile)
 
 // The MIME type of the file at `path`, by its extension, or none.
 export function getType(path) {

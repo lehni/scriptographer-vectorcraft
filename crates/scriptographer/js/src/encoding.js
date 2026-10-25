@@ -1,5 +1,5 @@
 import { getBufferBytes } from './blob.js'
-import { inject, setToStringTag } from './define.js'
+import { inject, defineInterfaces } from './define.js'
 import { natives } from './natives.js'
 import { TransformStream } from './streams.js'
 
@@ -175,7 +175,7 @@ for (const target of [
     { enumerable: true }
   )
 }
-setToStringTag(TextEncoder, TextDecoder, TextEncoderStream, TextDecoderStream)
+defineInterfaces(TextEncoder, TextDecoder, TextEncoderStream, TextDecoderStream)
 
 // How many of the bytes at the end start a character that isn't complete.
 function getIncomplete(bytes) {

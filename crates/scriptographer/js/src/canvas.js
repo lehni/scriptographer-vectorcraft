@@ -3,7 +3,7 @@ import {
   checkInternal,
   inject,
   internal,
-  setToStringTag
+  defineInterfaces
 } from './define.js'
 import { natives } from './natives.js'
 import {
@@ -566,7 +566,7 @@ export class CanvasPattern {
 
 export { TextCluster, TextMetrics }
 
-setToStringTag(
+defineInterfaces(
   OffscreenCanvas,
   OffscreenCanvasRenderingContext2D,
   ImageData,

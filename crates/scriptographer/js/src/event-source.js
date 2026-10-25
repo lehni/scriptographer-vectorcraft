@@ -1,4 +1,4 @@
-import { checkArguments, defineConstants, setToStringTag } from './define.js'
+import { checkArguments, defineConstants, defineInterfaces } from './define.js'
 import {
   Event,
   EventTarget,
@@ -76,4 +76,4 @@ export class EventSource extends EventTarget {
 
 defineConstants(EventSource, states)
 defineEventHandlers(EventSource.prototype, 'open', 'message', 'error')
-setToStringTag(EventSource)
+defineInterfaces(EventSource)

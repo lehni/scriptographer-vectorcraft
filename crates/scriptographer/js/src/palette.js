@@ -1,5 +1,5 @@
 import { getComponents, getValue } from './dialog.js'
-import { setToStringTag } from './define.js'
+import { defineInterfaces } from './define.js'
 
 // Scriptographer's `Palette`: `new Palette(title, components, values)` is a
 // panel that stays open while the script runs, with the same components as
@@ -45,7 +45,7 @@ export class Palette {
   }
 }
 
-setToStringTag(Palette)
+defineInterfaces(Palette)
 
 // The palettes that are new or changed since the last call, as the app shows
 // them: `{ id, title, components }`.

@@ -1,6 +1,6 @@
-import { inject, setToStringTag } from './define.js'
+import { checkArguments, inject, defineInterfaces } from './define.js'
 import { natives } from './natives.js'
-import { getPairs, pairIterable, setFirst } from './pairs.js'
+import { definePairIterable, getPairs, setFirst } from './pairs.js'
 
 // `URL` and `URLSearchParams` for scripts outside a browser, as the WHATWG URL
 // standard has them: the runtime parses, and sets the parts. `url.searchParams`
@@ -28,7 +28,8 @@ export class URL {
   #parts
   #searchParams = null
 
-  constructor(url, base) {
+  constructor(url, base = undefined) {
+    checkArguments(arguments, 1, 'URL')
     this.#parts = parse(url, base)
     if (!this.#parts) {
       throw new TypeError(`Invalid URL: '${url}'.`)
@@ -41,11 +42,13 @@ export class URL {
     }
   }
 
-  static canParse(url, base) {
+  static canParse(url, base = undefined) {
+    checkArguments(arguments, 1, 'canParse')
     return !!parse(url, base)
   }
 
-  static parse(url, base) {
+  static parse(url, base = undefined) {
+    checkArguments(arguments, 1, 'parse')
     return parse(url, base) ? new URL(url, base) : null
   }
 
@@ -54,7 +57,7 @@ export class URL {
   }
 
   set href(href) {
-    this.#set('href', href)
+    this.#set('href', toUSVString(href))
   }
 
   get origin() {
@@ -95,7 +98,7 @@ export class URL {
           },
 
           set [part](value) {
-            this.#set(part, value)
+            this.#set(part, toUSVString(value))
           }
         },
         { enumerable: true }
@@ -110,15 +113,22 @@ const linksByParams = new WeakMap()
 export class URLSearchParams {
   #pairs = []
 
-  // A query string (with or without `?`), `[[name, value], …]`,
-  // `{ name: value }` or another `URLSearchParams`.
+  // A query string (with or without `?`), `[[name, value], …]` or anything
+  // iterable of pairs, as `URLSearchParams` are, or `{ name: value }`.
   constructor(init = '') {
-    if (init instanceof URLSearchParams) {
-      this.#pairs = init.#pairs.map(pair => [...pair])
-    } else if (init !== null && typeof init === 'object') {
-      this.#pairs = getPairs(init).map(pair => pair.map(String))
+    if (
+      init !== null &&
+      (typeof init === 'object' || typeof init === 'function')
+    ) {
+      // A record's names can be the same once they're USVStrings: the last value
+      // wins, in the first one's place.
+      const pairs = getPairs(init).map(pair => pair.map(toUSVString))
+      this.#pairs =
+        typeof init[Symbol.iterator] === 'function'
+          ? pairs
+          : [...new Map(pairs)]
     } else {
-      this.#pairs = parseQuery(String(init))
+      this.#pairs = parseQuery(toUSVString(init))
     }
   }
 
@@ -133,41 +143,51 @@ export class URLSearchParams {
   }
 
   append(name, value) {
-    this.#pairs.push([String(name), String(value)])
+    checkArguments(arguments, 2, 'append')
+    this.#pairs.push([toUSVString(name), toUSVString(value)])
     this.#update()
   }
 
-  delete(name, value) {
-    name = String(name)
+  delete(name, value = undefined) {
+    checkArguments(arguments, 1, 'delete')
+    name = toUSVString(name)
     this.#pairs = this.#pairs.filter(
       pair => (
-        pair[0] !== name || value !== undefined && pair[1] !== String(value)
+        pair[0] !== name ||
+        value !== undefined && pair[1] !== toUSVString(value)
       )
     )
     this.#update()
   }
 
   get(name) {
-    return this.#pairs.find(pair => pair[0] === String(name))?.[1] ?? null
+    checkArguments(arguments, 1, 'get')
+    name = toUSVString(name)
+    return this.#pairs.find(pair => pair[0] === name)?.[1] ?? null
   }
 
   getAll(name) {
+    checkArguments(arguments, 1, 'getAll')
+    name = toUSVString(name)
     return this.#pairs
-      .filter(pair => pair[0] === String(name))
+      .filter(pair => pair[0] === name)
       .map(([, value]) => value)
   }
 
-  has(name, value) {
+  has(name, value = undefined) {
+    checkArguments(arguments, 1, 'has')
+    name = toUSVString(name)
     return this.#pairs.some(
       pair => (
-        pair[0] === String(name) &&
-        (value === undefined || pair[1] === String(value))
+        pair[0] === name &&
+        (value === undefined || pair[1] === toUSVString(value))
       )
     )
   }
 
   set(name, value) {
-    this.#pairs = setFirst(this.#pairs, [String(name), String(value)])
+    checkArguments(arguments, 2, 'set')
+    this.#pairs = setFirst(this.#pairs, [toUSVString(name), toUSVString(value)])
     this.#update()
   }
 
@@ -177,8 +197,13 @@ export class URLSearchParams {
     this.#update()
   }
 
+  // By index over the pairs as they are at each step, so what changes while
+  // they're iterated shows:
   *entries() {
-    for (const [name, value] of this.#pairs) yield [name, value]
+    for (let i = 0; i < this.#pairs.length; i++) {
+      const [name, value] = this.#pairs[i]
+      yield [name, value]
+    }
   }
 
   toString() {
@@ -192,14 +217,22 @@ export class URLSearchParams {
   }
 }
 
-inject(URLSearchParams.prototype, pairIterable)
-setToStringTag(URL, URLSearchParams)
+definePairIterable(URLSearchParams)
+defineInterfaces(URL, URLSearchParams)
 
 // The parts of `url`, against `base` when it's given, or `null`.
 function parse(url, base) {
   return base === undefined
-    ? natives.url.parse(String(url))
-    : natives.url.parse(String(url), String(base))
+    ? natives.url.parse(toUSVString(url))
+    : natives.url.parse(toUSVString(url), toUSVString(base))
+}
+
+// `value` as WebIDL's USVString: a string whose unpaired surrogates are U+FFFD.
+function toUSVString(value) {
+  return String(value).replace(
+    /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g,
+    '\ufffd'
+  )
 }
 
 function parseQuery(query) {
