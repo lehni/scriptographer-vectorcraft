@@ -1316,19 +1316,21 @@ fn canvases_have_pixels<E: Engine>() {
     );
 }
 
-/// A canvas path with many points builds in time proportional to them.
+/// A canvas path with many points builds in time proportional to them: four times the points take
+/// about four times as long, not sixteen. Timed against each other, as the machine's load varies.
 fn long_canvas_paths_build_quickly<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
-    let start = std::time::Instant::now();
-    runtime
-        .execute(
-            &scope,
-            "const ctx = new OffscreenCanvas(100, 100).getContext('2d')\n\
-             for (let i = 0; i < 200000; i++) ctx.lineTo(i % 100, i % 7)",
-        )
-        .unwrap();
-    assert!(start.elapsed() < std::time::Duration::from_secs(5), "{:?}", start.elapsed());
+    let mut time = |points: u32| {
+        let start = std::time::Instant::now();
+        let source = format!(
+            "const ctx{points} = new OffscreenCanvas(100, 100).getContext('2d')\nfor (let i = 0; i < {points}; i++) ctx{points}.lineTo(i % 100, i % 7)"
+        );
+        runtime.execute(&scope, &source).unwrap();
+        start.elapsed().as_secs_f64()
+    };
+    let (short, long) = (time(25000), time(100000));
+    assert!(long < short * 8.0, "{short} s, then {long} s");
 }
 
 fn canvases_draw<E: Engine>() {
