@@ -578,13 +578,15 @@ impl<E: Engine> Runtime<E> {
             event_source::poll(call)?;
             #[cfg(not(target_arch = "wasm32"))]
             locks::poll(call)?;
+            // A callback that throws fails the turn, but the others still run, as in browsers.
+            let mut failed = None;
             for callback in due {
-                call.call(&callback, &Value::Undefined, &[])?;
+                failed = failed.or(call.call(&callback, &Value::Undefined, &[]).err());
             }
             for (_, callback) in frames {
-                call.call(&callback, &Value::Undefined, &[Value::Number(now)])?;
+                failed = failed.or(call.call(&callback, &Value::Undefined, &[Value::Number(now)]).err());
             }
-            Ok(())
+            failed.map_or(Ok(()), Err)
         })?;
         self.failure()
     }
