@@ -152,6 +152,7 @@ pub(crate) fn patch<H: Clone>(
         }
     }
     let threads = threads(call, doc, &texts, &news)?;
+    let mut reordered = Vec::new();
     for (id, item) in parents {
         let children = object(call, &item, "children")?;
         let count = number(call.get(&children, "length")?) as usize;
@@ -169,6 +170,17 @@ pub(crate) fn patch<H: Clone>(
             }
         }
         news.order.push(json!({ "parent": id.0, "children": slots }));
+        reordered.push(id);
+    }
+    // A child that left its parent and is in no order list went to another project, another
+    // document: it's gone from this one.
+    let listed: HashSet<u64> = news.order.iter().flat_map(|o| o["children"].as_array().into_iter().flatten()).filter_map(Json::as_u64).collect();
+    for id in reordered {
+        for child in node(doc, id)?.children().into_iter().flatten() {
+            if !listed.contains(&child.id.0) && !remove.contains(&json!(child.id.0)) {
+                remove.push(json!(child.id.0));
+            }
+        }
     }
     let mut params = Map::new();
     let News { insert, inserted, order, .. } = news;
