@@ -5602,13 +5602,19 @@ ${stack}` : ""));
   }
   __name(watchEffects, "watchEffects");
   function applyEffect(scope, type, parameters, art, key) {
-    const { Effect, EffectInstance, Base, project } = scope;
-    const effect = Effect.get(type);
-    const input = Base.importJSON(art);
-    const instance = new EffectInstance({ type, parameters });
-    const item = project.getItemByKey(key);
-    const output = effect?.onApply?.call(instance, { art: input, item }) ?? input;
-    return output.exportJSON();
+    const { Effect, EffectInstance, Base, project, settings } = scope;
+    const { insertItems } = settings;
+    settings.insertItems = false;
+    try {
+      const effect = Effect.get(type);
+      const input = Base.importJSON(art);
+      const instance = new EffectInstance({ type, parameters });
+      const item = project.getItemByKey(key)?.clone();
+      const output = effect?.onApply?.call(instance, { art: input, item }) ?? input;
+      return output.exportJSON();
+    } finally {
+      settings.insertItems = insertItems;
+    }
   }
   __name(applyEffect, "applyEffect");
 
