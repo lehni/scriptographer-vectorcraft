@@ -7162,6 +7162,8 @@ ${value}\r
     static {
       __name(this, "Palette");
     }
+    // The components as defined, for `reset()`:
+    #defaults;
     constructor(title = "", components, values) {
       if (!components || typeof components !== "object") {
         throw new TypeError("Invalid components: they must be an object.");
@@ -7174,18 +7176,12 @@ ${value}\r
           this.values[component.name] = getValue(component, component.value);
         }
       }
-      palettes.set(++lastId, {
-        palette: this,
-        defaults: getComponents(components),
-        reported: ""
-      });
+      this.#defaults = getComponents(components);
+      palettes.set(++lastId, { palette: this, reported: "" });
     }
     // Every component's value back to the one it was defined with.
     reset() {
-      const { defaults: defaults2 } = [...palettes.values()].find(
-        (entry) => entry.palette === this
-      );
-      for (const component of defaults2) {
+      for (const component of this.#defaults) {
         const value = getValue(component, component.value);
         this.values[component.name] = value;
         this.components[component.name].value = value;
