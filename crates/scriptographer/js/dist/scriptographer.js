@@ -8804,56 +8804,55 @@ ${value}\r
         this.#timer = setTimeout(() => this.#fail("timeout"), this.#timeout);
       }
       const isCurrent = /* @__PURE__ */ __name(() => this.#request === request, "isCurrent");
-      fetch(this.#url, {
-        method: this.#method,
-        headers: this.#headers,
-        body,
-        signal: controller.signal
-      }).then(
-        async (response) => {
-          if (isCurrent()) {
-            if (this.#isUploading) {
-              this.#isUploading = false;
-              for (const type of ["progress", "load", "loadend"]) {
-                fireProgress(this.#upload, type);
-              }
+      const load = /* @__PURE__ */ __name(async () => {
+        const response = await fetch(this.#url, {
+          method: this.#method,
+          headers: this.#headers,
+          body,
+          signal: controller.signal
+        });
+        if (isCurrent()) {
+          if (this.#isUploading) {
+            this.#isUploading = false;
+            for (const type of ["progress", "load", "loadend"]) {
+              fireProgress(this.#upload, type);
             }
-            this.#response = response;
-            this.#parts = [];
-            this.#setState(states4.HEADERS_RECEIVED);
-            const total = Number(response.headers.get("content-length")) || 0;
-            const reader = response.body.getReader();
-            let loaded = 0;
-            let reported = -Infinity;
-            for (; ; ) {
-              const { done, value } = await reader.read();
-              if (!isCurrent()) {
-                reader.cancel();
-                return;
-              } else if (done) {
-                break;
-              }
-              this.#parts.push(value);
-              loaded += value.length;
-              this.#setState(states4.LOADING);
-              const now = performance.now();
-              if (now - reported >= 50) {
-                reported = now;
-                fireProgress(this, "progress", loaded, total);
-              }
-            }
-            this.#bytes = joinBytes(this.#parts);
-            fireProgress(this, "progress", loaded, total);
-            this.#finish();
-            this.#setState(states4.DONE);
-            fireProgress(this, "load", loaded, total);
-            fireProgress(this, "loadend", loaded, total);
           }
-        },
-        () => {
-          if (isCurrent()) this.#fail("error");
+          this.#response = response;
+          this.#parts = [];
+          this.#setState(states4.HEADERS_RECEIVED);
+          const total = Number(response.headers.get("content-length")) || 0;
+          const reader = response.body.getReader();
+          let loaded = 0;
+          let reported = -Infinity;
+          for (; ; ) {
+            const { done, value } = await reader.read();
+            if (!isCurrent()) {
+              await reader.cancel();
+              return;
+            } else if (done) {
+              break;
+            }
+            this.#parts.push(value);
+            loaded += value.length;
+            this.#setState(states4.LOADING);
+            const now = performance.now();
+            if (now - reported >= 50) {
+              reported = now;
+              fireProgress(this, "progress", loaded, total);
+            }
+          }
+          this.#bytes = joinBytes(this.#parts);
+          fireProgress(this, "progress", loaded, total);
+          this.#finish();
+          this.#setState(states4.DONE);
+          fireProgress(this, "load", loaded, total);
+          fireProgress(this, "loadend", loaded, total);
         }
-      );
+      }, "load");
+      load().catch(() => {
+        if (isCurrent()) this.#fail("error");
+      });
     }
     abort() {
       const state = this.#readyState;

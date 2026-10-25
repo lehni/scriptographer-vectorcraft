@@ -188,57 +188,59 @@ export class XMLHttpRequest extends XMLHttpRequestEventTarget {
       this.#timer = setTimeout(() => this.#fail('timeout'), this.#timeout)
     }
     const isCurrent = () => this.#request === request
-    fetch(this.#url, {
-      method: this.#method,
-      headers: this.#headers,
-      body,
-      signal: controller.signal
-    }).then(
-      async response => {
-        if (isCurrent()) {
-          if (this.#isUploading) {
-            this.#isUploading = false
-            for (const type of ['progress', 'load', 'loadend']) {
-              fireProgress(this.#upload, type)
-            }
+    const load = async () => {
+      const response = await fetch(this.#url, {
+        method: this.#method,
+        headers: this.#headers,
+        body,
+        signal: controller.signal
+      })
+      if (isCurrent()) {
+        if (this.#isUploading) {
+          this.#isUploading = false
+          for (const type of ['progress', 'load', 'loadend']) {
+            fireProgress(this.#upload, type)
           }
-          this.#response = response
-          this.#parts = []
-          this.#setState(states.HEADERS_RECEIVED)
-          const total = Number(response.headers.get('content-length')) || 0
-          const reader = response.body.getReader()
-          let loaded = 0
-          let reported = -Infinity
-          // Each part as it arrives, the progress at most every 50 ms:
-          for (;;) {
-            const { done, value } = await reader.read()
-            if (!isCurrent()) {
-              reader.cancel()
-              return
-            } else if (done) {
-              break
-            }
-            this.#parts.push(value)
-            loaded += value.length
-            this.#setState(states.LOADING)
-            const now = performance.now()
-            if (now - reported >= 50) {
-              reported = now
-              fireProgress(this, 'progress', loaded, total)
-            }
-          }
-          this.#bytes = joinBytes(this.#parts)
-          fireProgress(this, 'progress', loaded, total)
-          this.#finish()
-          this.#setState(states.DONE)
-          fireProgress(this, 'load', loaded, total)
-          fireProgress(this, 'loadend', loaded, total)
         }
-      },
-      () => {
-        if (isCurrent()) this.#fail('error')
+        this.#response = response
+        this.#parts = []
+        this.#setState(states.HEADERS_RECEIVED)
+        const total = Number(response.headers.get('content-length')) || 0
+        const reader = response.body.getReader()
+        let loaded = 0
+        let reported = -Infinity
+        // Each part as it arrives, the progress at most every 50 ms:
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (!isCurrent()) {
+            await reader.cancel()
+            return
+          } else if (done) {
+            break
+          }
+          this.#parts.push(value)
+          loaded += value.length
+          this.#setState(states.LOADING)
+          const now = performance.now()
+          if (now - reported >= 50) {
+            reported = now
+            fireProgress(this, 'progress', loaded, total)
+          }
+        }
+        this.#bytes = joinBytes(this.#parts)
+        fireProgress(this, 'progress', loaded, total)
+        this.#finish()
+        this.#setState(states.DONE)
+        fireProgress(this, 'load', loaded, total)
+        fireProgress(this, 'loadend', loaded, total)
       }
-    )
+    }
+    // A request that's no longer current was aborted or timed out, which said
+    // so already; any other failure, also halfway through the body, is a
+    // network error:
+    load().catch(() => {
+      if (isCurrent()) this.#fail('error')
+    })
   }
 
   abort() {
