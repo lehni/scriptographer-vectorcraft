@@ -51,7 +51,7 @@ const FRAME_WAIT: Duration = Duration::from_millis(100);
 const NOT_RESPONDING: f64 = 5.0;
 
 /// How many log lines are kept.
-const LOG_LINES: usize = 1000;
+pub(crate) const LOG_LINES: usize = 1000;
 
 /// How far into the scripts folder the panel looks, and how many entries it lists at most.
 const MAX_DEPTH: usize = 8;

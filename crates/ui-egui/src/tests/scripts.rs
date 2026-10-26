@@ -202,6 +202,41 @@ fn scripts_go_on_in_every_document() {
     assert!(app.scripts.log().iter().all(|l| !l.error), "without errors");
 }
 
+/// A script's document can close while the script waits on its dialog: the dialog stays, and
+/// what the script changes after it in the closed document goes with that document.
+#[test]
+fn a_document_closes_while_its_script_asks() {
+    let (mut app, _) = app();
+    let path = tempfile_path::Path::new(
+        "var item = project.activeLayer.firstChild\n\
+         Dialog.alert('Wait')\n\
+         item.position.x += 100\n\
+         print('moved')",
+    );
+    app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).unwrap();
+    let ctx = egui::Context::default();
+    let mut now = 0.0;
+    let mut frames = |app: &mut VectorcraftApp| {
+        for _ in 0..5 {
+            now += 0.1;
+            crate::scripts::frame(app, &ctx, now);
+        }
+    };
+    frames(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::script::KIND));
+    app.session.active_mut().unwrap().mark_saved();
+    app.run("file.close", json!({})).unwrap();
+    app.run("file.new", json!({})).unwrap();
+    frames(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::script::KIND), "the alert stays");
+    crate::dialogs::confirm(&mut app).unwrap();
+    frames(&mut app);
+    assert_eq!(children(&app), 0, "nothing moved into the new document");
+    assert!(!app.scripts.is_running());
+    assert_eq!(app.scripts.log().first().map(|l| (l.text.as_str(), l.error)), Some(("moved", false)));
+    assert!(app.scripts.log().iter().all(|l| !l.error));
+}
+
 /// A tool script that draws a circle when it runs, and one where the mouse goes down.
 const DRAWING_TOOL: &str = "new Path.Circle({ center: [0, 0], radius: 5 })\n\
     function onMouseDown(event) { new Path.Circle({ center: event.point, radius: 5 }) }";
@@ -333,6 +368,23 @@ fn a_tool_script_gets_the_plain_keys() {
     let log: Vec<&str> = app.scripts.log().iter().map(|l| l.text.as_str()).collect();
     assert_eq!(log, ["a A", "left "]);
     assert_eq!(left, [key(egui::Key::V, egui::Modifiers::COMMAND)], "Cmd+V stays the app's");
+}
+
+/// Quit runs the scripts' `onShutdown` once the unsaved documents are answered for. (With no
+/// document left open, it doesn't run: a limit `docs/gaps.md` G6 lists.)
+#[test]
+fn quit_shuts_the_scripts_down() {
+    let (mut app, _) = app();
+    let path = tempfile_path::Path::new("script.keepAlive = true\nfunction onFrame() {}\nfunction onShutdown() { console.log('shut down') }");
+    app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).unwrap();
+    app.run("file.new", json!({})).unwrap();
+    app.session.active_mut().unwrap().mark_saved();
+    let shut = |app: &VectorcraftApp| app.scripts.log().iter().any(|l| l.text == "shut down");
+    app.run("app.quit", json!({})).unwrap();
+    assert!(!shut(&app), "not while the unsaved document is asked about");
+    app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(shut(&app));
 }
 
 /// The window's close button runs the scripts' `onShutdown`, as Quit does.
@@ -1114,6 +1166,41 @@ fn a_script_that_keeps_asking_for_files_can_be_stopped() {
     assert_eq!(shown.get(), 2);
 }
 
+/// A script that alerts again as soon as its alert closes can still be stopped: Stop Running
+/// Scripts stays in the menu while the alert is open, and closes it.
+#[test]
+fn a_script_that_keeps_alerting_can_be_stopped() {
+    let (mut app, _) = app();
+    let path = tempfile_path::Path::new("for (;;) Dialog.alert('Again')");
+    app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).unwrap();
+    let ctx = egui::Context::default();
+    // The script asks from its own thread, so the alert can take a few frames:
+    let alerts = |app: &mut VectorcraftApp| {
+        (1..10).any(|frame| {
+            crate::scripts::frame(app, &ctx, f64::from(frame));
+            app.ui.dialog.as_ref().is_some_and(|d| d.kind == crate::dialogs::script::KIND)
+        })
+    };
+    assert!(alerts(&mut app));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(alerts(&mut app), "the next alert follows");
+    assert!(crate::menus::enabled(&app, "ui.stopScripts"));
+    app.run("ui.stopScripts", json!({})).unwrap();
+    assert!(app.ui.dialog.is_none() && !app.scripts.is_running());
+    assert!(!alerts(&mut app));
+}
+
+/// A script that prints more than the console keeps leaves its last lines.
+#[test]
+fn a_script_that_floods_the_console_leaves_its_last_lines() {
+    let (mut app, _) = app();
+    let path = tempfile_path::Path::new("for (var i = 0; i < 100000; i++) console.log(i)");
+    app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).unwrap();
+    let log = app.scripts.log();
+    assert_eq!(log.len(), crate::scripts::LOG_LINES);
+    assert_eq!(log.last().map(|l| l.text.as_str()), Some("99999"));
+}
+
 /// `showOpenFilePicker({ multiple: true })` shows the app's dialog for several files, with the
 /// script's file types; the paths picked answer it.
 #[test]
@@ -1329,6 +1416,49 @@ fn the_wobble_example_draws_its_effect_into_the_edits_undo_step() {
     assert_eq!((effect(&app), undone), (Some(("script.wobble".into(), true, 10.0)), drawn), "one undo step: the move and what was drawn of it");
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(effect(&app), None, "one undo step: the effect and what was drawn of it");
+}
+
+/// A document saved with a script's effect opens without the script: the effect draws what the
+/// script drew while its input stays the same, and the geometry once it changed, and the document
+/// stays as it was until then.
+#[test]
+fn a_script_effect_opens_without_its_script() {
+    let (mut app, id) = app();
+    let temp = TempFolder::new("wobble-saved");
+    crate::scripts::set_up_script_folders(&mut app, &temp.0, None);
+    app.run("ui.runScript", json!({ "path": temp.0.join("Scripts").join("Wobble.js").to_string_lossy() })).unwrap();
+    let ctx = egui::Context::default();
+    let frames = |app: &mut VectorcraftApp, from: f64| {
+        for frame in 0..3 {
+            crate::scripts::frame(app, &ctx, from + f64::from(frame) / 10.0);
+        }
+    };
+    frames(&mut app, 1.0);
+    app.run("effect.apply", json!({ "effect": "script.wobble", "params": {}, "ids": [id] })).unwrap();
+    frames(&mut app, 2.0);
+    let file = temp.0.join("wobbled.vectorcraft");
+    app.services.write = Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string())));
+    app.run("file.saveAs", json!({ "path": file.to_string_lossy() })).unwrap();
+    app.run("ui.stopScripts", json!({})).unwrap();
+
+    let services = crate::Services { read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))), ..Default::default() };
+    let mut opened = VectorcraftApp::new(Session::new(), services);
+    opened.run("file.open", json!({ "path": file.to_string_lossy() })).unwrap();
+    frames(&mut opened, 1.0);
+    let node = |app: &VectorcraftApp| app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].clone();
+    // Whether the effect draws what the script drew, as its input is the one it drew it from:
+    let draws = |app: &VectorcraftApp| {
+        let node = node(app);
+        let input = vectorcraft_effects::script::inputs(&node);
+        input.first().is_some_and(|i| node.appearance.effects[0].params["_input"] == json!(i.fingerprint))
+    };
+    assert!(draws(&opened), "what the script drew");
+    assert!(!opened.session.active().unwrap().is_dirty());
+    let moved = node(&opened).id.0;
+    opened.run("object.move", json!({ "ids": [moved], "dx": 10, "dy": 0 })).unwrap();
+    frames(&mut opened, 2.0);
+    assert!(!draws(&opened), "the geometry, once it moved");
+    assert!(opened.scripts.log().iter().all(|l| !l.error));
 }
 
 /// Double-clicking the Scriptographer Tool's button calls its script's `onEditOptions()`, as
