@@ -1087,6 +1087,44 @@ fn items_move_between_documents<E: Engine>() {
 
 /// A symbol instance a script moves to another document takes a copy of its symbol along, a new
 /// symbol there; its own document keeps the symbol and its other instances as they were.
+/// Items that use one symbol, moved to another document in two operations, each take a copy of it
+/// along, named apart; moved in one, they share one.
+fn separate_moves_take_separate_copies<E: Engine>() {
+    let (mut s, a, _) = document();
+    let (first, second) = symbols(&mut s, a);
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let [one, two] = [0, 1].map(|i| s.documents()[i].uid);
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    let bind = |runtime: &mut Runtime<E>, s: &Session, uid| {
+        let st = s.documents().iter().find(|d| d.uid == uid).unwrap();
+        runtime.bind(&scope, uid, st.doc.clone(), st.selection.clone()).unwrap();
+    };
+    bind(&mut runtime, &s, one);
+    runtime.execute(&scope, &format!("globalThis.instances = [{}, {}].map(key => paper.project.getItemByKey(key))", first.0, second.0)).unwrap();
+    bind(&mut runtime, &s, two);
+    runtime.execute(&scope, "paper.project.activeLayer.addChild(instances[0])\npaper.project.activeLayer.addChild(instances[1])").unwrap();
+    for patch in runtime.take_patches().unwrap() {
+        let index = s.documents().iter().position(|d| d.uid == patch.uid).unwrap();
+        s.set_active(index);
+        s.execute("document.patch", &patch.params).unwrap();
+    }
+    let to = &s.documents()[1].doc;
+    let names: Vec<&str> = to.symbols.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names.len(), 2, "two copies: {names:?}");
+    assert_ne!(names[0], names[1]);
+    let used: Vec<String> = to.layers[0]
+        .children()
+        .unwrap()
+        .iter()
+        .map(|n| match &n.kind {
+            NodeKind::SymbolInstance { symbol, .. } => symbol.clone(),
+            _ => panic!("an instance"),
+        })
+        .collect();
+    assert_eq!(used, names, "each instance its own");
+}
+
 fn moved_items_take_their_symbols_along<E: Engine>() {
     let (mut s, a, _) = document();
     let (first, second) = symbols(&mut s, a);
@@ -1470,6 +1508,11 @@ macro_rules! engine_tests {
             #[test]
             fn items_move_between_documents() {
                 super::items_move_between_documents::<$engine>();
+            }
+
+            #[test]
+            fn separate_moves_take_separate_copies() {
+                super::separate_moves_take_separate_copies::<$engine>();
             }
 
             #[test]
