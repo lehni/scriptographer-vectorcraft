@@ -707,7 +707,7 @@ fn locks_are_shared_by_scripts<E: Engine>(name: &str) {
     assert_eq!(second.take_output(), ["freed"]);
 }
 
-/// Encoding as the Encoding standard has it, and base64 as browsers read it.
+/// Encoding as the Encoding standard has it, UTF-8 and UTF-16, and base64 as browsers read it.
 fn text_encodes_as_the_standard_has_it<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
@@ -719,8 +719,12 @@ fn text_encodes_as_the_standard_has_it<E: Engine>() {
              console.log(streamed.decode(new Uint8Array([0xef, 0xbb, 0xbf, 0x68, 0xc3]), { stream: true }) + streamed.decode(new Uint8Array([0xa9])))\n\
              console.log(new TextDecoder('utf-8', { ignoreBOM: true }).decode(new Uint8Array([0xef, 0xbb, 0xbf])).length, new TextDecoder().decode(new Uint8Array([0xff])))\n\
              console.log(thrown(() => new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array([0xff]))), thrown(() => new TextDecoder('latin1')))\n\
+             console.log(JSON.stringify(streamed.decode(new Uint8Array([0xe0, 0x80]), { stream: true }) + streamed.decode(new Uint8Array([0xef, 0xbb, 0xbf]))))\n\
+             const utf16 = new TextDecoder('utf-16')\n\
+             console.log(utf16.encoding, utf16.decode(new Uint8Array([0xff, 0xfe, 0x68, 0x00, 0x3d, 0xd8]), { stream: true }) + utf16.decode(new Uint8Array([0x00, 0xde, 0x00])))\n\
+             console.log(new TextDecoder('utf-16be').decode(new Uint8Array([0xfe, 0xff, 0x00, 0x68])), thrown(() => new TextDecoder('utf-16le', { fatal: true }).decode(new Uint8Array([0x00, 0xd8]))))\n\
              const into = new Uint8Array(3)\n\
-             console.log(JSON.stringify(new TextEncoder().encodeInto('aé€', into)), into.join())\n\
+             console.log(JSON.stringify(new TextEncoder().encodeInto('aé€', into)), into.join(), thrown(() => new TextEncoder().encodeInto('a', new Uint8ClampedArray(1))))\n\
              console.log(atob(' aG k= '), btoa('ab'), thrown(() => atob('a')), thrown(() => btoa('€')))\n\
              console.log(thrown(() => crypto.getRandomValues(new Float32Array(1))))",
         )
@@ -731,7 +735,10 @@ fn text_encodes_as_the_standard_has_it<E: Engine>() {
             "hé",
             "1 \u{fffd}",
             "TypeError RangeError",
-            "{\"read\":2,\"written\":3} 97,195,169",
+            "\"\u{fffd}\u{fffd}\u{feff}\"",
+            "utf-16le h\u{1f600}\u{fffd}",
+            "h TypeError",
+            "{\"read\":2,\"written\":3} 97,195,169 TypeError",
             "hi YWI= InvalidCharacterError InvalidCharacterError",
             "TypeMismatchError"
         ]

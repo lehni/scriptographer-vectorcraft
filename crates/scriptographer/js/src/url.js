@@ -1,4 +1,9 @@
-import { checkArguments, inject, defineInterfaces } from './define.js'
+import {
+  checkArguments,
+  inject,
+  defineInterfaces,
+  toUSVString
+} from './define.js'
 import { natives } from './natives.js'
 import { definePairIterable, getPairs, setFirst } from './pairs.js'
 
@@ -225,14 +230,6 @@ function parse(url, base) {
   return base === undefined
     ? natives.url.parse(toUSVString(url))
     : natives.url.parse(toUSVString(url), toUSVString(base))
-}
-
-// `value` as WebIDL's USVString: a string whose unpaired surrogates are U+FFFD.
-function toUSVString(value) {
-  return String(value).replace(
-    /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g,
-    '\ufffd'
-  )
 }
 
 function parseQuery(query) {
