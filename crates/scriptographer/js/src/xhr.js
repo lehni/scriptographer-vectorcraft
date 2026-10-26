@@ -299,7 +299,7 @@ export class XMLHttpRequest extends XMLHttpRequestEventTarget {
       )
     }
     const bytes = this.#bytes ?? (this.#parts && joinBytes(this.#parts))
-    return bytes ? new TextDecoder().decode(bytes) : ''
+    return bytes ? decodeText(bytes, this.#getMimeType()) : ''
   }
 
   get response() {
@@ -448,6 +448,28 @@ defineInterfaces(
   XMLHttpRequestUpload,
   XMLHttpRequest
 )
+
+// `bytes` as text, as the standard decodes a response: in the encoding a BOM
+// says, else the charset of `type`, when it's one the decoder reads, else UTF-8.
+function decodeText(bytes, type) {
+  const [first, second, third] = bytes
+  const bom =
+    first === 0xef && second === 0xbb && third === 0xbf
+      ? 'utf-8'
+      : first === 0xfe && second === 0xff
+        ? 'utf-16be'
+        : first === 0xff && second === 0xfe
+          ? 'utf-16le'
+          : null
+  const charset = /;\s*charset\s*=\s*"?([^";\s]+)/i.exec(type)?.[1]
+  let decoder
+  try {
+    decoder = new TextDecoder(bom ?? charset ?? 'utf-8')
+  } catch {
+    decoder = new TextDecoder()
+  }
+  return decoder.decode(bytes)
+}
 
 function fireProgress(target, type, loaded = 0, total = 0) {
   target.dispatchEvent(

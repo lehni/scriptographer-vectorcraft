@@ -14,14 +14,13 @@
 //! `WPT_FILTER=text` runs only the files whose path contains `text` and prints each test's result
 //! and message, without checking the list.
 //!
-//! What fails, by cause (2026-10-26: 7685 of 9325 pass, 7594 of the standard's 9195 and 91 of
+//! What fails, by cause (2026-10-26: 7689 of 9325 pass, 7598 of the standard's 9195 and 91 of
 //! the 130 tentative ones), to come back to; most of it rarely matters to a script. `docs/gaps.md`
 //! (G6) sums it up:
 //!
 //! - Legacy encodings (about 1,400): `TextDecoder` and `TextDecoderStream` decode UTF-8 and
-//!   UTF-16 only, not the single-byte and East Asian encodings or `replacement`;
-//!   `XMLHttpRequest` reads text as UTF-8, whatever its BOM or charset; and the IDL test needs a
-//!   window's or a worker's global scope, which scripts' isn't.
+//!   UTF-16 only, not the single-byte and East Asian encodings or `replacement`; and the IDL
+//!   test needs a window's or a worker's global scope, which scripts' isn't.
 //! - `URL` (about 100): where the `url` crate (2.5.8, the newest) follows an older URL standard:
 //!   `file:` hosts and empty path segments, `/.` in non-special paths, the spaces before an opaque
 //!   path's query, `blob:` origins of schemes other than HTTP(S), and hosts that end in a number

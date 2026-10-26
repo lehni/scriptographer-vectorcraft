@@ -9202,7 +9202,7 @@ ${value}\r
         );
       }
       const bytes = this.#bytes ?? (this.#parts && joinBytes(this.#parts));
-      return bytes ? new TextDecoder().decode(bytes) : "";
+      return bytes ? decodeText(bytes, this.#getMimeType()) : "";
     }
     get response() {
       const type = this.#responseType;
@@ -9317,6 +9317,19 @@ ${value}\r
     XMLHttpRequestUpload,
     XMLHttpRequest
   );
+  function decodeText(bytes, type) {
+    const [first, second, third] = bytes;
+    const bom = first === 239 && second === 187 && third === 191 ? "utf-8" : first === 254 && second === 255 ? "utf-16be" : first === 255 && second === 254 ? "utf-16le" : null;
+    const charset = /;\s*charset\s*=\s*"?([^";\s]+)/i.exec(type)?.[1];
+    let decoder;
+    try {
+      decoder = new TextDecoder(bom ?? charset ?? "utf-8");
+    } catch {
+      decoder = new TextDecoder();
+    }
+    return decoder.decode(bytes);
+  }
+  __name(decodeText, "decodeText");
   function fireProgress(target, type, loaded = 0, total = 0) {
     target.dispatchEvent(
       new ProgressEvent(type, { lengthComputable: total > 0, loaded, total })
