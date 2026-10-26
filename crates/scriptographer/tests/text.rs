@@ -161,6 +161,42 @@ fn threads(s: &Session) -> Vec<Vec<NodeId>> {
     s.active().unwrap().doc.text_threads.clone()
 }
 
+/// A frame of a linked story that a script moves to another document takes a copy of the whole
+/// story along, unlinked there; the story flows on through the frames that stay.
+fn a_moved_frame_takes_its_story_along<E: Engine>() {
+    let (mut s, _, _, area) = document();
+    let next = threaded(&mut s, area);
+    // Each frame holds its part of the story:
+    let story = text(&s, area).plain_text() + &text(&s, next).plain_text();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let [first, second] = [0, 1].map(|i| s.documents()[i].uid);
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    let bind = |runtime: &mut Runtime<E>, s: &Session, uid| {
+        let st = s.documents().iter().find(|d| d.uid == uid).unwrap();
+        runtime.bind(&scope, uid, st.doc.clone(), st.selection.clone()).unwrap();
+    };
+    bind(&mut runtime, &s, first);
+    runtime.execute(&scope, &format!("globalThis.frame = paper.project.getItemByKey({})", next.0)).unwrap();
+    bind(&mut runtime, &s, second);
+    runtime.execute(&scope, "paper.project.activeLayer.addChild(frame)").unwrap();
+    for patch in runtime.take_patches().unwrap() {
+        let index = s.documents().iter().position(|d| d.uid == patch.uid).unwrap();
+        s.set_active(index);
+        s.execute("document.patch", &patch.params).unwrap();
+    }
+    let (from, to) = (&s.documents()[0].doc, &s.documents()[1].doc);
+    assert!(from.node(next).is_none(), "the frame left its document");
+    assert!(from.text_threads.iter().all(|t| !t.contains(&area)), "the frame that stays is unlinked");
+    let NodeKind::Text(stayed) = &from.node(area).unwrap().kind else { panic!("text") };
+    assert_eq!(stayed.plain_text(), story, "and holds the story");
+    let moved = to.layers[0].children().unwrap();
+    let [moved] = moved.as_slice() else { panic!("one frame: {moved:?}") };
+    let NodeKind::Text(copy) = &moved.kind else { panic!("text") };
+    assert_eq!(copy.plain_text(), story, "a copy of the whole story");
+    assert!(to.text_threads.is_empty(), "unlinked");
+}
+
 /// Text items a script links become a thread, its story flowing across them; an item it unlinks
 /// leaves the thread, and its text stays with the story.
 fn scripts_link_and_unlink_frames<E: Engine>() {
@@ -466,6 +502,11 @@ fn text_gradients_are_in_its_own_space<E: Engine>() {
 macro_rules! engine_tests {
     ($module:ident, $engine:ty) => {
         mod $module {
+            #[test]
+            fn a_moved_frame_takes_its_story_along() {
+                super::a_moved_frame_takes_its_story_along::<$engine>();
+            }
+
             #[test]
             fn reads_text() {
                 super::reads_text::<$engine>();
