@@ -7,7 +7,7 @@
 //! coordinates, but for text: its transform is its matrix, and its boxes are in its own space.
 //! Records come without boxes: Paper.js asks for an item's ([`boxes`]) once it needs them.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
@@ -152,15 +152,9 @@ impl Columns {
             .collect();
         let changed_threads = changed_threads(old, new);
         let symbols = new.symbol_boxes();
-        let mut walk = Walk {
-            columns: &mut columns,
-            selection: new_selection,
-            symbols: &symbols,
-            reselected: &reselected,
-            reanchored: &reanchored,
-            changed_threads: &changed_threads,
-        };
+        let mut walk = Walk { columns: &mut columns, selection: new_selection, symbols: &symbols };
         walk.children(&old.layers, &new.layers);
+        let mut pushed: HashSet<NodeId> = columns.keys.iter().map(|key| NodeId(*key as u64)).collect();
         // Definitions that changed, and the instances of changed symbols with what holds them,
         // whose boxes change with their art:
         let changed_symbols = new.changed_symbols(old);
@@ -181,19 +175,23 @@ impl Columns {
             });
         }
         for id in remeasured {
-            if !columns.keys.contains(&(id.0 as f64))
+            if pushed.insert(id)
                 && let Some(node) = new.node(id)
             {
                 columns.push(node, new_selection, &symbols);
             }
         }
-        // Frames of those threads in subtrees that didn't change, which the walk skips.
-        for id in &changed_threads {
-            if !columns.keys.contains(&(id.0 as f64))
+        // Objects whose selection, selected points or thread changed where their nodes didn't,
+        // which the walk skips: the frames of those threads, and objects with new points selected,
+        // change content.
+        for id in reselected.iter().chain(&reanchored).chain(&changed_threads) {
+            if pushed.insert(*id)
                 && let Some(node) = new.node(*id)
             {
                 columns.push(node, new_selection, &symbols);
-                if let Some(last) = columns.flags.last_mut() {
+                if (reanchored.contains(id) || changed_threads.contains(id))
+                    && let Some(last) = columns.flags.last_mut()
+                {
                     *last |= flags::CONTENT_CHANGED;
                 }
             }
@@ -224,9 +222,6 @@ struct Walk<'a> {
     columns: &'a mut Columns,
     selection: &'a Selection,
     symbols: &'a SymbolBoxes<'a>,
-    reselected: &'a BTreeSet<NodeId>,
-    reanchored: &'a BTreeSet<NodeId>,
-    changed_threads: &'a BTreeSet<NodeId>,
 }
 
 impl Walk<'_> {
@@ -242,9 +237,7 @@ impl Walk<'_> {
     }
 
     fn node(&mut self, old: &Arc<Node>, new: &Arc<Node>) {
-        let selected = self.reselected.contains(&new.id);
-        let reanchored = self.reanchored.contains(&new.id) || self.changed_threads.contains(&new.id);
-        if Arc::ptr_eq(old, new) && !selected && !reanchored {
+        if Arc::ptr_eq(old, new) {
             return;
         }
         let mut changed = 0;
@@ -259,8 +252,7 @@ impl Walk<'_> {
                 }
                 self.children(a, b);
             }
-            _ if !Arc::ptr_eq(old, new) || reanchored => changed |= flags::CONTENT_CHANGED,
-            _ => {}
+            _ => changed |= flags::CONTENT_CHANGED,
         }
         self.columns.push(new, self.selection, self.symbols);
         if let Some(last) = self.columns.flags.last_mut() {

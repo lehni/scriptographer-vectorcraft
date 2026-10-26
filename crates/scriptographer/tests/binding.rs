@@ -339,6 +339,31 @@ fn selection_goes_both_ways<E: Engine>() {
     assert_eq!(runtime.selected_ids(&scope).unwrap().into_iter().collect::<Vec<_>>(), [b]);
 }
 
+/// What the user selects in the app reaches a script that runs, where nothing else changed.
+fn the_apps_selection_reaches_the_script<E: Engine>() {
+    let (mut s, a, b) = document();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    let mut selected = |s: &Session| {
+        let st = s.active().unwrap();
+        runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
+        runtime.execute(&scope, "console.log(project.selectedItems.map(item => item.key).join())").unwrap();
+        runtime.take_output().join(" ")
+    };
+    assert_eq!(selected(&s), a.0.to_string());
+    s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(selected(&s), format!("{},{}", a.0, b.0));
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    assert_eq!(selected(&s), b.0.to_string());
+    // And the points selected:
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 2]], "mode": "set"})).unwrap();
+    let st = s.active().unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.execute(&scope, &format!("console.log(project.getItemByKey({}).segments.map(segment => +segment.selected).join(''))", a.0)).unwrap();
+    assert_eq!(runtime.take_output(), ["0010"]);
+}
+
 fn artboards_and_the_active_one<E: Engine>() {
     let (mut s, _, _) = document();
     s.execute("artboard.new", &json!({"x": 500, "y": 0, "width": 200, "height": 100})).unwrap();
@@ -1453,6 +1478,11 @@ macro_rules! engine_tests {
             #[test]
             fn selection_goes_both_ways() {
                 super::selection_goes_both_ways::<$engine>();
+            }
+
+            #[test]
+            fn the_apps_selection_reaches_the_script() {
+                super::the_apps_selection_reaches_the_script::<$engine>();
             }
 
             #[test]
