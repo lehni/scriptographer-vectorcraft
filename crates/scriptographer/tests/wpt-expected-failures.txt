@@ -1410,10 +1410,6 @@ encoding/textencoder-constructor-non-utf.any.js: Encoding argument supported for
 encoding/textencoder-constructor-non-utf.any.js: Encoding argument supported for decode: windows-874
 encoding/textencoder-constructor-non-utf.any.js: Encoding argument supported for decode: x-mac-cyrillic
 encoding/textencoder-constructor-non-utf.any.js: Encoding argument supported for decode: x-user-defined
-encoding/unsupported-encodings.any.js: UTF-32 with BOM should decode as UTF-16LE
-encoding/unsupported-encodings.any.js: UTF-32LE with BOM should decode as UTF-16LE
-encoding/unsupported-encodings.any.js: utf-32 with BOM should decode as UTF-16LE
-encoding/unsupported-encodings.any.js: utf-32le with BOM should decode as UTF-16LE
 html/canvas/offscreen/canvas-context/2d.getContext.options.any.js: 2d
 html/canvas/offscreen/color-type/2d.color.type.u8p3.to.u8srgb.to.u8p3.worker.js: test srgb unorm8 canvas storing 8-bit display-p3 data accurately
 html/canvas/offscreen/color-type/2d.color.type.u8srgb.to.u8p3.to.u8srgb.worker.js: test display-p3 unorm8 canvas not storing 8-bit srgb data accurately

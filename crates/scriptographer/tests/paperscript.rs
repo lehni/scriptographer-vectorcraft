@@ -1092,6 +1092,25 @@ fn fetch_reads_data_urls<E: Engine>() {
     );
 }
 
+/// `XMLHttpRequest` reads text in the encoding its BOM says, else in the response's charset or
+/// the one `overrideMimeType()` gives, as the standard has it.
+fn requests_read_text_in_their_charset<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    let script = "const read = (url, type) => new Promise(resolve => {\n\
+             const xhr = new XMLHttpRequest()\n\
+             xhr.open('GET', url)\n\
+             if (type) xhr.overrideMimeType(type)\n\
+             xhr.onload = () => resolve(xhr.responseText)\n\
+             xhr.send()\n\
+         })\n\
+         console.log(await read('data:text/plain;charset=utf-16be,%00h%00i'), await read('data:,%FF%FEh%00'))\n\
+         console.log(await read('data:,h%00i%00', 'text/plain; charset=\"utf-16le\"'), await read('data:text/plain;charset=latin1,h%C3%A9'))";
+    runtime.execute(&scope, &format!("(async () => {{ try {{ {script} }} catch (e) {{ console.log('error', e.name, e.message) }} }})()")).unwrap();
+    settle(&mut runtime);
+    assert_eq!(runtime.take_output(), ["hi h", "hi hé"]);
+}
+
 fn scripts_fetch<E: Engine>() {
     let address = serve(4);
     let mut runtime = Runtime::<E>::new().unwrap();
@@ -2847,6 +2866,11 @@ macro_rules! engine_tests {
             #[test]
             fn fetch_reads_data_urls() {
                 super::fetch_reads_data_urls::<$engine>();
+            }
+
+            #[test]
+            fn requests_read_text_in_their_charset() {
+                super::requests_read_text_in_their_charset::<$engine>();
             }
 
             #[test]
