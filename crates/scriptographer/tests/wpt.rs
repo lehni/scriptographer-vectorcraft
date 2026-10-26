@@ -14,7 +14,7 @@
 //! `WPT_FILTER=text` runs only the files whose path contains `text` and prints each test's result
 //! and message, without checking the list.
 //!
-//! What fails, by cause (2026-10-26: 7497 of 9325 pass, 7406 of the standard's 9195 and 91 of
+//! What fails, by cause (2026-10-26: 7567 of 9325 pass, 7476 of the standard's 9195 and 91 of
 //! the 130 tentative ones), to come back to; most of it rarely matters to a script. `docs/gaps.md`
 //! (G6) sums it up:
 //!
@@ -22,7 +22,6 @@
 //!   of a page's charset (`unsupported-encodings`) need a page, and the IDL test a window's or a
 //!   worker's global scope, which scripts' isn't; also `encodeInto()`'s checks of its bytes, and
 //!   streamed UTF-8 that turns invalid before it ends.
-//! - `Request`'s and `Response`'s `formData()` (70), which they don't have.
 //! - `URL` (about 100): where the `url` crate (2.5.8, the newest) follows an older URL standard:
 //!   `file:` hosts and empty path segments, `/.` in non-special paths, the spaces before an opaque
 //!   path's query, `blob:` origins of schemes other than HTTP(S), and hosts that end in a number

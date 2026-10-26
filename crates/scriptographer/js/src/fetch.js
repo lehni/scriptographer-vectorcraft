@@ -3,6 +3,7 @@ import { checkArguments, defineInterfaces } from './define.js'
 import { natives } from './natives.js'
 import { definePairIterable, getPairs, setFirst } from './pairs.js'
 import { ReadableStream } from './streams.js'
+import { URLSearchParams } from './url.js'
 
 // The browser's `fetch()` for scripts outside a browser, with `Headers`,
 // `FormData`, `Request` and `Response`. The runtime sends the requests, on
@@ -162,6 +163,33 @@ class Body {
   async blob() {
     const type = this.headers.get('content-type') ?? ''
     return new Blob([await this.#take()], { type })
+  }
+
+  // The body's form: the pairs of `application/x-www-form-urlencoded`, or the
+  // parts of `multipart/form-data`, files as `File`s.
+  async formData() {
+    const type = this.headers.get('content-type') ?? ''
+    const essence = type.split(';')[0].trim().toLowerCase()
+    const bytes = await this.#take()
+    const form = new FormData()
+    if (essence === 'application/x-www-form-urlencoded') {
+      // The form parser keeps a BOM, which `text()` would drop:
+      const text = new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes)
+      for (const [name, value] of new URLSearchParams(text)) {
+        form.append(name, value)
+      }
+    } else if (essence === 'multipart/form-data') {
+      const boundary = /;\s*boundary=(?:"([^"]*)"|([^;\s]+))/i.exec(type)
+      if (!boundary) {
+        throw new TypeError(`Invalid form data: '${type}' has no boundary.`)
+      }
+      for (const [name, value] of getParts(bytes, boundary[1] ?? boundary[2])) {
+        form.append(name, value)
+      }
+    } else {
+      throw new TypeError(`Unable to read the body as form data: '${type}'.`)
+    }
+    return form
   }
 
   async #take() {
@@ -428,6 +456,51 @@ function getEntry(name, value, filename) {
           })
       : String(value)
   ]
+}
+
+// The `[name, value]` parts of `multipart/form-data` `bytes`, split at
+// `boundary`: text, or a `File` for a part with a filename.
+function getParts(bytes, boundary) {
+  const decoder = new TextDecoder()
+  const encode = text => new TextEncoder().encode(text)
+  const delimiter = encode(`--${boundary}`)
+  const find = (needle, from) => {
+    for (let i = from; i <= bytes.length - needle.length; i++) {
+      let j = 0
+      while (j < needle.length && bytes[i + j] === needle[j]) j++
+      if (j === needle.length) return i
+    }
+    return -1
+  }
+  const invalid = () => new TypeError('Invalid form data: a part is malformed.')
+  const unquote = text =>
+    text.replace(/%0D/g, '\r').replace(/%0A/g, '\n').replace(/%22/g, '"')
+  const parts = []
+  let at = find(delimiter, 0)
+  if (at < 0) throw invalid()
+  for (;;) {
+    at += delimiter.length
+    // The last delimiter ends in `--`:
+    if (bytes[at] === 0x2d && bytes[at + 1] === 0x2d) break
+    const headersEnd = find(encode('\r\n\r\n'), at)
+    if (headersEnd < 0) throw invalid()
+    const next = find(encode(`\r\n--${boundary}`), headersEnd)
+    if (next < 0) throw invalid()
+    const headers = decoder.decode(bytes.subarray(at, headersEnd))
+    const body = bytes.slice(headersEnd + 4, next)
+    const name = /;\s*name="([^"]*)"/i.exec(headers)
+    if (!name) throw invalid()
+    const filename = /;\s*filename="([^"]*)"/i.exec(headers)
+    const type = /^content-type:\s*(.*)$/im.exec(headers)?.[1].trim() ?? ''
+    parts.push([
+      unquote(name[1]),
+      filename
+        ? new File([body], unquote(filename[1]), { type })
+        : decoder.decode(body)
+    ])
+    at = next + 2
+  }
+  return parts
 }
 
 // `FormData` as `multipart/form-data`, with a random boundary.

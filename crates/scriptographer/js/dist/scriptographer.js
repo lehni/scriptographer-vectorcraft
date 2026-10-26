@@ -5978,6 +5978,192 @@ ${stack}` : ""));
   }
   __name(setFirst, "setFirst");
 
+  // src/url.js
+  var parts = [
+    "protocol",
+    "username",
+    "password",
+    "host",
+    "hostname",
+    "port",
+    "pathname",
+    "search",
+    "hash"
+  ];
+  var setPairs;
+  var setSearch;
+  var URL2 = class _URL {
+    static {
+      __name(this, "URL");
+    }
+    // The parts as the runtime parsed them:
+    #parts;
+    #searchParams = null;
+    constructor(url, base = void 0) {
+      checkArguments(arguments, 1, "URL");
+      this.#parts = parse(url, base);
+      if (!this.#parts) {
+        throw new TypeError(`Invalid URL: '${url}'.`);
+      }
+    }
+    static {
+      setSearch = /* @__PURE__ */ __name((url, query) => {
+        url.#parts = natives.url.set(url.#parts.href, "search", query);
+      }, "setSearch");
+    }
+    static canParse(url, base = void 0) {
+      checkArguments(arguments, 1, "canParse");
+      return !!parse(url, base);
+    }
+    static parse(url, base = void 0) {
+      checkArguments(arguments, 1, "parse");
+      return parse(url, base) ? new _URL(url, base) : null;
+    }
+    get href() {
+      return this.#parts.href;
+    }
+    set href(href) {
+      this.#set("href", toUSVString(href));
+    }
+    get origin() {
+      return this.#parts.origin;
+    }
+    get searchParams() {
+      if (!this.#searchParams) {
+        this.#searchParams = new URLSearchParams(this.#parts.search);
+        linksByParams.set(this.#searchParams, this);
+      }
+      return this.#searchParams;
+    }
+    toString() {
+      return this.#parts.href;
+    }
+    toJSON() {
+      return this.#parts.href;
+    }
+    // Set a part, and the search params follow.
+    #set(part, value) {
+      this.#parts = natives.url.set(this.#parts.href, part, String(value));
+      if (this.#searchParams) {
+        setPairs(this.#searchParams, parseQuery(this.#parts.search));
+      }
+    }
+    static {
+      for (const part of parts) {
+        inject(
+          _URL.prototype,
+          {
+            get [part]() {
+              return this.#parts[part];
+            },
+            set [part](value) {
+              this.#set(part, toUSVString(value));
+            }
+          },
+          { enumerable: true }
+        );
+      }
+    }
+  };
+  var linksByParams = /* @__PURE__ */ new WeakMap();
+  var URLSearchParams = class {
+    static {
+      __name(this, "URLSearchParams");
+    }
+    #pairs = [];
+    // A query string (with or without `?`), `[[name, value], …]` or anything
+    // iterable of pairs, as `URLSearchParams` are, or `{ name: value }`.
+    constructor(init = "") {
+      if (init !== null && (typeof init === "object" || typeof init === "function")) {
+        const pairs = getPairs(init).map((pair) => pair.map(toUSVString));
+        this.#pairs = typeof init[Symbol.iterator] === "function" ? pairs : [...new Map(pairs)];
+      } else {
+        this.#pairs = parseQuery(toUSVString(init));
+      }
+    }
+    static {
+      setPairs = /* @__PURE__ */ __name((params, pairs) => {
+        params.#pairs = pairs;
+      }, "setPairs");
+    }
+    get size() {
+      return this.#pairs.length;
+    }
+    append(name, value) {
+      checkArguments(arguments, 2, "append");
+      this.#pairs.push([toUSVString(name), toUSVString(value)]);
+      this.#update();
+    }
+    delete(name, value = void 0) {
+      checkArguments(arguments, 1, "delete");
+      name = toUSVString(name);
+      this.#pairs = this.#pairs.filter(
+        (pair) => pair[0] !== name || value !== void 0 && pair[1] !== toUSVString(value)
+      );
+      this.#update();
+    }
+    get(name) {
+      checkArguments(arguments, 1, "get");
+      name = toUSVString(name);
+      return this.#pairs.find((pair) => pair[0] === name)?.[1] ?? null;
+    }
+    getAll(name) {
+      checkArguments(arguments, 1, "getAll");
+      name = toUSVString(name);
+      return this.#pairs.filter((pair) => pair[0] === name).map(([, value]) => value);
+    }
+    has(name, value = void 0) {
+      checkArguments(arguments, 1, "has");
+      name = toUSVString(name);
+      return this.#pairs.some(
+        (pair) => pair[0] === name && (value === void 0 || pair[1] === toUSVString(value))
+      );
+    }
+    set(name, value) {
+      checkArguments(arguments, 2, "set");
+      this.#pairs = setFirst(this.#pairs, [toUSVString(name), toUSVString(value)]);
+      this.#update();
+    }
+    // By name, in UTF-16 code units, as strings compare: stable.
+    sort() {
+      this.#pairs.sort(([a3], [b3]) => a3 < b3 ? -1 : a3 > b3 ? 1 : 0);
+      this.#update();
+    }
+    // By index over the pairs as they are at each step, so what changes while
+    // they're iterated shows:
+    *entries() {
+      for (let i2 = 0; i2 < this.#pairs.length; i2++) {
+        const [name, value] = this.#pairs[i2];
+        yield [name, value];
+      }
+    }
+    toString() {
+      return natives.url.serializeQuery(this.#pairs);
+    }
+    // The URL they belong to follows.
+    #update() {
+      const url = linksByParams.get(this);
+      if (url) setSearch(url, this.toString());
+    }
+  };
+  definePairIterable(URLSearchParams);
+  defineInterfaces(URL2, URLSearchParams);
+  function parse(url, base) {
+    return base === void 0 ? natives.url.parse(toUSVString(url)) : natives.url.parse(toUSVString(url), toUSVString(base));
+  }
+  __name(parse, "parse");
+  function toUSVString(value) {
+    return String(value).replace(
+      /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g,
+      "\uFFFD"
+    );
+  }
+  __name(toUSVString, "toUSVString");
+  function parseQuery(query) {
+    return natives.url.parseQuery(query.replace(/^\?/, ""));
+  }
+  __name(parseQuery, "parseQuery");
+
   // src/fetch.js
   var Headers2 = class _Headers {
     static {
@@ -6107,6 +6293,31 @@ ${stack}` : ""));
     async blob() {
       const type = this.headers.get("content-type") ?? "";
       return new Blob([await this.#take()], { type });
+    }
+    // The body's form: the pairs of `application/x-www-form-urlencoded`, or the
+    // parts of `multipart/form-data`, files as `File`s.
+    async formData() {
+      const type = this.headers.get("content-type") ?? "";
+      const essence = type.split(";")[0].trim().toLowerCase();
+      const bytes = await this.#take();
+      const form = new FormData();
+      if (essence === "application/x-www-form-urlencoded") {
+        const text = new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes);
+        for (const [name, value] of new URLSearchParams(text)) {
+          form.append(name, value);
+        }
+      } else if (essence === "multipart/form-data") {
+        const boundary = /;\s*boundary=(?:"([^"]*)"|([^;\s]+))/i.exec(type);
+        if (!boundary) {
+          throw new TypeError(`Invalid form data: '${type}' has no boundary.`);
+        }
+        for (const [name, value] of getParts(bytes, boundary[1] ?? boundary[2])) {
+          form.append(name, value);
+        }
+      } else {
+        throw new TypeError(`Unable to read the body as form data: '${type}'.`);
+      }
+      return form;
     }
     async #take() {
       if (this.bodyUsed || this.#stream?.locked) {
@@ -6326,6 +6537,46 @@ ${stack}` : ""));
     ];
   }
   __name(getEntry, "getEntry");
+  function getParts(bytes, boundary) {
+    const decoder = new TextDecoder();
+    const encode = /* @__PURE__ */ __name((text) => new TextEncoder().encode(text), "encode");
+    const delimiter = encode(`--${boundary}`);
+    const find2 = /* @__PURE__ */ __name((needle, from) => {
+      for (let i2 = from; i2 <= bytes.length - needle.length; i2++) {
+        let j3 = 0;
+        while (j3 < needle.length && bytes[i2 + j3] === needle[j3]) j3++;
+        if (j3 === needle.length) return i2;
+      }
+      return -1;
+    }, "find");
+    const invalid = /* @__PURE__ */ __name(() => new TypeError("Invalid form data: a part is malformed."), "invalid");
+    const unquote = /* @__PURE__ */ __name((text) => text.replace(/%0D/g, "\r").replace(/%0A/g, "\n").replace(/%22/g, '"'), "unquote");
+    const parts2 = [];
+    let at2 = find2(delimiter, 0);
+    if (at2 < 0) throw invalid();
+    for (; ; ) {
+      at2 += delimiter.length;
+      if (bytes[at2] === 45 && bytes[at2 + 1] === 45) break;
+      const headersEnd = find2(encode("\r\n\r\n"), at2);
+      if (headersEnd < 0) throw invalid();
+      const next = find2(encode(`\r
+--${boundary}`), headersEnd);
+      if (next < 0) throw invalid();
+      const headers = decoder.decode(bytes.subarray(at2, headersEnd));
+      const body = bytes.slice(headersEnd + 4, next);
+      const name = /;\s*name="([^"]*)"/i.exec(headers);
+      if (!name) throw invalid();
+      const filename = /;\s*filename="([^"]*)"/i.exec(headers);
+      const type = /^content-type:\s*(.*)$/im.exec(headers)?.[1].trim() ?? "";
+      parts2.push([
+        unquote(name[1]),
+        filename ? new File([body], unquote(filename[1]), { type }) : decoder.decode(body)
+      ]);
+      at2 = next + 2;
+    }
+    return parts2;
+  }
+  __name(getParts, "getParts");
   function getMultipart(form) {
     const boundary = `----Scriptographer${Array.from(
       { length: 24 },
@@ -7404,192 +7655,6 @@ ${value}\r
     }
   };
   defineInterfaces(StorageManager);
-
-  // src/url.js
-  var parts = [
-    "protocol",
-    "username",
-    "password",
-    "host",
-    "hostname",
-    "port",
-    "pathname",
-    "search",
-    "hash"
-  ];
-  var setPairs;
-  var setSearch;
-  var URL2 = class _URL {
-    static {
-      __name(this, "URL");
-    }
-    // The parts as the runtime parsed them:
-    #parts;
-    #searchParams = null;
-    constructor(url, base = void 0) {
-      checkArguments(arguments, 1, "URL");
-      this.#parts = parse(url, base);
-      if (!this.#parts) {
-        throw new TypeError(`Invalid URL: '${url}'.`);
-      }
-    }
-    static {
-      setSearch = /* @__PURE__ */ __name((url, query) => {
-        url.#parts = natives.url.set(url.#parts.href, "search", query);
-      }, "setSearch");
-    }
-    static canParse(url, base = void 0) {
-      checkArguments(arguments, 1, "canParse");
-      return !!parse(url, base);
-    }
-    static parse(url, base = void 0) {
-      checkArguments(arguments, 1, "parse");
-      return parse(url, base) ? new _URL(url, base) : null;
-    }
-    get href() {
-      return this.#parts.href;
-    }
-    set href(href) {
-      this.#set("href", toUSVString(href));
-    }
-    get origin() {
-      return this.#parts.origin;
-    }
-    get searchParams() {
-      if (!this.#searchParams) {
-        this.#searchParams = new URLSearchParams2(this.#parts.search);
-        linksByParams.set(this.#searchParams, this);
-      }
-      return this.#searchParams;
-    }
-    toString() {
-      return this.#parts.href;
-    }
-    toJSON() {
-      return this.#parts.href;
-    }
-    // Set a part, and the search params follow.
-    #set(part, value) {
-      this.#parts = natives.url.set(this.#parts.href, part, String(value));
-      if (this.#searchParams) {
-        setPairs(this.#searchParams, parseQuery(this.#parts.search));
-      }
-    }
-    static {
-      for (const part of parts) {
-        inject(
-          _URL.prototype,
-          {
-            get [part]() {
-              return this.#parts[part];
-            },
-            set [part](value) {
-              this.#set(part, toUSVString(value));
-            }
-          },
-          { enumerable: true }
-        );
-      }
-    }
-  };
-  var linksByParams = /* @__PURE__ */ new WeakMap();
-  var URLSearchParams2 = class {
-    static {
-      __name(this, "URLSearchParams");
-    }
-    #pairs = [];
-    // A query string (with or without `?`), `[[name, value], …]` or anything
-    // iterable of pairs, as `URLSearchParams` are, or `{ name: value }`.
-    constructor(init = "") {
-      if (init !== null && (typeof init === "object" || typeof init === "function")) {
-        const pairs = getPairs(init).map((pair) => pair.map(toUSVString));
-        this.#pairs = typeof init[Symbol.iterator] === "function" ? pairs : [...new Map(pairs)];
-      } else {
-        this.#pairs = parseQuery(toUSVString(init));
-      }
-    }
-    static {
-      setPairs = /* @__PURE__ */ __name((params, pairs) => {
-        params.#pairs = pairs;
-      }, "setPairs");
-    }
-    get size() {
-      return this.#pairs.length;
-    }
-    append(name, value) {
-      checkArguments(arguments, 2, "append");
-      this.#pairs.push([toUSVString(name), toUSVString(value)]);
-      this.#update();
-    }
-    delete(name, value = void 0) {
-      checkArguments(arguments, 1, "delete");
-      name = toUSVString(name);
-      this.#pairs = this.#pairs.filter(
-        (pair) => pair[0] !== name || value !== void 0 && pair[1] !== toUSVString(value)
-      );
-      this.#update();
-    }
-    get(name) {
-      checkArguments(arguments, 1, "get");
-      name = toUSVString(name);
-      return this.#pairs.find((pair) => pair[0] === name)?.[1] ?? null;
-    }
-    getAll(name) {
-      checkArguments(arguments, 1, "getAll");
-      name = toUSVString(name);
-      return this.#pairs.filter((pair) => pair[0] === name).map(([, value]) => value);
-    }
-    has(name, value = void 0) {
-      checkArguments(arguments, 1, "has");
-      name = toUSVString(name);
-      return this.#pairs.some(
-        (pair) => pair[0] === name && (value === void 0 || pair[1] === toUSVString(value))
-      );
-    }
-    set(name, value) {
-      checkArguments(arguments, 2, "set");
-      this.#pairs = setFirst(this.#pairs, [toUSVString(name), toUSVString(value)]);
-      this.#update();
-    }
-    // By name, in UTF-16 code units, as strings compare: stable.
-    sort() {
-      this.#pairs.sort(([a3], [b3]) => a3 < b3 ? -1 : a3 > b3 ? 1 : 0);
-      this.#update();
-    }
-    // By index over the pairs as they are at each step, so what changes while
-    // they're iterated shows:
-    *entries() {
-      for (let i2 = 0; i2 < this.#pairs.length; i2++) {
-        const [name, value] = this.#pairs[i2];
-        yield [name, value];
-      }
-    }
-    toString() {
-      return natives.url.serializeQuery(this.#pairs);
-    }
-    // The URL they belong to follows.
-    #update() {
-      const url = linksByParams.get(this);
-      if (url) setSearch(url, this.toString());
-    }
-  };
-  definePairIterable(URLSearchParams2);
-  defineInterfaces(URL2, URLSearchParams2);
-  function parse(url, base) {
-    return base === void 0 ? natives.url.parse(toUSVString(url)) : natives.url.parse(toUSVString(url), toUSVString(base));
-  }
-  __name(parse, "parse");
-  function toUSVString(value) {
-    return String(value).replace(
-      /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g,
-      "\uFFFD"
-    );
-  }
-  __name(toUSVString, "toUSVString");
-  function parseQuery(query) {
-    return natives.url.parseQuery(query.replace(/^\?/, ""));
-  }
-  __name(parseQuery, "parseQuery");
 
   // ../vendor/urlpattern-polyfill.mjs
   var Pe2 = Object.defineProperty;
@@ -9218,7 +9283,7 @@ ${value}\r
     });
   }
   if (!globalThis.URL) {
-    inject(globalThis, { URL: URL2, URLSearchParams: URLSearchParams2, webkitURL: URL2 });
+    inject(globalThis, { URL: URL2, URLSearchParams, webkitURL: URL2 });
   }
   if (!globalThis.URLPattern) {
     inject(globalThis, { URLPattern: Y2 });
