@@ -97,7 +97,7 @@
   // src/global-scope.js
   var global_scope_exports = {};
   __export(global_scope_exports, {
-    atob: () => atob,
+    atob: () => atob2,
     btoa: () => btoa,
     isSecureContext: () => isSecureContext,
     performance: () => performance2,
@@ -140,7 +140,7 @@
   }
   __name(reportError, "reportError");
   var alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  function atob(data) {
+  function atob2(data) {
     let text = String(data).replace(/[\t\n\f\r ]/g, "");
     if (text.length % 4 === 0) text = text.replace(/==?$/, "");
     if (text.length % 4 === 1 || /[^A-Za-z0-9+/]/.test(text)) {
@@ -162,7 +162,7 @@
     }
     return result;
   }
-  __name(atob, "atob");
+  __name(atob2, "atob");
   function btoa(data) {
     const text = String(data);
     if (/[^\0-\xff]/.test(text)) {
@@ -6510,6 +6510,19 @@ ${stack}` : ""));
     const { method, url, headers, signal, redirect } = request;
     const body = await Body.read(request);
     signal?.throwIfAborted();
+    if (url.startsWith("data:")) {
+      const href = url.replace(/#.*$/s, "");
+      const { type, bytes } = getData(href);
+      const response = new Response(bytes, {
+        statusText: "OK",
+        headers: { "content-type": type }
+      });
+      return setResponse(response, {
+        url: href,
+        redirected: false,
+        type: "basic"
+      });
+    }
     return new Promise((resolve, reject) => {
       let controller;
       const stream = new ReadableStream({
@@ -6559,6 +6572,46 @@ ${stack}` : ""));
     });
   }
   __name(fetch2, "fetch");
+  function getData(url) {
+    const data = url.slice("data:".length);
+    const comma = data.indexOf(",");
+    if (comma < 0) {
+      throw new TypeError(`fetch failed: '${url}' has no data.`);
+    }
+    let type = data.slice(0, comma).replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, "");
+    const encoded = new TextEncoder().encode(data.slice(comma + 1));
+    const decoded = [];
+    for (let i2 = 0; i2 < encoded.length; i2++) {
+      const hex = String.fromCharCode(encoded[i2 + 1], encoded[i2 + 2]);
+      if (encoded[i2] === 37 && /^[\da-f]{2}$/i.test(hex)) {
+        decoded.push(parseInt(hex, 16));
+        i2 += 2;
+      } else {
+        decoded.push(encoded[i2]);
+      }
+    }
+    let bytes = Uint8Array.from(decoded);
+    const base64 = /;[ ]*base64$/i.exec(type);
+    if (base64) {
+      type = type.slice(0, base64.index);
+      let text = "";
+      for (let i2 = 0; i2 < bytes.length; i2 += 8192) {
+        text += String.fromCharCode(...bytes.subarray(i2, i2 + 8192));
+      }
+      try {
+        text = atob(text);
+      } catch {
+        throw new TypeError(`fetch failed: '${url}' isn't valid base64.`);
+      }
+      bytes = Uint8Array.from(text, (char) => char.charCodeAt(0));
+    }
+    if (type.startsWith(";")) type = `text/plain${type}`;
+    if (!/^[^\s/;]+\/[^\s/;]+(;|$)/.test(type)) {
+      type = "text/plain;charset=US-ASCII";
+    }
+    return { type, bytes };
+  }
+  __name(getData, "getData");
   async function readStream(stream) {
     const chunks = [];
     for await (const chunk of stream) {

@@ -1066,6 +1066,32 @@ fn bodies_read_as_form_data<E: Engine>() {
     assert_eq!(runtime.take_output(), ["true true dot.svg image/svg+xml <svg/>", "[[\"\u{feff}a\",\"1\"],[\"b\",\"  \"]]", "TypeError"]);
 }
 
+/// `fetch()` reads `data:` URLs as the Fetch standard has them, percent-encoded or base64, and
+/// so does `XMLHttpRequest`.
+fn fetch_reads_data_urls<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    let script = "const read = async url => { try { const r = await fetch(url); return [r.headers.get('content-type'), r.url, await r.text()].join(' ') } catch (e) { return e.name } }\n\
+         console.log(await read('data:image/svg+xml;charset=utf-8,%3Csvg%2F%3E%20é'))\n\
+         console.log(await read('data:;base64,aGk%3D#x'))\n\
+         console.log(await read('data:text/plain;base64,!!'), await read('data:nocomma'))\n\
+         const xhr = new XMLHttpRequest()\n\
+         xhr.open('GET', 'data:,sent')\n\
+         await new Promise(resolve => { xhr.onload = resolve; xhr.send() })\n\
+         console.log(xhr.responseText)";
+    runtime.execute(&scope, &format!("(async () => {{ try {{ {script} }} catch (e) {{ console.log('error', e.name, e.message) }} }})()")).unwrap();
+    settle(&mut runtime);
+    assert_eq!(
+        runtime.take_output(),
+        [
+            "image/svg+xml;charset=utf-8 data:image/svg+xml;charset=utf-8,%3Csvg%2F%3E%20%C3%A9 <svg/> é",
+            "text/plain;charset=US-ASCII data:;base64,aGk%3D hi",
+            "TypeError TypeError",
+            "sent"
+        ]
+    );
+}
+
 fn scripts_fetch<E: Engine>() {
     let address = serve(4);
     let mut runtime = Runtime::<E>::new().unwrap();
@@ -2816,6 +2842,11 @@ macro_rules! engine_tests {
             #[test]
             fn bodies_read_as_form_data() {
                 super::bodies_read_as_form_data::<$engine>();
+            }
+
+            #[test]
+            fn fetch_reads_data_urls() {
+                super::fetch_reads_data_urls::<$engine>();
             }
 
             #[test]
