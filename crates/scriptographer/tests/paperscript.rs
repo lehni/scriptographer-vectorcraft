@@ -1040,6 +1040,25 @@ fn requests_parse_their_urls<E: Engine>() {
     assert_eq!(runtime.take_output(), ["true false http://example.com/", "TypeError"]);
 }
 
+/// `formData()` reads a body's form: a multipart one, files and all, as a request with a form
+/// writes it, and a URL-encoded one, BOM and all; a body of another type is a `TypeError`.
+fn bodies_read_as_form_data<E: Engine>() {
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    let script = "const form = new FormData()\n\
+         form.append('name', 'dot \"x\"\\n')\n\
+         form.append('file', new Blob(['<svg/>'], { type: 'image/svg+xml' }), 'dot.svg')\n\
+         const read = await new Request('http://example.com/', { method: 'POST', body: form }).formData()\n\
+         const file = read.get('file')\n\
+         console.log(read.get('name') === 'dot \"x\"\\n', file instanceof File, file.name, file.type, await file.text())\n\
+         const pairs = await new Response('\\ufeffa=1&b=%20+', { headers: { 'content-type': 'application/x-www-form-urlencoded' } }).formData()\n\
+         console.log(JSON.stringify([...pairs]))\n\
+         try { await new Response('x').formData() } catch (e) { console.log(e.name) }";
+    runtime.execute(&scope, &format!("(async () => {{ try {{ {script} }} catch (e) {{ console.log('error', e.name, e.message) }} }})()")).unwrap();
+    settle(&mut runtime);
+    assert_eq!(runtime.take_output(), ["true true dot.svg image/svg+xml <svg/>", "[[\"\u{feff}a\",\"1\"],[\"b\",\"  \"]]", "TypeError"]);
+}
+
 fn scripts_fetch<E: Engine>() {
     let address = serve(4);
     let mut runtime = Runtime::<E>::new().unwrap();
@@ -2785,6 +2804,11 @@ macro_rules! engine_tests {
             #[test]
             fn requests_parse_their_urls() {
                 super::requests_parse_their_urls::<$engine>();
+            }
+
+            #[test]
+            fn bodies_read_as_form_data() {
+                super::bodies_read_as_form_data::<$engine>();
             }
 
             #[test]
