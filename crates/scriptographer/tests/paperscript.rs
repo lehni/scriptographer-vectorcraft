@@ -1388,17 +1388,21 @@ fn canvases_have_pixels<E: Engine>() {
 }
 
 /// A canvas path with many points builds in time proportional to them: four times the points take
-/// about four times as long, not sixteen. Timed against each other, as the machine's load varies.
+/// about four times as long, not sixteen. Timed against each other, as the machine's load varies,
+/// and the quickest of three runs each, as the load slows down some runs only.
 fn long_canvas_paths_build_quickly<E: Engine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
     let mut time = |points: u32| {
-        let start = std::time::Instant::now();
         let source = format!(
-            "const ctx{points} = new OffscreenCanvas(100, 100).getContext('2d')\nfor (let i = 0; i < {points}; i++) ctx{points}.lineTo(i % 100, i % 7)"
+            "{{ const ctx = new OffscreenCanvas(100, 100).getContext('2d')\nfor (let i = 0; i < {points}; i++) ctx.lineTo(i % 100, i % 7) }}"
         );
-        runtime.execute(&scope, &source).unwrap();
-        start.elapsed().as_secs_f64()
+        let mut run = || {
+            let start = std::time::Instant::now();
+            runtime.execute(&scope, &source).unwrap();
+            start.elapsed().as_secs_f64()
+        };
+        (0..3).map(|_| run()).fold(f64::INFINITY, f64::min)
     };
     let (short, long) = (time(25000), time(100000));
     assert!(long < short * 8.0, "{short} s, then {long} s");
