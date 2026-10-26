@@ -128,6 +128,69 @@ fn an_item_the_document_cant_hold_is_left_out<E: Engine>() {
     assert_eq!(s.active().unwrap().doc.layers[0].children().unwrap().len(), 3, "the circle went in, beside the two rectangles");
 }
 
+/// New items go in their places by their indices when they come in their order, and else, as when
+/// the script moved or reversed items, or a layer holds an item the document can't, the layer's
+/// children go whole.
+fn new_items_go_in_their_places<E: Engine>() {
+    let (mut s, a, b) = document();
+    let st = s.active().unwrap();
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
+    // Each turn's children, by name, and whether its patch listed them whole:
+    let mut turn = |s: &mut Session, script: &str| {
+        let st = s.active().unwrap();
+        runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
+        runtime.execute(&scope, &format!("var layer = project.activeLayer\n{script}")).unwrap();
+        let mut whole = false;
+        for patch in runtime.take_patches().unwrap() {
+            whole |= patch.params.get("order").is_some();
+            let result = s.execute("document.patch", &patch.params).unwrap();
+            let st = s.active().unwrap();
+            runtime.apply_ids(patch, &result, st.doc.clone(), st.selection.clone(), false).unwrap();
+        }
+        let names: Vec<String> = s.active().unwrap().doc.layers[0]
+            .children()
+            .unwrap()
+            .iter()
+            .map(|n| {
+                n.name.clone().unwrap_or_else(|| {
+                    if n.id == a {
+                        "a".into()
+                    } else if n.id == b {
+                        "b".into()
+                    } else {
+                        "?".into()
+                    }
+                })
+            })
+            .collect();
+        (names, whole)
+    };
+    assert_eq!(turn(&mut s, "new Path({ name: 'c' })\nnew Path({ name: 'd' })"), (vec!["a".into(), "b".into(), "c".into(), "d".into()], false));
+    assert_eq!(
+        turn(&mut s, "layer.insertChild(1, new Path({ name: 'e' }))\nlayer.insertChild(3, new Path({ name: 'f' }))").0,
+        ["a", "e", "b", "f", "c", "d"]
+    );
+    assert_eq!(
+        turn(&mut s, "layer.insertChild(0, new Path({ name: 'g' }))\nlayer.insertChild(0, new Path({ name: 'h' }))"),
+        (["h", "g", "a", "e", "b", "f", "c", "d"].map(String::from).to_vec(), true),
+        "out of their order, the children go whole"
+    );
+    assert_eq!(turn(&mut s, "layer.insertChild(0, layer.lastChild)").0, ["d", "h", "g", "a", "e", "b", "f", "c"]);
+    assert_eq!(turn(&mut s, "layer.reverseChildren()").0, ["c", "f", "b", "e", "a", "g", "h", "d"]);
+    let names = turn(&mut s, "layer.insertChild(0, new Raster({ size: [4, 4] }))").0;
+    assert_eq!(names[0], "c", "the raster isn't in the document");
+    assert_eq!(turn(&mut s, "layer.insertChild(1, new Path({ name: 'i' }))").0[..2], ["i", "c"], "a place past it is one less in the document");
+    // Wherever it goes:
+    turn(&mut s, "layer.addChild(new Group({ name: 'group', children: [new Path({ name: 'k' })] }))");
+    turn(&mut s, "layer.children.group.insertChild(0, layer.firstChild)");
+    turn(&mut s, "layer.children.group.insertChild(1, new Path({ name: 'j' }))");
+    let group = s.active().unwrap().doc.layers[0].children().unwrap().last().unwrap().clone();
+    let names: Vec<_> = group.children().unwrap().iter().map(|n| n.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["j", "k"]);
+}
+
 /// New `Shape`s are live shapes, sized and placed as the script made them; a rectangle with
 /// elliptical corners, which no live shape is, a path of its outline.
 fn new_shapes_are_live_shapes<E: Engine>() {
@@ -1428,6 +1491,11 @@ macro_rules! engine_tests {
             #[test]
             fn an_item_the_document_cant_hold_is_left_out() {
                 super::an_item_the_document_cant_hold_is_left_out::<$engine>();
+            }
+
+            #[test]
+            fn new_items_go_in_their_places() {
+                super::new_items_go_in_their_places::<$engine>();
             }
 
             #[test]

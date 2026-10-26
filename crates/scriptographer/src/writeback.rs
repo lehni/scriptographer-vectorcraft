@@ -28,17 +28,19 @@ mod change {
     pub const CONTENT: u32 = 0x8 | 0x10 | 0x20 | 0x40 | 0x80 | 0x100 | 0x200 | 0x800;
 }
 
-/// One entry of the change log.
+/// One entry of the change log: `reordered` when the item's children changed in order other than by
+/// items inserted and removed.
 pub(crate) struct Change<H> {
     item: H,
     flags: u32,
+    reordered: bool,
     key: Option<NodeId>,
     inserted: bool,
     class: String,
 }
 
 impl<H: Clone> Change<H> {
-    pub(crate) fn read(call: &mut dyn Call<H>, item: H, flags: u32) -> Result<Self, Error> {
+    pub(crate) fn read(call: &mut dyn Call<H>, item: H, flags: u32, reordered: bool) -> Result<Self, Error> {
         let key = match call.get(&item, "key")? {
             Value::Number(n) if n.is_finite() && n >= 0.0 => Some(NodeId(n as u64)),
             _ => None,
@@ -48,7 +50,7 @@ impl<H: Clone> Change<H> {
             Value::String(class) => class,
             _ => String::new(),
         };
-        Ok(Self { item, flags, key, inserted, class })
+        Ok(Self { item, flags, reordered, key, inserted, class })
     }
 }
 
@@ -109,7 +111,7 @@ pub(crate) fn patch<H: Clone>(
                     }
                 }
                 if change.flags & change::CHILDREN != 0 {
-                    parents.push((id, change.item.clone()));
+                    parents.push((id, change.item.clone(), change.reordered));
                 }
             }
             // A new item inside another new item goes in with that one.
@@ -131,7 +133,7 @@ pub(crate) fn patch<H: Clone>(
     }
     for (id, item) in compounds {
         if !replaced_ids.contains(&id) {
-            let change = Change::read(call, item, change::CONTENT)?;
+            let change = Change::read(call, item, change::CONTENT, false)?;
             replace.push(replaced(call, doc, node(doc, id)?, &change)?);
             replaced_ids.push(id);
         }
@@ -144,7 +146,7 @@ pub(crate) fn patch<H: Clone>(
             if let Value::Number(key) = call.get(&linked, "key")?
                 && !replaced_ids.contains(&NodeId(key as u64))
             {
-                let change = Change::read(call, linked.clone(), change::CONTENT)?;
+                let change = Change::read(call, linked.clone(), change::CONTENT, false)?;
                 replace.push(replaced(call, doc, node(doc, NodeId(key as u64))?, &change)?);
                 replaced_ids.push(NodeId(key as u64));
                 texts.push(linked);
@@ -153,7 +155,15 @@ pub(crate) fn patch<H: Clone>(
     }
     let threads = threads(call, doc, &texts, &news)?;
     let mut reordered = Vec::new();
-    for (id, item) in parents {
+    for (id, item, is_reordered) in parents {
+        // The new items of a container that only gained and lost items go in by their indices, as
+        // long as they come in the order of their places: else, its children go whole.
+        let indices: Vec<u64> =
+            news.insert.iter().filter(|insert| insert["parent"] == json!(id.0)).filter_map(|insert| insert["index"].as_u64()).collect();
+        let is_in_order = indices.windows(2).all(|pair| pair[0] < pair[1]);
+        if !is_reordered && is_in_order && !matches!(call.get(&item, HOLDS_UNWRITTEN)?, Value::Bool(true)) {
+            continue;
+        }
         let children = object(call, &item, "children")?;
         let count = number(call.get(&children, "length")?) as usize;
         let mut slots = Vec::new();
@@ -290,6 +300,7 @@ impl<H: Clone> News<H> {
     /// among the inserts, or `None` for an item the document can't hold, which is left out.
     fn add(&mut self, call: &mut dyn Call<H>, item: &H, parent: Json, index: Option<u64>) -> Result<Option<usize>, Error> {
         if is_unwritten(call, item)? {
+            hold_unwritten(call, item)?;
             return Ok(None);
         }
         let k = self.insert.len();
@@ -298,6 +309,7 @@ impl<H: Clone> News<H> {
             Ok(made) => made,
             Err(e) => {
                 call.set(item, UNWRITTEN, &Value::Bool(true))?;
+                hold_unwritten(call, item)?;
                 let class = call.get(item, "className")?;
                 let class = call.to_string(&class)?;
                 let reason = e.to_string();
@@ -360,8 +372,20 @@ fn container_node<H: Clone>(call: &mut dyn Call<H>, item: &H) -> Result<(bool, N
 /// The property that marks an item the document can't hold, which write-back leaves out.
 const UNWRITTEN: &str = "_unwritten";
 
+/// The property that marks a container holding such an item, whose children's indices aren't the
+/// document's: its children go whole.
+const HOLDS_UNWRITTEN: &str = "_holdsUnwritten";
+
 fn is_unwritten<H: Clone>(call: &mut dyn Call<H>, item: &H) -> Result<bool, Error> {
     Ok(matches!(call.get(item, UNWRITTEN)?, Value::Bool(true)))
+}
+
+/// Marks the container of `item`, which the document can't hold, wherever the script puts it.
+fn hold_unwritten<H: Clone>(call: &mut dyn Call<H>, item: &H) -> Result<(), Error> {
+    if let Value::Js(parent) = call.get(item, "parent")? {
+        call.set(&parent, HOLDS_UNWRITTEN, &Value::Bool(true))?;
+    }
+    Ok(())
 }
 
 fn is_text(class: &str) -> bool {

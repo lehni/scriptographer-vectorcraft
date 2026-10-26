@@ -232,7 +232,8 @@ impl<E: Engine> Runtime<E> {
                     match call.get(&entry, "item")? {
                         Value::Js(item) => {
                             let flags = number(call.get(&entry, "flags")?) as u32;
-                            list.push(Change::read(call, item, flags)?);
+                            let reordered = matches!(call.get(&entry, "reordered")?, Value::Bool(true));
+                            list.push(Change::read(call, item, flags, reordered)?);
                         }
                         _ => definitions.push(object(call, &entry, "definition")?),
                     }

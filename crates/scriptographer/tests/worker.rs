@@ -113,6 +113,37 @@ fn adding_to_a_big_layer_is_quick() {
     assert!(start.elapsed() < Duration::from_millis(100), "{:?}", start.elapsed());
 }
 
+/// New items that a frame adds on top of a layer of many go in by their places, without the
+/// layer's children: they cost a fraction of new items that go in below each other, which need
+/// them. Timed against each other, as the machine's load varies.
+#[test]
+fn adding_on_top_of_a_big_layer_leaves_its_children_out() {
+    let mut s = session();
+    let worker = spawn();
+    let script = "for (var i = 0; i < 40000; i++) new Path.Circle([i % 200 * 5, Math.floor(i / 200) * 5], 2)\n\
+                  var layer = project.activeLayer\n\
+                  function onFrame() { for (var i = 0; i < 2; i++) globalThis.below ? layer.insertChild(0, new Path()) : new Path() }";
+    send(&s, &worker, Work::Execute(script.into()));
+    assert_eq!(settle(&mut s, &worker), None);
+    let mut now = 0.0;
+    let mut time = |s: &mut Session, below: bool| {
+        send(s, &worker, Work::Execute(format!("globalThis.below = {below}")));
+        assert_eq!(settle(s, &worker), None);
+        (0..4)
+            .map(|_| {
+                now += 20.0;
+                let start = std::time::Instant::now();
+                send_at(s, &worker, now, Work::Frame);
+                assert_eq!(settle(s, &worker), None);
+                start.elapsed().as_secs_f64()
+            })
+            .reduce(f64::min)
+            .unwrap_or_default()
+    };
+    let (on_top, below) = (time(&mut s, false), time(&mut s, true));
+    assert!(on_top < below / 2.0, "{on_top} s on top, {below} s below");
+}
+
 /// A frame costs little while many objects are selected: the script's selection is read in one
 /// call. The quickest of a few frames, as the machine's load varies: about five times as long
 /// without (14 ms).
