@@ -65,3 +65,11 @@ export function checkArguments(args, count, name) {
     throw new TypeError(`Invalid ${name}(): an argument is missing.`)
   }
 }
+
+// `value` as WebIDL's USVString: a string whose unpaired surrogates are U+FFFD.
+export function toUSVString(value) {
+  return String(value).replace(
+    /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g,
+    '\ufffd'
+  )
+}

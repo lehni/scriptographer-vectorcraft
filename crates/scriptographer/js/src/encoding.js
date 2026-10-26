@@ -1,18 +1,26 @@
 import { getBufferBytes } from './blob.js'
-import { inject, defineInterfaces } from './define.js'
+import { defineInterfaces, toUSVString } from './define.js'
 import { natives } from './natives.js'
 import { TransformStream } from './streams.js'
 
 // `TextEncoder` and `TextDecoder` for scripts outside a browser: UTF-8, as the
-// Encoding standard has it, which the runtime encodes and decodes.
+// Encoding standard has it, which the runtime encodes and decodes, and UTF-16
+// for the decoder, whose text files some apps still write.
 
 export class TextEncoder {
+  get encoding() {
+    return 'utf-8'
+  }
+
   encode(text = '') {
     return natives.encoding.encode(String(text))
   }
 
   // As much of `text` as fits in `bytes`, whole characters only.
   encodeInto(text, bytes) {
+    if (!(bytes instanceof Uint8Array)) {
+      throw new TypeError('Invalid encodeInto(): the bytes are no Uint8Array.')
+    }
     text = String(text)
     let read = 0
     let written = 0
@@ -24,14 +32,36 @@ export class TextEncoder {
       read += char.length
       written += length
     }
-    bytes.set(natives.encoding.encode(text.slice(0, read)))
+    // `set()` throws on a detached buffer, even with nothing to set:
+    if (read) bytes.set(natives.encoding.encode(text.slice(0, read)))
     return { read, written }
   }
 }
 
-const labels = ['utf-8', 'utf8', 'unicode-1-1-utf-8', 'unicode11utf8']
+// The encodings the decoder reads, with their labels:
+const encodings = {
+  'utf-8': [
+    'unicode-1-1-utf-8',
+    'unicode11utf8',
+    'unicode20utf8',
+    'utf-8',
+    'utf8',
+    'x-unicode20utf8'
+  ],
+  'utf-16be': ['unicodefffe', 'utf-16be'],
+  'utf-16le': [
+    'csunicode',
+    'iso-10646-ucs-2',
+    'ucs-2',
+    'unicode',
+    'unicodefeff',
+    'utf-16',
+    'utf-16le'
+  ]
+}
 
 export class TextDecoder {
+  #encoding
   #fatal
   #ignoreBOM
   // The bytes of a character a streamed chunk ended in the middle of, and
@@ -40,12 +70,24 @@ export class TextDecoder {
   #isStart = true
 
   constructor(label = 'utf-8', { fatal = false, ignoreBOM = false } = {}) {
-    label = String(label).trim().toLowerCase()
-    if (!labels.includes(label)) {
-      throw new RangeError(`Unsupported encoding: '${label}', only UTF-8.`)
+    // Labels are ASCII, without the ASCII whitespace around them:
+    label = String(label)
+      .replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, '')
+      .replace(/[A-Z]/g, char => char.toLowerCase())
+    this.#encoding = Object.keys(encodings).find(name =>
+      encodings[name].includes(label)
+    )
+    if (!this.#encoding) {
+      throw new RangeError(
+        `Unsupported encoding: '${label}', only UTF-8 and UTF-16.`
+      )
     }
     this.#fatal = !!fatal
     this.#ignoreBOM = !!ignoreBOM
+  }
+
+  get encoding() {
+    return this.#encoding
   }
 
   get fatal() {
@@ -66,31 +108,35 @@ export class TextDecoder {
       bytes.set(this.#pending)
       bytes.set(given, this.#pending.length)
     }
-    const end = stream ? bytes.length - getIncomplete(bytes) : bytes.length
+    const isUTF8 = this.#encoding === 'utf-8'
+    const isBigEndian = this.#encoding === 'utf-16be'
+    const end = !stream
+      ? bytes.length
+      : bytes.length -
+        (isUTF8 ? getIncomplete(bytes) : getIncompleteUTF16(bytes, isBigEndian))
     this.#pending = bytes.slice(end)
-    let text = natives.encoding.decode(bytes.subarray(0, end), this.#fatal)
+    const part = bytes.subarray(0, end)
+    let text = isUTF8
+      ? natives.encoding.decode(part, this.#fatal)
+      : decodeUTF16(part, isBigEndian, this.#fatal)
     if (text === null) {
-      throw new TypeError('Invalid UTF-8: the data is not valid UTF-8.')
+      // The stream starts over after an error, as a new decoder:
+      this.#pending = new Uint8Array()
+      this.#isStart = true
+      throw new TypeError(
+        `Invalid ${this.#encoding}: the data is not valid ${this.#encoding}.`
+      )
     }
-    if (this.#isStart && !this.#ignoreBOM && text.startsWith('﻿')) {
+    // Only the first character can be a BOM, even when it's the only one:
+    const isStart = this.#isStart
+    this.#isStart = !stream || isStart && !text
+    if (isStart && !this.#ignoreBOM && text.startsWith('\ufeff')) {
       text = text.slice(1)
     }
-    this.#isStart = !stream || this.#isStart && !text
     return text
   }
 }
 
-for (const target of [TextEncoder.prototype, TextDecoder.prototype]) {
-  inject(
-    target,
-    {
-      get encoding() {
-        return 'utf-8'
-      }
-    },
-    { enumerable: true }
-  )
-}
 // The same, chunk by chunk, as streams that strings and bytes go through:
 export class TextEncoderStream {
   #transform
@@ -111,6 +157,10 @@ export class TextEncoderStream {
         if (pending) controller.enqueue(encoder.encode(pending))
       }
     })
+  }
+
+  get encoding() {
+    return 'utf-8'
   }
 
   get readable() {
@@ -144,6 +194,10 @@ export class TextDecoderStream {
     })
   }
 
+  get encoding() {
+    return this.#decoder.encoding
+  }
+
   get fatal() {
     return this.#decoder.fatal
   }
@@ -161,32 +215,72 @@ export class TextDecoderStream {
   }
 }
 
-for (const target of [
-  TextEncoderStream.prototype,
-  TextDecoderStream.prototype
-]) {
-  inject(
-    target,
-    {
-      get encoding() {
-        return 'utf-8'
-      }
-    },
-    { enumerable: true }
-  )
-}
 defineInterfaces(TextEncoder, TextDecoder, TextEncoderStream, TextDecoderStream)
 
-// How many of the bytes at the end start a character that isn't complete.
+// How many of the bytes at the end start a UTF-8 character that's valid so far
+// but not complete, which a streamed chunk keeps for the next one.
 function getIncomplete(bytes) {
   for (let back = 1; back <= Math.min(3, bytes.length); back++) {
-    const byte = bytes[bytes.length - back]
-    if (byte >= 0xc0) {
-      const length = byte >= 0xf0 ? 4 : byte >= 0xe0 ? 3 : 2
-      return length > back ? back : 0
-    } else if (byte < 0x80) {
-      return 0
+    const lead = bytes[bytes.length - back]
+    if (lead < 0x80 || lead >= 0xc0) {
+      const length =
+        lead < 0xc2 || lead > 0xf4 ? 1 : lead >= 0xf0 ? 4 : lead >= 0xe0 ? 3 : 2
+      if (length <= back) return 0
+      // After some leads, the second byte has narrower bounds, as the
+      // Encoding standard's decoder checks them:
+      const second = bytes[bytes.length - back + 1]
+      const [lower, upper] =
+        lead === 0xe0
+          ? [0xa0, 0xbf]
+          : lead === 0xed
+            ? [0x80, 0x9f]
+            : lead === 0xf0
+              ? [0x90, 0xbf]
+              : lead === 0xf4
+                ? [0x80, 0x8f]
+                : [0x80, 0xbf]
+      return back === 1 || second >= lower && second <= upper ? back : 0
     }
   }
   return 0
+}
+
+// The same for UTF-16: an odd byte, after a lead surrogate perhaps.
+function getIncompleteUTF16(bytes, isBigEndian) {
+  const odd = bytes.length % 2
+  const end = bytes.length - odd
+  const unit = end >= 2 ? getUnit(bytes, end - 2, isBigEndian) : 0
+  return odd + (isLead(unit) ? 2 : 0)
+}
+
+// UTF-16 `bytes` as text: unpaired surrogates and an odd byte replaced, or
+// `null` when `isFatal`.
+function decodeUTF16(bytes, isBigEndian, isFatal) {
+  const isOdd = bytes.length % 2 === 1
+  let count = bytes.length >> 1
+  // A lead surrogate before an odd byte is one character cut short:
+  if (isOdd && count && isLead(getUnit(bytes, 2 * count - 2, isBigEndian))) {
+    count--
+  }
+  const units = new Uint16Array(count)
+  for (let i = 0; i < units.length; i++) {
+    units[i] = getUnit(bytes, 2 * i, isBigEndian)
+  }
+  let text = ''
+  for (let i = 0; i < units.length; i += 0x2000) {
+    text += String.fromCharCode(...units.subarray(i, i + 0x2000))
+  }
+  const decoded = toUSVString(text) + (isOdd ? '\ufffd' : '')
+  return isFatal && decoded !== text ? null : decoded
+}
+
+function getUnit(bytes, index, isBigEndian) {
+  const [high, low] = isBigEndian
+    ? [bytes[index], bytes[index + 1]]
+    : [bytes[index + 1], bytes[index]]
+  return (high << 8) | low
+}
+
+function isLead(unit) {
+  return unit >= 0xd800 && unit <= 0xdbff
 }

@@ -64,6 +64,13 @@
     }
   }
   __name(checkArguments, "checkArguments");
+  function toUSVString(value) {
+    return String(value).replace(
+      /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g,
+      "\uFFFD"
+    );
+  }
+  __name(toUSVString, "toUSVString");
 
   // src/abort.js
   var abort_exports = {};
@@ -5698,11 +5705,17 @@ ${stack}` : ""));
     static {
       __name(this, "TextEncoder");
     }
+    get encoding() {
+      return "utf-8";
+    }
     encode(text = "") {
       return natives.encoding.encode(String(text));
     }
     // As much of `text` as fits in `bytes`, whole characters only.
     encodeInto(text, bytes) {
+      if (!(bytes instanceof Uint8Array)) {
+        throw new TypeError("Invalid encodeInto(): the bytes are no Uint8Array.");
+      }
       text = String(text);
       let read2 = 0;
       let written = 0;
@@ -5713,15 +5726,35 @@ ${stack}` : ""));
         read2 += char.length;
         written += length;
       }
-      bytes.set(natives.encoding.encode(text.slice(0, read2)));
+      if (read2) bytes.set(natives.encoding.encode(text.slice(0, read2)));
       return { read: read2, written };
     }
   };
-  var labels = ["utf-8", "utf8", "unicode-1-1-utf-8", "unicode11utf8"];
+  var encodings = {
+    "utf-8": [
+      "unicode-1-1-utf-8",
+      "unicode11utf8",
+      "unicode20utf8",
+      "utf-8",
+      "utf8",
+      "x-unicode20utf8"
+    ],
+    "utf-16be": ["unicodefffe", "utf-16be"],
+    "utf-16le": [
+      "csunicode",
+      "iso-10646-ucs-2",
+      "ucs-2",
+      "unicode",
+      "unicodefeff",
+      "utf-16",
+      "utf-16le"
+    ]
+  };
   var TextDecoder2 = class {
     static {
       __name(this, "TextDecoder");
     }
+    #encoding;
     #fatal;
     #ignoreBOM;
     // The bytes of a character a streamed chunk ended in the middle of, and
@@ -5729,12 +5762,20 @@ ${stack}` : ""));
     #pending = new Uint8Array();
     #isStart = true;
     constructor(label = "utf-8", { fatal = false, ignoreBOM = false } = {}) {
-      label = String(label).trim().toLowerCase();
-      if (!labels.includes(label)) {
-        throw new RangeError(`Unsupported encoding: '${label}', only UTF-8.`);
+      label = String(label).replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, "").replace(/[A-Z]/g, (char) => char.toLowerCase());
+      this.#encoding = Object.keys(encodings).find(
+        (name) => encodings[name].includes(label)
+      );
+      if (!this.#encoding) {
+        throw new RangeError(
+          `Unsupported encoding: '${label}', only UTF-8 and UTF-16.`
+        );
       }
       this.#fatal = !!fatal;
       this.#ignoreBOM = !!ignoreBOM;
+    }
+    get encoding() {
+      return this.#encoding;
     }
     get fatal() {
       return this.#fatal;
@@ -5752,30 +5793,27 @@ ${stack}` : ""));
         bytes.set(this.#pending);
         bytes.set(given, this.#pending.length);
       }
-      const end = stream ? bytes.length - getIncomplete(bytes) : bytes.length;
+      const isUTF8 = this.#encoding === "utf-8";
+      const isBigEndian = this.#encoding === "utf-16be";
+      const end = !stream ? bytes.length : bytes.length - (isUTF8 ? getIncomplete(bytes) : getIncompleteUTF16(bytes, isBigEndian));
       this.#pending = bytes.slice(end);
-      let text = natives.encoding.decode(bytes.subarray(0, end), this.#fatal);
+      const part = bytes.subarray(0, end);
+      let text = isUTF8 ? natives.encoding.decode(part, this.#fatal) : decodeUTF16(part, isBigEndian, this.#fatal);
       if (text === null) {
-        throw new TypeError("Invalid UTF-8: the data is not valid UTF-8.");
+        this.#pending = new Uint8Array();
+        this.#isStart = true;
+        throw new TypeError(
+          `Invalid ${this.#encoding}: the data is not valid ${this.#encoding}.`
+        );
       }
-      if (this.#isStart && !this.#ignoreBOM && text.startsWith("\uFEFF")) {
+      const isStart = this.#isStart;
+      this.#isStart = !stream || isStart && !text;
+      if (isStart && !this.#ignoreBOM && text.startsWith("\uFEFF")) {
         text = text.slice(1);
       }
-      this.#isStart = !stream || this.#isStart && !text;
       return text;
     }
   };
-  for (const target of [TextEncoder2.prototype, TextDecoder2.prototype]) {
-    inject(
-      target,
-      {
-        get encoding() {
-          return "utf-8";
-        }
-      },
-      { enumerable: true }
-    );
-  }
   var TextEncoderStream = class {
     static {
       __name(this, "TextEncoderStream");
@@ -5795,6 +5833,9 @@ ${stack}` : ""));
           if (pending) controller.enqueue(encoder.encode(pending));
         }
       });
+    }
+    get encoding() {
+      return "utf-8";
     }
     get readable() {
       return this.#transform.readable;
@@ -5825,6 +5866,9 @@ ${stack}` : ""));
         }
       });
     }
+    get encoding() {
+      return this.#decoder.encoding;
+    }
     get fatal() {
       return this.#decoder.fatal;
     }
@@ -5838,34 +5882,55 @@ ${stack}` : ""));
       return this.#transform.writable;
     }
   };
-  for (const target of [
-    TextEncoderStream.prototype,
-    TextDecoderStream.prototype
-  ]) {
-    inject(
-      target,
-      {
-        get encoding() {
-          return "utf-8";
-        }
-      },
-      { enumerable: true }
-    );
-  }
   defineInterfaces(TextEncoder2, TextDecoder2, TextEncoderStream, TextDecoderStream);
   function getIncomplete(bytes) {
     for (let back = 1; back <= Math.min(3, bytes.length); back++) {
-      const byte = bytes[bytes.length - back];
-      if (byte >= 192) {
-        const length = byte >= 240 ? 4 : byte >= 224 ? 3 : 2;
-        return length > back ? back : 0;
-      } else if (byte < 128) {
-        return 0;
+      const lead = bytes[bytes.length - back];
+      if (lead < 128 || lead >= 192) {
+        const length = lead < 194 || lead > 244 ? 1 : lead >= 240 ? 4 : lead >= 224 ? 3 : 2;
+        if (length <= back) return 0;
+        const second = bytes[bytes.length - back + 1];
+        const [lower, upper] = lead === 224 ? [160, 191] : lead === 237 ? [128, 159] : lead === 240 ? [144, 191] : lead === 244 ? [128, 143] : [128, 191];
+        return back === 1 || second >= lower && second <= upper ? back : 0;
       }
     }
     return 0;
   }
   __name(getIncomplete, "getIncomplete");
+  function getIncompleteUTF16(bytes, isBigEndian) {
+    const odd = bytes.length % 2;
+    const end = bytes.length - odd;
+    const unit = end >= 2 ? getUnit(bytes, end - 2, isBigEndian) : 0;
+    return odd + (isLead(unit) ? 2 : 0);
+  }
+  __name(getIncompleteUTF16, "getIncompleteUTF16");
+  function decodeUTF16(bytes, isBigEndian, isFatal) {
+    const isOdd = bytes.length % 2 === 1;
+    let count = bytes.length >> 1;
+    if (isOdd && count && isLead(getUnit(bytes, 2 * count - 2, isBigEndian))) {
+      count--;
+    }
+    const units2 = new Uint16Array(count);
+    for (let i2 = 0; i2 < units2.length; i2++) {
+      units2[i2] = getUnit(bytes, 2 * i2, isBigEndian);
+    }
+    let text = "";
+    for (let i2 = 0; i2 < units2.length; i2 += 8192) {
+      text += String.fromCharCode(...units2.subarray(i2, i2 + 8192));
+    }
+    const decoded = toUSVString(text) + (isOdd ? "\uFFFD" : "");
+    return isFatal && decoded !== text ? null : decoded;
+  }
+  __name(decodeUTF16, "decodeUTF16");
+  function getUnit(bytes, index, isBigEndian) {
+    const [high, low] = isBigEndian ? [bytes[index], bytes[index + 1]] : [bytes[index + 1], bytes[index]];
+    return high << 8 | low;
+  }
+  __name(getUnit, "getUnit");
+  function isLead(unit) {
+    return unit >= 55296 && unit <= 56319;
+  }
+  __name(isLead, "isLead");
 
   // src/event-source.js
   var states2 = { CONNECTING: 0, OPEN: 1, CLOSED: 2 };
@@ -6152,13 +6217,6 @@ ${stack}` : ""));
     return base === void 0 ? natives.url.parse(toUSVString(url)) : natives.url.parse(toUSVString(url), toUSVString(base));
   }
   __name(parse, "parse");
-  function toUSVString(value) {
-    return String(value).replace(
-      /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g,
-      "\uFFFD"
-    );
-  }
-  __name(toUSVString, "toUSVString");
   function parseQuery(query) {
     return natives.url.parseQuery(query.replace(/^\?/, ""));
   }
