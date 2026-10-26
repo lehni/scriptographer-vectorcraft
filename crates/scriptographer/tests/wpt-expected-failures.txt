@@ -60,17 +60,11 @@ encoding/iso-2022-jp-decoder.any.js: iso-2022-jp decoder: reset after a final ch
 encoding/iso-2022-jp-decoder.any.js: iso-2022-jp decoder: reset after a final chunk, fatal=true
 encoding/iso-2022-jp-decoder.any.js: iso-2022-jp decoder: reset after an empty flush, fatal=false
 encoding/iso-2022-jp-decoder.any.js: iso-2022-jp decoder: reset after an empty flush, fatal=true
-encoding/replacement-encodings.any.js: csiso2022kr - empty input decodes to empty output.
 encoding/replacement-encodings.any.js: csiso2022kr - non-empty input decodes to one replacement character.
-encoding/replacement-encodings.any.js: hz-gb-2312 - empty input decodes to empty output.
 encoding/replacement-encodings.any.js: hz-gb-2312 - non-empty input decodes to one replacement character.
-encoding/replacement-encodings.any.js: iso-2022-cn - empty input decodes to empty output.
 encoding/replacement-encodings.any.js: iso-2022-cn - non-empty input decodes to one replacement character.
-encoding/replacement-encodings.any.js: iso-2022-cn-ext - empty input decodes to empty output.
 encoding/replacement-encodings.any.js: iso-2022-cn-ext - non-empty input decodes to one replacement character.
-encoding/replacement-encodings.any.js: iso-2022-kr - empty input decodes to empty output.
 encoding/replacement-encodings.any.js: iso-2022-kr - non-empty input decodes to one replacement character.
-encoding/replacement-encodings.any.js: replacement - empty input decodes to empty output.
 encoding/replacement-encodings.any.js: replacement - non-empty input decodes to one replacement character.
 encoding/streams/decode-attributes.any.js: encoding attribute should have correct value for 'ascii'
 encoding/streams/decode-attributes.any.js: encoding attribute should have correct value for 'iso-8859-2'
@@ -1417,19 +1411,9 @@ encoding/textencoder-constructor-non-utf.any.js: Encoding argument supported for
 encoding/textencoder-constructor-non-utf.any.js: Encoding argument supported for decode: x-mac-cyrillic
 encoding/textencoder-constructor-non-utf.any.js: Encoding argument supported for decode: x-user-defined
 encoding/unsupported-encodings.any.js: UTF-32 with BOM should decode as UTF-16LE
-encoding/unsupported-encodings.any.js: UTF-32 with no BOM should decode as UTF-8
 encoding/unsupported-encodings.any.js: UTF-32LE with BOM should decode as UTF-16LE
-encoding/unsupported-encodings.any.js: UTF-32LE with no BOM should decode as UTF-8
-encoding/unsupported-encodings.any.js: UTF-32be with BOM should decode as UTF-8
-encoding/unsupported-encodings.any.js: UTF-32be with no BOM should decode as UTF-8
-encoding/unsupported-encodings.any.js: UTF-7 should not be supported
 encoding/unsupported-encodings.any.js: utf-32 with BOM should decode as UTF-16LE
-encoding/unsupported-encodings.any.js: utf-32 with no BOM should decode as UTF-8
-encoding/unsupported-encodings.any.js: utf-32be with BOM should decode as UTF-8
-encoding/unsupported-encodings.any.js: utf-32be with no BOM should decode as UTF-8
 encoding/unsupported-encodings.any.js: utf-32le with BOM should decode as UTF-16LE
-encoding/unsupported-encodings.any.js: utf-32le with no BOM should decode as UTF-8
-encoding/unsupported-encodings.any.js: utf-7 should not be supported
 html/canvas/offscreen/canvas-context/2d.getContext.options.any.js: 2d
 html/canvas/offscreen/color-type/2d.color.type.u8p3.to.u8srgb.to.u8p3.worker.js: test srgb unorm8 canvas storing 8-bit display-p3 data accurately
 html/canvas/offscreen/color-type/2d.color.type.u8srgb.to.u8p3.to.u8srgb.worker.js: test display-p3 unorm8 canvas not storing 8-bit srgb data accurately

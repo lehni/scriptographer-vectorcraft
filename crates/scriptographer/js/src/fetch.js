@@ -351,6 +351,20 @@ export async function fetch(input, init) {
   // Read before it's sent, so the signal may have aborted meanwhile:
   const body = await Body.read(request)
   signal?.throwIfAborted()
+  if (url.startsWith('data:')) {
+    // Without the fragment, as responses' URLs are:
+    const href = url.replace(/#.*$/s, '')
+    const { type, bytes } = getData(href)
+    const response = new Response(bytes, {
+      statusText: 'OK',
+      headers: { 'content-type': type }
+    })
+    return setResponse(response, {
+      url: href,
+      redirected: false,
+      type: 'basic'
+    })
+  }
   return new Promise((resolve, reject) => {
     let controller
     const stream = new ReadableStream({
@@ -401,6 +415,51 @@ export async function fetch(input, init) {
     }
     signal?.addEventListener('abort', abort)
   })
+}
+
+// The type and bytes of the `data:` URL `url`, without its fragment, as the
+// Fetch standard's data: URL processor reads them, or a `TypeError`.
+function getData(url) {
+  const data = url.slice('data:'.length)
+  const comma = data.indexOf(',')
+  if (comma < 0) {
+    throw new TypeError(`fetch failed: '${url}' has no data.`)
+  }
+  let type = data
+    .slice(0, comma)
+    .replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, '')
+  // Percent-decoded, the rest as the UTF-8 that URLs are:
+  const encoded = new TextEncoder().encode(data.slice(comma + 1))
+  const decoded = []
+  for (let i = 0; i < encoded.length; i++) {
+    const hex = String.fromCharCode(encoded[i + 1], encoded[i + 2])
+    if (encoded[i] === 0x25 && /^[\da-f]{2}$/i.test(hex)) {
+      decoded.push(parseInt(hex, 16))
+      i += 2
+    } else {
+      decoded.push(encoded[i])
+    }
+  }
+  let bytes = Uint8Array.from(decoded)
+  const base64 = /;[ ]*base64$/i.exec(type)
+  if (base64) {
+    type = type.slice(0, base64.index)
+    let text = ''
+    for (let i = 0; i < bytes.length; i += 0x2000) {
+      text += String.fromCharCode(...bytes.subarray(i, i + 0x2000))
+    }
+    try {
+      text = atob(text)
+    } catch {
+      throw new TypeError(`fetch failed: '${url}' isn't valid base64.`)
+    }
+    bytes = Uint8Array.from(text, char => char.charCodeAt(0))
+  }
+  if (type.startsWith(';')) type = `text/plain${type}`
+  if (!/^[^\s/;]+\/[^\s/;]+(;|$)/.test(type)) {
+    type = 'text/plain;charset=US-ASCII'
+  }
+  return { type, bytes }
 }
 
 // The bytes of `stream`, which gives them as `Uint8Array`s, together:
