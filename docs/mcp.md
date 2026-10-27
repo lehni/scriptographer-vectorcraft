@@ -236,10 +236,12 @@ for callers that keep their own copy of the art and write back what changed (scr
 `insert` new objects (`{parent, index?, node}`; their ids are replaced with new ones, returned as `ids`),
 `replace` objects by their id (a container sent without its children keeps them), and `order` sets a parent's
 children exactly, moving listed objects from elsewhere and placing the k-th insert with `{new: k}`. They apply in
-that order, and a patch that fails anywhere changes nothing. During an interaction (a drag in progress) a patch
-applies beneath it, so the interaction's next preview keeps it; it leaves out the objects the interaction changed
-and lists them as `skipped`, and it records no undo step of its own. `extend: true` adds a patch to the newest undo
-step instead of recording one, for a caller whose own last edit that step is.
+that order, after `images` (`[{mime, dataBase64}]`), which adds encoded images for the objects to show, each under
+its content key (`img` and the 64-bit FNV-1a hash of its bytes, in 16 hex digits), the `key` an image object names.
+A patch that fails anywhere changes nothing. During an interaction (a drag in progress) a patch applies beneath it,
+so the interaction's next preview keeps it; it leaves out the objects the interaction changed and lists them as
+`skipped`, and it records no undo step of its own. `extend: true` adds a patch to the newest undo step instead of
+recording one, for a caller whose own last edit that step is.
 
 In the summary an object reports its paint as `fill`, `stroke` (labels) and `strokeWidth`. So does a compound path,
 whose paint is its own: its member paths report `compoundMember: true` instead of a paint they don't have. Every

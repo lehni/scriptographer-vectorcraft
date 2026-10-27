@@ -6,7 +6,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Document, ImageBlob, Node, NodeId, NodeKind};
 use vectorcraft_geom::Rect;
 
 use super::{CommandSpec, bad, cmd, has_doc};
@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Patch Document",
         [],
         None,
-        "{label?: undo step name (default \"Edit\"), extend?: true adds to the newest undo step instead of recording one (for a caller whose last edit that step is), remove?: [ids], insert?: [{parent: id|null|{new: k} (null: the layer list; {new: k}: the k-th insert, an earlier one), index?: position among the parent's children (bottom first; default: on top), node: object JSON as document.node returns it (its ids are replaced with new ones)}], replace?: [object JSON with its id (a container sent without its children keeps them)], order?: [{parent: id|null|{new: k}, children: [id|{new: k}]}] (the parent's children become exactly these, bottom first; listed objects from elsewhere move here; {new: k} places the k-th insert), threads?: [[id|{new: k}]] (each list of frames, area type or type on a path, becomes one thread, in that order, which the threads they were in lose; a list of one frame takes it out of its thread; the stories flow again), keep?: {objects: [ids], lists: [parent id|null], patterns?: [names], symbols?: [names]} (what changed since the caller's copy of the document, which the patch leaves out), patterns?: [{name, tile?: [x, y, width, height], art?: [object JSON]}] (a new pattern swatch, or an existing one's tile and art replaced and its other options kept; a tile given turns Size Tile to Art off), symbols?: [{name, art: object JSON}] (a new symbol, or an existing one's art, in the symbol's space, replaced: its instances keep their transforms)} applied in that order, the patterns and symbols first, as one undo step; during an interaction (a drag) it applies beneath it, leaving out the objects, patterns and symbols the interaction changed too → {ids: [the new id of each insert], skipped?: [the objects left out], skippedPatterns?: [names], skippedSymbols?: [names]}",
+        "{label?: undo step name (default \"Edit\"), extend?: true adds to the newest undo step instead of recording one (for a caller whose last edit that step is), remove?: [ids], insert?: [{parent: id|null|{new: k} (null: the layer list; {new: k}: the k-th insert, an earlier one), index?: position among the parent's children (bottom first; default: on top), node: object JSON as document.node returns it (its ids are replaced with new ones)}], replace?: [object JSON with its id (a container sent without its children keeps them)], order?: [{parent: id|null|{new: k}, children: [id|{new: k}]}] (the parent's children become exactly these, bottom first; listed objects from elsewhere move here; {new: k} places the k-th insert), threads?: [[id|{new: k}]] (each list of frames, area type or type on a path, becomes one thread, in that order, which the threads they were in lose; a list of one frame takes it out of its thread; the stories flow again), keep?: {objects: [ids], lists: [parent id|null], patterns?: [names], symbols?: [names]} (what changed since the caller's copy of the document, which the patch leaves out), patterns?: [{name, tile?: [x, y, width, height], art?: [object JSON]}] (a new pattern swatch, or an existing one's tile and art replaced and its other options kept; a tile given turns Size Tile to Art off), symbols?: [{name, art: object JSON}] (a new symbol, or an existing one's art, in the symbol's space, replaced: its instances keep their transforms), images?: [{mime: image/…, dataBase64}] (encoded images the objects show, each kept under its content key, img and the 64-bit FNV-1a hash of its bytes in 16 hex digits, which an image object's key names)} applied in that order, the images, patterns and symbols first, as one undo step; during an interaction (a drag) it applies beneath it, leaving out the objects, patterns and symbols the interaction changed too → {ids: [the new id of each insert], skipped?: [the objects left out], skippedPatterns?: [names], skippedSymbols?: [names]}",
         has_doc,
         patch
     )]
@@ -51,6 +51,7 @@ struct Ops {
     /// Each pattern's name, and its tile and art when given.
     patterns: Vec<(String, Option<Rect>, Option<Vec<Node>>)>,
     symbols: Vec<(String, Node)>,
+    images: Vec<ImageBlob>,
 }
 
 /// What a patch left out: objects, and patterns and symbols by name.
@@ -153,7 +154,17 @@ fn parse(p: &Value) -> Result<Ops> {
             Ok((name(entry, "symbols")?, parse_node(art.clone(), "symbols")?))
         })
         .collect::<Result<Vec<_>>>()?;
-    Ok(Ops { remove, inserts, replaces, orders, threads, patterns, symbols })
+    let images = list(p, "images")?
+        .iter()
+        .map(|entry| {
+            let mime = entry.get("mime").and_then(Value::as_str).filter(|mime| mime.starts_with("image/"));
+            let mime = mime.ok_or_else(|| bad(CMD, "images: each image needs its mime type, image/…"))?;
+            let data = entry.get("dataBase64").and_then(Value::as_str).and_then(vectorcraft_format::base64_decode);
+            let data = data.ok_or_else(|| bad(CMD, "images: each image needs its bytes as dataBase64"))?;
+            Ok(ImageBlob::new(mime, data))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(Ops { remove, inserts, replaces, orders, threads, patterns, symbols, images })
 }
 
 /// An object of a list: an existing object's id, or `{new: k}`, the k-th of `inserts` inserts.
@@ -171,7 +182,10 @@ fn slot(value: &Value, inserts: usize, what: &str) -> Result<Slot> {
 
 /// Applies `ops` to `doc`. Returns the new ids of the inserts.
 fn apply(doc: &mut Document, ops: &Ops) -> Result<Vec<u64>> {
-    // Patterns and symbols first, so the objects can use the new ones:
+    // Images, patterns and symbols first, so the objects can use the new ones:
+    for image in &ops.images {
+        doc.images.entry(image.content_key()).or_insert_with(|| image.clone());
+    }
     for (name, tile, art) in &ops.patterns {
         super::patterncmds::set_pattern(doc, name, *tile, art.as_deref()).map_err(|e| bad(CMD, format!("patterns: {e}")))?;
     }
