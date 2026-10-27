@@ -174,7 +174,7 @@ pub(crate) fn patch<H: Clone>(
             let child = object(call, &children, &i.to_string())?;
             match call.get(&child, "key")? {
                 Value::Number(key) => slots.push(json!(key as u64)),
-                _ if is_unwritten(call, &child)? => {}
+                _ if is_unwritten(call, &child)? || is_loading(call, &child)? => {}
                 _ => {
                     let paper_id = number(call.get(&child, "id")?) as u64;
                     let k = news.new.get(&paper_id).ok_or_else(|| Error::Script("a new item is missing from the change log".into()))?;
@@ -306,7 +306,8 @@ impl<H: Clone> News<H> {
     /// its order list, so objects a script moved into a new group keep their ids. Returns its index
     /// among the inserts, or `None` for an item the document can't hold, which is left out.
     fn add(&mut self, call: &mut dyn Call<H>, item: &H, parent: Json, index: Option<u64>) -> Result<Option<usize>, Error> {
-        if is_unwritten(call, item)? {
+        // A raster whose image is loading goes in once it has, which it reports as a change:
+        if is_unwritten(call, item)? || is_loading(call, item)? {
             hold_unwritten(call, item)?;
             return Ok(None);
         }
@@ -396,9 +397,6 @@ fn write_pixels<H: Clone>(call: &mut dyn Call<H>, raster: &H, image: &mut ImageO
     if number(call.get(raster, "width")?) * number(call.get(raster, "height")?) == 0.0 {
         return Err(Error::Script("it has no pixels".into()));
     }
-    if !matches!(call.get(raster, "loaded")?, Value::Bool(true)) {
-        return Err(Error::Script("its image hasn't loaded".into()));
-    }
     let data = crate::handle(method(call, raster, "getImageData", &[])?, "getImageData()")?;
     let (width, height) = (number(call.get(&data, "width")?) as u32, number(call.get(&data, "height")?) as u32);
     let bytes = crate::handle(call.get(&data, "data")?, "data")?;
@@ -409,6 +407,17 @@ fn write_pixels<H: Clone>(call: &mut dyn Call<H>, raster: &H, image: &mut ImageO
     let blob = ImageBlob::png(png);
     *image = ImageObject { key: blob.content_key(), width, height, link: None, placement: Default::default(), ..image.clone() };
     Ok(blob)
+}
+
+/// Is `item` a raster whose image is still loading?
+fn is_loading<H: Clone>(call: &mut dyn Call<H>, item: &H) -> Result<bool, Error> {
+    if !matches!(call.get(item, "className")?, Value::String(class) if class == "Raster") || matches!(call.get(item, "loaded")?, Value::Bool(true)) {
+        return Ok(false);
+    }
+    Ok(match call.get(item, "image")? {
+        Value::Js(image) => matches!(call.get(&image, "complete")?, Value::Bool(false)),
+        _ => false,
+    })
 }
 
 /// Gives `image` the transform of the raster's matrix, unless it's the one it has but for the
@@ -611,7 +620,8 @@ fn replaced<H: Clone>(
         // Read without exporting it, which would write out its pixels:
         "Raster" => {
             if let NodeKind::Image(image) = &mut node.kind {
-                if change.flags & change::PIXELS != 0 {
+                // An image the script is loading keeps the one it has until it has loaded:
+                if change.flags & change::PIXELS != 0 && !is_loading(call, &change.item)? {
                     images.push(write_pixels(call, &change.item, image)?);
                 }
                 write_matrix(call, &change.item, image)?;

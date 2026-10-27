@@ -1267,6 +1267,52 @@ fn items_move_between_documents<E: Engine>() {
     assert_eq!((bounds.x0, bounds.y0, bounds.width(), bounds.height()), (50.0, 10.0, 30.0, 20.0), "where it was: {b:?}");
 }
 
+/// A raster a script makes of an image from the web goes in once the image has loaded, in a later
+/// turn, as it arrives after the turn the raster is made in.
+fn rasters_go_in_once_their_images_load<E: Engine>() {
+    let (mut s, ..) = document();
+    let mut png = Vec::new();
+    let rgba = image::RgbaImage::from_raw(2, 1, vec![255, 0, 0, 255, 0, 0, 255, 255]).unwrap();
+    rgba.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    // A server for the one request, which answers once it has read it:
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = format!("http://{}", listener.local_addr().unwrap());
+    std::thread::spawn(move || {
+        use std::io::{BufRead, Write};
+        let mut stream = listener.incoming().next().unwrap().unwrap();
+        let mut reader = std::io::BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        while reader.read_line(&mut line).unwrap() > 2 {
+            line.clear();
+        }
+        write!(stream, "HTTP/1.1 200 OK\r\ncontent-type: image/png\r\ncontent-length: {}\r\n\r\n", png.len()).unwrap();
+        stream.write_all(&png).unwrap();
+    });
+    let st = s.active().unwrap();
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.execute(&scope, &format!("new Raster('{address}/photo.png', [100, 50])")).unwrap();
+    let turn = |s: &mut Session, runtime: &mut Runtime<E>| {
+        for patch in runtime.take_patches().unwrap() {
+            let result = s.execute("document.patch", &patch.params).unwrap();
+            let st = s.active().unwrap();
+            runtime.apply_ids(patch, &result, st.doc.clone(), st.selection.clone(), false).unwrap();
+        }
+        s.active().unwrap().doc.layers[0].children().unwrap().len()
+    };
+    assert_eq!(turn(&mut s, &mut runtime), 2, "not yet, while it loads");
+    let start = std::time::Instant::now();
+    while turn(&mut s, &mut runtime) < 3 && start.elapsed() < std::time::Duration::from_secs(2) {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        runtime.run_timers(start.elapsed().as_secs_f64() * 1000.0).unwrap();
+    }
+    assert_eq!(runtime.take_output(), Vec::<String>::new());
+    let added = s.active().unwrap().doc.layers[0].children().unwrap().last().unwrap().clone();
+    assert_eq!(added.geometric_bounds().unwrap(), Rect::new(99.0, 49.5, 101.0, 50.5));
+    assert_eq!(pixels(&s, added.id), [[255, 0, 0, 255], [0, 0, 255, 255]]);
+}
+
 /// An image a script moves to another document takes its pixels along, where it was.
 fn images_move_between_documents<E: Engine>() {
     let (mut s, ..) = document();
@@ -1538,6 +1584,11 @@ macro_rules! engine_tests {
             #[test]
             fn new_rasters_go_in() {
                 super::new_rasters_go_in::<$engine>();
+            }
+
+            #[test]
+            fn rasters_go_in_once_their_images_load() {
+                super::rasters_go_in_once_their_images_load::<$engine>();
             }
 
             #[test]

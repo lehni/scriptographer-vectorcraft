@@ -30,6 +30,7 @@ import * as streams from './streams.js'
 import { notifyRejections, reportRejections } from './rejections.js'
 import { FontFace, FontFaceSet } from './font-face.js'
 import { LocalFile } from './local-file.js'
+import { WorkerLocation, setLocation } from './location.js'
 import { Lock, LockManager } from './locks.js'
 import {
   Palette,
@@ -168,6 +169,11 @@ if (natives.fs) {
 }
 if (!globalThis.OffscreenCanvas) {
   inject(globalThis, { ...canvas })
+}
+// The script's URL, once the runtime knows its file; a browser has the page's:
+if (!globalThis.location) {
+  inject(globalThis, { WorkerLocation })
+  Object.assign(natives, { setLocation })
 }
 // Fonts for the canvases, as a worker has them, `fonts`:
 if (!globalThis.FontFace) {

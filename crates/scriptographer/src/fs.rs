@@ -1,5 +1,5 @@
-//! What `LocalFile` and the File System Access API on desktop (`js/src/local-file.js` and
-//! `js/src/file-system.js`) need of the runtime: the file system, by path. A relative path is from
+//! What `LocalFile`, the File System Access API and `fetch()` on desktop (`js/src/local-file.js`,
+//! `js/src/file-system.js` and `js/src/fetch.js`) need of the runtime: the file system, by path. A relative path is from
 //! the script's folder. What fails throws the `DOMException` browsers give: `NotFoundError`,
 //! `NotAllowedError`, …
 
@@ -8,12 +8,12 @@ use std::path::{Path, PathBuf};
 use crate::{Call, Engine, Error, HostFunction, Value};
 
 /// The natives: `path(...parts)`, the parts joined as `path.join()` joins them (an absolute part
-/// starts the path again), `info(path)`, `read(path)`, `write(path, bytes, append)`, `list(path)`,
+/// starts the path again), `info(path)`, `fromURL(url)`, a `file:` URL's path, `read(path)`, `write(path, bytes, append)`, `list(path)`,
 /// `makeDirectory(path, recursive)`, `remove(path, recursive)`, `rename(path, nameOrPath)`, which
 /// gives the new path, `copy(from, to)`, `relative(directory, path)`, the names from the directory
 /// down to the path or `null`, and `userDirectory(name)`, one of the user's directories.
 pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E::Handle)>, Error> {
-    let natives: [(&str, HostFunction<E::Handle>); 13] = [
+    let natives: [(&str, HostFunction<E::Handle>); 14] = [
         ("privateDirectory", private_directory),
         ("usage", usage),
         ("path", |call, _, args| {
@@ -24,6 +24,12 @@ pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E:
             Ok(Value::String(display(&absolute(call, &path)?)))
         }),
         ("info", info),
+        ("fromURL", |call, _, args| {
+            let href = call.to_string(args.first().unwrap_or(&Value::Undefined))?;
+            let path = url::Url::parse(&href).ok().and_then(|url| url.to_file_path().ok());
+            let path = path.ok_or_else(|| Error::Type(format!("fetch failed: '{href}' is no file's URL.")))?;
+            Ok(Value::String(display(&path)))
+        }),
         ("read", |call, _, args| {
             let path = path(call, args, 0)?;
             let bytes = std::fs::read(&path).map_err(|e| io_error(&path, &e, false))?;

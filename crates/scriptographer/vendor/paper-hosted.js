@@ -9,7 +9,7 @@
  *
  * All rights reserved.
  *
- * Date: Tue Oct 27 17:41:55 2026 +0100
+ * Date: Tue Oct 27 22:18:28 2026 +0100
  *
  ***
  *
@@ -6163,7 +6163,7 @@ var Raster = Item.extend({
 			var image,
 				type = typeof source,
 				object = type === 'string'
-					? document.getElementById(source)
+					? document && document.getElementById(source)
 					: type  === 'object'
 						? source
 						: null;
@@ -23241,14 +23241,11 @@ var Tween = Base.extend(Emitter, /** @lends Tween# */{
 	},
 
 	_handleFrame: function(time) {
-		var startTime = this._startTime,
-			progress = startTime
-				? (time - startTime) / this.duration
-				: 0;
-		if (!startTime) {
-			this._startTime = time;
-		}
-		this.update(progress);
+		var startTime = this._startTime;
+		// The first frame starts the tween, also when its time is 0:
+		if (startTime == null)
+			startTime = this._startTime = time;
+		this.update((time - startTime) / this.duration);
 	},
 
 	_getState: function(state) {
@@ -27530,8 +27527,6 @@ Base.exports.PaperScript = function() {
 	}
 
 	function compile(code, options) {
-		if (!code)
-			return '';
 		options = options || {};
 
 		var insertions = [];

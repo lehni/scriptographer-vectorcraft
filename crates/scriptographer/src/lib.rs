@@ -707,7 +707,18 @@ impl<E: Engine> Runtime<E> {
                 set_language(call, &navigator, language)?;
             }
             Ok(())
-        })
+        })?;
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(url) = file.and_then(|file| url::Url::from_file_path(file).ok()) {
+            self.set_location(url.as_str())?;
+        }
+        Ok(())
+    }
+
+    /// Sets the global `location`, the script's URL, which relative URLs resolve against.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn set_location(&mut self, href: &str) -> Result<(), Error> {
+        self.engine.with_call(|call| call_bundle(call, "setLocation", &[Value::String(href.into())]).map(|_| ()))
     }
 
     /// Keeps `script.preferences` with the script's `localStorage`, when they changed.

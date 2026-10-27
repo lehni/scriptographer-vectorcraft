@@ -5,6 +5,7 @@ import {
   internal,
   defineInterfaces
 } from './define.js'
+import { EventTarget, Event, defineEventHandlers } from './events.js'
 import { natives } from './natives.js'
 import {
   TextCluster,
@@ -24,6 +25,7 @@ const { canvas } = natives
 // The slots of the objects, which the classes' static blocks reach:
 let getCanvasSurface,
   getBitmapSurface,
+  getImageBitmap,
   getPath,
   getGradientPaint,
   getPatternPaint
@@ -244,17 +246,24 @@ export class OffscreenCanvasRenderingContext2D {
     return createGradient('conic', angle, x, y)
   }
 
+  // `null` for an image that is still loading, as in browsers:
   createPattern(image, repetition) {
     checkArguments(arguments, 2, 'createPattern')
+    if (isLoading(image)) {
+      return null
+    }
     return new CanvasPattern(
       internal,
       canvas.createPattern(getSurface(image), repetition)
     )
   }
 
+  // Nothing for an image that is still loading, as in browsers:
   drawImage(image, ...args) {
     checkOverloads(arguments, [3, 5, 9], 'drawImage')
-    canvas.methods.drawImage.call(this.#surface, getSurface(image), ...args)
+    if (!isLoading(image)) {
+      canvas.methods.drawImage.call(this.#surface, getSurface(image), ...args)
+    }
   }
 
   // The path first, `null` for the current one:
@@ -526,6 +535,142 @@ export class ImageBitmap {
   }
 }
 
+// `<img>` without a document, `new Image()`: setting its `src` loads it through
+// `fetch()`, relative to the script's `location`, and decodes it as
+// `createImageBitmap()` does, then fires `load`, or `error` when that fails.
+export class HTMLImageElement extends EventTarget {
+  #src = ''
+  #crossOrigin = null
+  #width = null
+  #height = null
+  // What it loads, once its `src` is set, and what that gave:
+  #loading = null
+  #bitmap = null
+  #isBroken = false
+
+  constructor(key) {
+    checkInternal(key, 'HTMLImageElement', 'new Image() makes them')
+    super()
+  }
+
+  static {
+    getImageBitmap = image => {
+      if (image.#isBroken) {
+        throw new DOMException(
+          'Invalid image: it could not be decoded.',
+          'InvalidStateError'
+        )
+      }
+      return image.#bitmap
+    }
+  }
+
+  get src() {
+    return this.#src
+  }
+
+  // Resolved as browsers resolve it, and loaded:
+  set src(src) {
+    src = String(src)
+    this.#src = src && new URL(src, globalThis.location?.href).href
+    this.#bitmap = null
+    this.#isBroken = false
+    const loading = (this.#loading = this.#src ? this.#load(this.#src) : null)
+    loading?.then(
+      bitmap => {
+        if (this.#loading === loading) {
+          this.#bitmap = bitmap
+          this.dispatchEvent(new Event('load'))
+        }
+      },
+      () => {
+        if (this.#loading === loading) {
+          this.#isBroken = true
+          this.dispatchEvent(new Event('error'))
+        }
+      }
+    )
+  }
+
+  get currentSrc() {
+    return this.#bitmap ? this.#src : ''
+  }
+
+  get crossOrigin() {
+    return this.#crossOrigin
+  }
+
+  // Kept, as there's no CORS outside a browser:
+  set crossOrigin(crossOrigin) {
+    this.#crossOrigin = crossOrigin == null ? null : String(crossOrigin)
+  }
+
+  // Loaded or broken, or without a `src`:
+  get complete() {
+    return !this.#src || !!this.#bitmap || this.#isBroken
+  }
+
+  get naturalWidth() {
+    return this.#bitmap?.width ?? 0
+  }
+
+  get naturalHeight() {
+    return this.#bitmap?.height ?? 0
+  }
+
+  // As it's drawn, which is its natural size unless set:
+  get width() {
+    return this.#width ?? this.naturalWidth
+  }
+
+  set width(width) {
+    this.#width = Math.max(0, Math.trunc(width) || 0)
+  }
+
+  get height() {
+    return this.#height ?? this.naturalHeight
+  }
+
+  set height(height) {
+    this.#height = Math.max(0, Math.trunc(height) || 0)
+  }
+
+  // A Promise that it has loaded, rejected with an `EncodingError` when it
+  // can't be:
+  async decode() {
+    await this.#loading?.catch(() => {})
+    if (!this.#bitmap) {
+      throw new DOMException(
+        `Invalid image: '${this.#src}' could not be decoded.`,
+        'EncodingError'
+      )
+    }
+  }
+
+  async #load(src) {
+    const response = await globalThis.fetch(src)
+    if (!response.ok) {
+      throw new TypeError(`'${src}' answered ${response.status}`)
+    }
+    return createImageBitmap(await response.blob())
+  }
+}
+
+defineEventHandlers(HTMLImageElement.prototype, 'load', 'error')
+
+// `new Image(width, height)`, as browsers make an `<img>`.
+export function Image(width, height) {
+  if (!new.target) {
+    throw new TypeError("Invalid Image(): use 'new Image()'.")
+  }
+  const image = new HTMLImageElement(internal)
+  if (width !== undefined) image.width = width
+  if (height !== undefined) image.height = height
+  return image
+}
+
+Image.prototype = HTMLImageElement.prototype
+
 export class CanvasGradient {
   #paint
 
@@ -572,13 +717,20 @@ defineInterfaces(
   ImageData,
   Path2D,
   ImageBitmap,
+  HTMLImageElement,
   CanvasGradient,
   CanvasPattern
 )
 
-// A Promise of an `ImageBitmap` of `image` (a `Blob`, an `ImageData`, a canvas
-// or an `ImageBitmap`), cropped, flipped and resized as asked.
+// A Promise of an `ImageBitmap` of `image` (a `Blob`, an `ImageData`, an image,
+// a canvas or an `ImageBitmap`), cropped, flipped and resized as asked.
 export async function createImageBitmap(image, ...args) {
+  if (isLoading(image)) {
+    throw new DOMException(
+      'Invalid image: it is still loading.',
+      'InvalidStateError'
+    )
+  }
   const source =
     image instanceof globalThis.Blob
       ? new Uint8Array(await image.arrayBuffer())
@@ -588,7 +740,12 @@ export async function createImageBitmap(image, ...args) {
   return new ImageBitmap(internal, canvas.createImageBitmap(source, ...args))
 }
 
-// The surface of a canvas or a bitmap.
+// Is `image` an image whose `src` is still loading?
+function isLoading(image) {
+  return image instanceof HTMLImageElement && !image.complete
+}
+
+// The surface of a canvas, a bitmap or a loaded image.
 function getSurface(image) {
   if (image instanceof OffscreenCanvas) {
     if (image.width === 0 || image.height === 0) {
@@ -600,8 +757,19 @@ function getSurface(image) {
     return getCanvasSurface(image)
   } else if (image instanceof ImageBitmap) {
     return getBitmapSurface(image)
+  } else if (image instanceof HTMLImageElement) {
+    const bitmap = getImageBitmap(image)
+    if (!bitmap) {
+      throw new DOMException(
+        'Invalid image: it has no src.',
+        'InvalidStateError'
+      )
+    }
+    return getBitmapSurface(bitmap)
   } else {
-    throw new TypeError(`Invalid image: '${image}', not a canvas or bitmap.`)
+    throw new TypeError(
+      `Invalid image: '${image}', not an image, canvas or bitmap.`
+    )
   }
 }
 

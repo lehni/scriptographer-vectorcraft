@@ -2,6 +2,7 @@ import { Blob, File, getBufferBytes, getBytes, joinBytes } from './blob.js'
 import { checkArguments, defineInterfaces } from './define.js'
 import { natives } from './natives.js'
 import { definePairIterable, getPairs, setFirst } from './pairs.js'
+import { getType } from './local-file.js'
 import { ReadableStream } from './streams.js'
 import { URLSearchParams } from './url.js'
 
@@ -351,6 +352,9 @@ export async function fetch(input, init) {
   // Read before it's sent, so the signal may have aborted meanwhile:
   const body = await Body.read(request)
   signal?.throwIfAborted()
+  if (url.startsWith('file:') && natives.fs) {
+    return getFile(method, url.replace(/#.*$/s, ''))
+  }
   if (url.startsWith('data:')) {
     // Without the fragment, as responses' URLs are:
     const href = url.replace(/#.*$/s, '')
@@ -415,6 +419,31 @@ export async function fetch(input, init) {
     }
     signal?.addEventListener('abort', abort)
   })
+}
+
+// The largest file read, in bytes, as large as the runtime's downloads:
+const mostBytes = 512 * 1024 * 1024
+
+// The `Response` of the file at the `file:` URL `url`, as Deno reads them: only
+// to get, and a `TypeError` for a folder or a file that isn't there.
+function getFile(method, url) {
+  if (method !== 'GET' && method !== 'HEAD') {
+    throw new TypeError(`fetch failed: '${url}' can only be read.`)
+  }
+  const path = natives.fs.fromURL(url)
+  const { exists, isDirectory, size } = natives.fs.info(path)
+  if (!exists || isDirectory) {
+    throw new TypeError(`fetch failed: '${url}' is no file.`)
+  } else if (size > mostBytes) {
+    throw new TypeError(`fetch failed: '${url}' is larger than 512 MB.`)
+  }
+  const bytes = method === 'GET' ? natives.fs.read(path) : null
+  const type = getType(path)
+  const response = new Response(bytes, {
+    statusText: 'OK',
+    headers: type ? { 'content-type': type } : {}
+  })
+  return setResponse(response, { url, redirected: false, type: 'basic' })
 }
 
 // The type and bytes of the `data:` URL `url`, without its fragment, as the

@@ -3219,6 +3219,8 @@
   __export(canvas_exports, {
     CanvasGradient: () => CanvasGradient,
     CanvasPattern: () => CanvasPattern,
+    HTMLImageElement: () => HTMLImageElement,
+    Image: () => Image,
     ImageBitmap: () => ImageBitmap,
     ImageData: () => ImageData,
     OffscreenCanvas: () => OffscreenCanvas,
@@ -4297,6 +4299,7 @@
   var { canvas } = natives;
   var getCanvasSurface;
   var getBitmapSurface;
+  var getImageBitmap;
   var getPath;
   var getGradientPaint;
   var getPatternPaint;
@@ -4490,16 +4493,23 @@
       checkArguments(arguments, 3, "createConicGradient");
       return createGradient("conic", angle, x3, y2);
     }
+    // `null` for an image that is still loading, as in browsers:
     createPattern(image, repetition) {
       checkArguments(arguments, 2, "createPattern");
+      if (isLoading(image)) {
+        return null;
+      }
       return new CanvasPattern(
         internal,
         canvas.createPattern(getSurface(image), repetition)
       );
     }
+    // Nothing for an image that is still loading, as in browsers:
     drawImage(image, ...args) {
       checkOverloads(arguments, [3, 5, 9], "drawImage");
-      canvas.methods.drawImage.call(this.#surface, getSurface(image), ...args);
+      if (!isLoading(image)) {
+        canvas.methods.drawImage.call(this.#surface, getSurface(image), ...args);
+      }
     }
     // The path first, `null` for the current one:
     fill(...args) {
@@ -4730,6 +4740,123 @@
       }
     }
   };
+  var HTMLImageElement = class extends EventTarget {
+    static {
+      __name(this, "HTMLImageElement");
+    }
+    #src = "";
+    #crossOrigin = null;
+    #width = null;
+    #height = null;
+    // What it loads, once its `src` is set, and what that gave:
+    #loading = null;
+    #bitmap = null;
+    #isBroken = false;
+    constructor(key) {
+      checkInternal(key, "HTMLImageElement", "new Image() makes them");
+      super();
+    }
+    static {
+      getImageBitmap = /* @__PURE__ */ __name((image) => {
+        if (image.#isBroken) {
+          throw new DOMException(
+            "Invalid image: it could not be decoded.",
+            "InvalidStateError"
+          );
+        }
+        return image.#bitmap;
+      }, "getImageBitmap");
+    }
+    get src() {
+      return this.#src;
+    }
+    // Resolved as browsers resolve it, and loaded:
+    set src(src) {
+      src = String(src);
+      this.#src = src && new URL(src, globalThis.location?.href).href;
+      this.#bitmap = null;
+      this.#isBroken = false;
+      const loading = this.#loading = this.#src ? this.#load(this.#src) : null;
+      loading?.then(
+        (bitmap) => {
+          if (this.#loading === loading) {
+            this.#bitmap = bitmap;
+            this.dispatchEvent(new Event("load"));
+          }
+        },
+        () => {
+          if (this.#loading === loading) {
+            this.#isBroken = true;
+            this.dispatchEvent(new Event("error"));
+          }
+        }
+      );
+    }
+    get currentSrc() {
+      return this.#bitmap ? this.#src : "";
+    }
+    get crossOrigin() {
+      return this.#crossOrigin;
+    }
+    // Kept, as there's no CORS outside a browser:
+    set crossOrigin(crossOrigin) {
+      this.#crossOrigin = crossOrigin == null ? null : String(crossOrigin);
+    }
+    // Loaded or broken, or without a `src`:
+    get complete() {
+      return !this.#src || !!this.#bitmap || this.#isBroken;
+    }
+    get naturalWidth() {
+      return this.#bitmap?.width ?? 0;
+    }
+    get naturalHeight() {
+      return this.#bitmap?.height ?? 0;
+    }
+    // As it's drawn, which is its natural size unless set:
+    get width() {
+      return this.#width ?? this.naturalWidth;
+    }
+    set width(width) {
+      this.#width = Math.max(0, Math.trunc(width) || 0);
+    }
+    get height() {
+      return this.#height ?? this.naturalHeight;
+    }
+    set height(height) {
+      this.#height = Math.max(0, Math.trunc(height) || 0);
+    }
+    // A Promise that it has loaded, rejected with an `EncodingError` when it
+    // can't be:
+    async decode() {
+      await this.#loading?.catch(() => {
+      });
+      if (!this.#bitmap) {
+        throw new DOMException(
+          `Invalid image: '${this.#src}' could not be decoded.`,
+          "EncodingError"
+        );
+      }
+    }
+    async #load(src) {
+      const response = await globalThis.fetch(src);
+      if (!response.ok) {
+        throw new TypeError(`'${src}' answered ${response.status}`);
+      }
+      return createImageBitmap(await response.blob());
+    }
+  };
+  defineEventHandlers(HTMLImageElement.prototype, "load", "error");
+  function Image(width, height) {
+    if (!new.target) {
+      throw new TypeError("Invalid Image(): use 'new Image()'.");
+    }
+    const image = new HTMLImageElement(internal);
+    if (width !== void 0) image.width = width;
+    if (height !== void 0) image.height = height;
+    return image;
+  }
+  __name(Image, "Image");
+  Image.prototype = HTMLImageElement.prototype;
   var CanvasGradient = class {
     static {
       __name(this, "CanvasGradient");
@@ -4772,14 +4899,25 @@
     ImageData,
     Path2D,
     ImageBitmap,
+    HTMLImageElement,
     CanvasGradient,
     CanvasPattern
   );
   async function createImageBitmap(image, ...args) {
+    if (isLoading(image)) {
+      throw new DOMException(
+        "Invalid image: it is still loading.",
+        "InvalidStateError"
+      );
+    }
     const source = image instanceof globalThis.Blob ? new Uint8Array(await image.arrayBuffer()) : image instanceof ImageData ? image : getSurface(image);
     return new ImageBitmap(internal, canvas.createImageBitmap(source, ...args));
   }
   __name(createImageBitmap, "createImageBitmap");
+  function isLoading(image) {
+    return image instanceof HTMLImageElement && !image.complete;
+  }
+  __name(isLoading, "isLoading");
   function getSurface(image) {
     if (image instanceof OffscreenCanvas) {
       if (image.width === 0 || image.height === 0) {
@@ -4791,8 +4929,19 @@
       return getCanvasSurface(image);
     } else if (image instanceof ImageBitmap) {
       return getBitmapSurface(image);
+    } else if (image instanceof HTMLImageElement) {
+      const bitmap = getImageBitmap(image);
+      if (!bitmap) {
+        throw new DOMException(
+          "Invalid image: it has no src.",
+          "InvalidStateError"
+        );
+      }
+      return getBitmapSurface(bitmap);
     } else {
-      throw new TypeError(`Invalid image: '${image}', not a canvas or bitmap.`);
+      throw new TypeError(
+        `Invalid image: '${image}', not an image, canvas or bitmap.`
+      );
     }
   }
   __name(getSurface, "getSurface");
@@ -6043,6 +6192,458 @@ ${stack}` : ""));
   }
   __name(setFirst, "setFirst");
 
+  // src/file-system.js
+  var file_system_exports = {};
+  __export(file_system_exports, {
+    FileSystemDirectoryHandle: () => FileSystemDirectoryHandle,
+    FileSystemFileHandle: () => FileSystemFileHandle,
+    FileSystemHandle: () => FileSystemHandle,
+    FileSystemWritableFileStream: () => FileSystemWritableFileStream,
+    getDirectoryHandle: () => getDirectoryHandle,
+    getHandlePath: () => getHandlePath,
+    showDirectoryPicker: () => showDirectoryPicker2,
+    showOpenFilePicker: () => showOpenFilePicker2,
+    showSaveFilePicker: () => showSaveFilePicker2
+  });
+  var pathsByHandle = /* @__PURE__ */ new WeakMap();
+  var most = 512 * 1024 * 1024;
+  var FileSystemHandle = class {
+    static {
+      __name(this, "FileSystemHandle");
+    }
+    constructor(key, path) {
+      checkInternal(key, "FileSystemHandle", "the pickers give them");
+      pathsByHandle.set(this, path);
+    }
+    get kind() {
+      return this instanceof FileSystemDirectoryHandle ? "directory" : "file";
+    }
+    get name() {
+      return natives.fs.info(getPath2(this)).name;
+    }
+    async isSameEntry(other) {
+      return pathsByHandle.get(other) === getPath2(this);
+    }
+    // Granted: scripts on desktop may change what the user's files.
+    async queryPermission() {
+      return "granted";
+    }
+    async requestPermission() {
+      return "granted";
+    }
+  };
+  var FileSystemFileHandle = class extends FileSystemHandle {
+    static {
+      __name(this, "FileSystemFileHandle");
+    }
+    async getFile() {
+      const path = getPath2(this);
+      const { name, lastModified } = natives.fs.info(path);
+      return new File([natives.fs.read(path)], name, {
+        type: getType2(path),
+        lastModified
+      });
+    }
+    // A stream that writes the file on `close()`, starting empty, or with what
+    // the file holds.
+    async createWritable({ keepExistingData = false } = {}) {
+      const path = getPath2(this);
+      return new FileSystemWritableFileStream(
+        internal,
+        path,
+        keepExistingData ? natives.fs.read(path) : new Uint8Array()
+      );
+    }
+  };
+  var FileSystemDirectoryHandle = class extends FileSystemHandle {
+    static {
+      __name(this, "FileSystemDirectoryHandle");
+    }
+    async getFileHandle(name, { create = false } = {}) {
+      return getEntry(this, name, false, create);
+    }
+    async getDirectoryHandle(name, { create = false } = {}) {
+      return getEntry(this, name, true, create);
+    }
+    async removeEntry(name, { recursive = false } = {}) {
+      natives.fs.remove(getEntryPath(this, name), recursive);
+    }
+    // The names from the directory down to `handle`, or `null` outside it.
+    async resolve(handle) {
+      const path = pathsByHandle.get(handle);
+      return path ? natives.fs.relative(getPath2(this), path) : null;
+    }
+    // What's in the directory, by name:
+    async *entries() {
+      for (const path of natives.fs.list(getPath2(this))) {
+        yield [natives.fs.info(path).name, createHandle(path)];
+      }
+    }
+    async *keys() {
+      for await (const [name] of this.entries()) yield name;
+    }
+    async *values() {
+      for await (const [, handle] of this.entries()) yield handle;
+    }
+    [Symbol.asyncIterator]() {
+      return this.entries();
+    }
+  };
+  var FileSystemWritableFileStream = class {
+    static {
+      __name(this, "FileSystemWritableFileStream");
+    }
+    #path;
+    #bytes;
+    #position = 0;
+    #isClosed = false;
+    constructor(key, path, bytes) {
+      checkInternal(
+        key,
+        "FileSystemWritableFileStream",
+        "createWritable() gives them"
+      );
+      this.#path = path;
+      this.#bytes = bytes;
+    }
+    // Text, a `Blob`, a buffer or a view at the position, or
+    // `{ type: 'write' | 'seek' | 'truncate', data, position, size }`.
+    async write(data) {
+      const isCommand = data && typeof data === "object" && typeof data.type === "string" && !(data instanceof Blob) && !getBufferBytes(data);
+      const { type, position, size } = isCommand ? data : { type: "write" };
+      if (type === "seek") {
+        return this.seek(position);
+      } else if (type === "truncate") {
+        return this.truncate(size);
+      } else if (type === "write") {
+        if (isCommand) data = data.data;
+        if (data == null) {
+          throw new DOMException(
+            "Invalid write(): the data is missing.",
+            "SyntaxError"
+          );
+        }
+        this.#check();
+        const { bytes } = getBody(data);
+        const start = getCount(position ?? this.#position);
+        const end = getCount(start + bytes.length);
+        if (this.#bytes.length < end) this.#resize(end);
+        this.#bytes.set(bytes, start);
+        this.#position = end;
+      } else {
+        throw new TypeError(`Invalid write() command: '${type}'.`);
+      }
+    }
+    // Where the stream writes next.
+    async seek(position) {
+      if (position == null) {
+        throw new DOMException(
+          "Invalid seek(): the position is missing.",
+          "SyntaxError"
+        );
+      }
+      this.#check();
+      this.#position = getCount(position);
+    }
+    // Its bytes cut, or filled with zeros, to `size`.
+    async truncate(size) {
+      this.#check();
+      this.#resize(getCount(size));
+      this.#position = Math.min(this.#position, this.#bytes.length);
+    }
+    // Write the file, all at once.
+    async close() {
+      this.#check();
+      this.#isClosed = true;
+      natives.fs.write(this.#path, this.#bytes, false);
+    }
+    async abort() {
+      this.#check();
+      this.#isClosed = true;
+    }
+    #check() {
+      if (this.#isClosed) {
+        throw new TypeError("Invalid stream: it is closed.");
+      }
+    }
+    #resize(size) {
+      const bytes = new Uint8Array(size);
+      bytes.set(this.#bytes.subarray(0, size));
+      this.#bytes = bytes;
+    }
+  };
+  defineInterfaces(
+    FileSystemHandle,
+    FileSystemFileHandle,
+    FileSystemDirectoryHandle,
+    FileSystemWritableFileStream
+  );
+  async function showOpenFilePicker2(options = {}) {
+    const paths = pick2(options.multiple ? "openFiles" : "openFile", options);
+    return paths.map((path) => createHandle(path, false));
+  }
+  __name(showOpenFilePicker2, "showOpenFilePicker");
+  async function showSaveFilePicker2(options = {}) {
+    const start = getStart(options);
+    const { suggestedName } = options;
+    const path = suggestedName == null ? start : start ? natives.fs.path(start, String(suggestedName)) : String(suggestedName);
+    const [picked] = pick2("saveFile", options, path);
+    if (!natives.fs.info(picked).exists) {
+      natives.fs.write(picked, new Uint8Array(), false);
+    }
+    return createHandle(picked, false);
+  }
+  __name(showSaveFilePicker2, "showSaveFilePicker");
+  async function showDirectoryPicker2(options = {}) {
+    const [picked] = pick2("chooseDirectory", { startIn: options.startIn });
+    return createHandle(picked, true);
+  }
+  __name(showDirectoryPicker2, "showDirectoryPicker");
+  function getHandlePath(handle) {
+    return pathsByHandle.get(handle) ?? null;
+  }
+  __name(getHandlePath, "getHandlePath");
+  function getPath2(handle) {
+    const path = pathsByHandle.get(handle);
+    if (!path) {
+      throw new TypeError(`Invalid handle: '${handle}', not a FileSystemHandle.`);
+    }
+    return path;
+  }
+  __name(getPath2, "getPath");
+  function getDirectoryHandle(path) {
+    return new FileSystemDirectoryHandle(internal, path);
+  }
+  __name(getDirectoryHandle, "getDirectoryHandle");
+  function createHandle(path, isDirectory = natives.fs.info(path).isDirectory) {
+    const Handle = isDirectory ? FileSystemDirectoryHandle : FileSystemFileHandle;
+    return new Handle(internal, path);
+  }
+  __name(createHandle, "createHandle");
+  function getEntryPath(directory, name) {
+    name = String(name);
+    if (!name || name === "." || name === ".." || /[/\\]/.test(name)) {
+      throw new TypeError(`Invalid name: '${name}'.`);
+    }
+    return natives.fs.path(getPath2(directory), name);
+  }
+  __name(getEntryPath, "getEntryPath");
+  function getEntry(directory, name, isDirectory, create) {
+    const path = getEntryPath(directory, name);
+    const info = natives.fs.info(path);
+    if (info.exists) {
+      if (info.isDirectory !== isDirectory) {
+        throw new DOMException(
+          `Invalid entry: '${path}' is a ${info.isDirectory ? "directory" : "file"}.`,
+          "TypeMismatchError"
+        );
+      }
+    } else if (create) {
+      if (isDirectory) {
+        natives.fs.makeDirectory(path, false);
+      } else {
+        natives.fs.write(path, new Uint8Array(), false);
+      }
+    } else {
+      throw new DOMException(`Unable to find '${path}'.`, "NotFoundError");
+    }
+    return createHandle(path, isDirectory);
+  }
+  __name(getEntry, "getEntry");
+  function getCount(value) {
+    const count = Number(value);
+    if (!(count >= 0 && Number.isFinite(count))) {
+      throw new TypeError(`Invalid size: '${value}'.`);
+    }
+    if (count > most) {
+      throw new DOMException(
+        `Unable to write ${count} bytes: more than a file may have here.`,
+        "QuotaExceededError"
+      );
+    }
+    return Math.trunc(count);
+  }
+  __name(getCount, "getCount");
+  function pick2(type, options, path = getStart(options)) {
+    const answer = natives.ask({ type, path, filters: getFilters(options) });
+    const paths = (Array.isArray(answer) ? answer : [answer]).filter(
+      (path2) => typeof path2 === "string"
+    );
+    if (!paths.length) {
+      throw new DOMException("The user aborted a request.", "AbortError");
+    }
+    return paths;
+  }
+  __name(pick2, "pick");
+  function getStart({ startIn }) {
+    if (startIn == null) {
+      return null;
+    } else if (typeof startIn === "object") {
+      const path = getHandlePath(startIn) ?? startIn.path;
+      if (typeof path !== "string") {
+        throw new TypeError(
+          `Invalid startIn: '${startIn}', not a handle or a LocalFile.`
+        );
+      }
+      const info = natives.fs.info(path);
+      return info.isDirectory ? path : info.parent;
+    } else {
+      return natives.fs.userDirectory(String(startIn));
+    }
+  }
+  __name(getStart, "getStart");
+  function getFilters({ types: types2, excludeAcceptAllOption }) {
+    const filters = Array.from(types2 ?? [], ({ description, accept }) => {
+      if (!accept) {
+        throw new TypeError("Invalid file type: its accept is missing.");
+      }
+      const extensions = Object.values(accept).flat().map((extension) => {
+        extension = String(extension);
+        if (!/^\.[^.]/.test(extension)) {
+          throw new TypeError(
+            `Invalid extension: '${extension}', which starts with '.'.`
+          );
+        }
+        return extension.slice(1);
+      });
+      return [
+        description || extensions.map((extension) => `.${extension}`).join(", "),
+        extensions
+      ];
+    });
+    if (filters.length && !excludeAcceptAllOption) {
+      filters.push(["All Files", []]);
+    }
+    return filters;
+  }
+  __name(getFilters, "getFilters");
+
+  // src/local-file.js
+  var types = {
+    txt: "text/plain",
+    md: "text/markdown",
+    csv: "text/csv",
+    html: "text/html",
+    css: "text/css",
+    js: "text/javascript",
+    json: "application/json",
+    xml: "application/xml",
+    pdf: "application/pdf",
+    svg: "image/svg+xml",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    bmp: "image/bmp",
+    tif: "image/tiff",
+    tiff: "image/tiff"
+  };
+  var LocalFile2 = class _LocalFile extends File {
+    static {
+      __name(this, "LocalFile");
+    }
+    #path;
+    constructor(...parts2) {
+      if (!parts2.length) {
+        throw new TypeError("Invalid LocalFile: its path is missing.");
+      }
+      const path = natives.fs.path(...parts2.map(String));
+      super([], natives.fs.info(path).name);
+      this.#path = path;
+    }
+    // The `LocalFile` of a file or directory handle.
+    static async from(handle) {
+      const path = getHandlePath(handle);
+      if (!path) {
+        throw new TypeError(
+          `Invalid handle: '${handle}', not a FileSystemHandle.`
+        );
+      }
+      return new _LocalFile(path);
+    }
+    get path() {
+      return this.#path;
+    }
+    get name() {
+      return this.#info.name;
+    }
+    get extension() {
+      return this.#info.extension;
+    }
+    get type() {
+      return getType2(this.#path);
+    }
+    get parent() {
+      const { parent } = this.#info;
+      return parent ? new _LocalFile(parent) : null;
+    }
+    get isDirectory() {
+      return this.#info.isDirectory;
+    }
+    // On desktop, every file can be written where it is.
+    get writable() {
+      return true;
+    }
+    get size() {
+      return this.#info.size;
+    }
+    get lastModified() {
+      return this.#info.lastModified;
+    }
+    // What it holds now, as its readers read it:
+    [readBytes]() {
+      return natives.fs.read(this.#path);
+    }
+    // Text, a `Blob`, a buffer or a view.
+    async write(data = "") {
+      natives.fs.write(this.#path, getBody(data).bytes, false);
+    }
+    async append(data = "") {
+      natives.fs.write(this.#path, getBody(data).bytes, true);
+    }
+    async exists() {
+      return this.#info.exists;
+    }
+    // The files and directories in the directory, by name.
+    async list() {
+      return natives.fs.list(this.#path).map((path) => new _LocalFile(path));
+    }
+    // The file or directory `name` in this directory.
+    async file(name) {
+      return new _LocalFile(this.#path, String(name));
+    }
+    async makeDirectory() {
+      natives.fs.makeDirectory(this.#path, true);
+      return this;
+    }
+    // A name renames it where it is, a path moves it; the `LocalFile` follows.
+    async rename(nameOrPath) {
+      this.#path = natives.fs.rename(this.#path, String(nameOrPath));
+      return this;
+    }
+    async copyTo(fileOrPath) {
+      const copy = new _LocalFile(fileOrPath);
+      natives.fs.copy(this.#path, copy.path);
+      return copy;
+    }
+    // A directory with what's in it only when `recursive`.
+    async remove({ recursive = false } = {}) {
+      natives.fs.remove(this.#path, recursive);
+    }
+    toString() {
+      return this.#path;
+    }
+    get #info() {
+      return natives.fs.info(this.#path);
+    }
+  };
+  defineInterfaces(LocalFile2);
+  function getType2(path) {
+    return types[natives.fs.info(path).extension.toLowerCase()] ?? "";
+  }
+  __name(getType2, "getType");
+
   // src/url.js
   var parts = [
     "protocol",
@@ -6274,11 +6875,11 @@ ${stack}` : ""));
     #entries = [];
     append(name, value, filename) {
       checkArguments(arguments, 2, "append");
-      this.#entries.push(getEntry(...arguments));
+      this.#entries.push(getEntry2(...arguments));
     }
     set(name, value, filename) {
       checkArguments(arguments, 2, "set");
-      this.#entries = setFirst(this.#entries, getEntry(...arguments));
+      this.#entries = setFirst(this.#entries, getEntry2(...arguments));
     }
     get(name) {
       return this.#entries.find((entry) => entry[0] === String(name))?.[1] ?? null;
@@ -6510,6 +7111,9 @@ ${stack}` : ""));
     const { method, url, headers, signal, redirect } = request;
     const body = await Body.read(request);
     signal?.throwIfAborted();
+    if (url.startsWith("file:") && natives.fs) {
+      return getFile(method, url.replace(/#.*$/s, ""));
+    }
     if (url.startsWith("data:")) {
       const href = url.replace(/#.*$/s, "");
       const { type, bytes } = getData(href);
@@ -6572,6 +7176,27 @@ ${stack}` : ""));
     });
   }
   __name(fetch2, "fetch");
+  var mostBytes = 512 * 1024 * 1024;
+  function getFile(method, url) {
+    if (method !== "GET" && method !== "HEAD") {
+      throw new TypeError(`fetch failed: '${url}' can only be read.`);
+    }
+    const path = natives.fs.fromURL(url);
+    const { exists, isDirectory, size } = natives.fs.info(path);
+    if (!exists || isDirectory) {
+      throw new TypeError(`fetch failed: '${url}' is no file.`);
+    } else if (size > mostBytes) {
+      throw new TypeError(`fetch failed: '${url}' is larger than 512 MB.`);
+    }
+    const bytes = method === "GET" ? natives.fs.read(path) : null;
+    const type = getType2(path);
+    const response = new Response(bytes, {
+      statusText: "OK",
+      headers: type ? { "content-type": type } : {}
+    });
+    return setResponse(response, { url, redirected: false, type: "basic" });
+  }
+  __name(getFile, "getFile");
   function getData(url) {
     const data = url.slice("data:".length);
     const comma = data.indexOf(",");
@@ -6639,7 +7264,7 @@ ${stack}` : ""));
     return String(name).trim().toLowerCase();
   }
   __name(getName, "getName");
-  function getEntry(name, value, filename) {
+  function getEntry2(name, value, filename) {
     return [
       String(name),
       value instanceof Blob ? value instanceof File && filename === void 0 ? value : new File([value], filename ?? value.name ?? "blob", {
@@ -6647,7 +7272,7 @@ ${stack}` : ""));
       }) : String(value)
     ];
   }
-  __name(getEntry, "getEntry");
+  __name(getEntry2, "getEntry");
   function getParts(bytes, boundary) {
     const decoder = new TextDecoder();
     const encode = /* @__PURE__ */ __name((text) => new TextEncoder().encode(text), "encode");
@@ -6723,460 +7348,6 @@ ${value}\r
     };
   }
   __name(getMultipart, "getMultipart");
-
-  // src/file-system.js
-  var file_system_exports = {};
-  __export(file_system_exports, {
-    FileSystemDirectoryHandle: () => FileSystemDirectoryHandle,
-    FileSystemFileHandle: () => FileSystemFileHandle,
-    FileSystemHandle: () => FileSystemHandle,
-    FileSystemWritableFileStream: () => FileSystemWritableFileStream,
-    getDirectoryHandle: () => getDirectoryHandle,
-    getHandlePath: () => getHandlePath,
-    showDirectoryPicker: () => showDirectoryPicker2,
-    showOpenFilePicker: () => showOpenFilePicker2,
-    showSaveFilePicker: () => showSaveFilePicker2
-  });
-
-  // src/local-file.js
-  var types = {
-    txt: "text/plain",
-    md: "text/markdown",
-    csv: "text/csv",
-    html: "text/html",
-    css: "text/css",
-    js: "text/javascript",
-    json: "application/json",
-    xml: "application/xml",
-    pdf: "application/pdf",
-    svg: "image/svg+xml",
-    png: "image/png",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    gif: "image/gif",
-    webp: "image/webp",
-    bmp: "image/bmp",
-    tif: "image/tiff",
-    tiff: "image/tiff"
-  };
-  var LocalFile2 = class _LocalFile extends File {
-    static {
-      __name(this, "LocalFile");
-    }
-    #path;
-    constructor(...parts2) {
-      if (!parts2.length) {
-        throw new TypeError("Invalid LocalFile: its path is missing.");
-      }
-      const path = natives.fs.path(...parts2.map(String));
-      super([], natives.fs.info(path).name);
-      this.#path = path;
-    }
-    // The `LocalFile` of a file or directory handle.
-    static async from(handle) {
-      const path = getHandlePath(handle);
-      if (!path) {
-        throw new TypeError(
-          `Invalid handle: '${handle}', not a FileSystemHandle.`
-        );
-      }
-      return new _LocalFile(path);
-    }
-    get path() {
-      return this.#path;
-    }
-    get name() {
-      return this.#info.name;
-    }
-    get extension() {
-      return this.#info.extension;
-    }
-    get type() {
-      return getType2(this.#path);
-    }
-    get parent() {
-      const { parent } = this.#info;
-      return parent ? new _LocalFile(parent) : null;
-    }
-    get isDirectory() {
-      return this.#info.isDirectory;
-    }
-    // On desktop, every file can be written where it is.
-    get writable() {
-      return true;
-    }
-    get size() {
-      return this.#info.size;
-    }
-    get lastModified() {
-      return this.#info.lastModified;
-    }
-    // What it holds now, as its readers read it:
-    [readBytes]() {
-      return natives.fs.read(this.#path);
-    }
-    // Text, a `Blob`, a buffer or a view.
-    async write(data = "") {
-      natives.fs.write(this.#path, getBody(data).bytes, false);
-    }
-    async append(data = "") {
-      natives.fs.write(this.#path, getBody(data).bytes, true);
-    }
-    async exists() {
-      return this.#info.exists;
-    }
-    // The files and directories in the directory, by name.
-    async list() {
-      return natives.fs.list(this.#path).map((path) => new _LocalFile(path));
-    }
-    // The file or directory `name` in this directory.
-    async file(name) {
-      return new _LocalFile(this.#path, String(name));
-    }
-    async makeDirectory() {
-      natives.fs.makeDirectory(this.#path, true);
-      return this;
-    }
-    // A name renames it where it is, a path moves it; the `LocalFile` follows.
-    async rename(nameOrPath) {
-      this.#path = natives.fs.rename(this.#path, String(nameOrPath));
-      return this;
-    }
-    async copyTo(fileOrPath) {
-      const copy = new _LocalFile(fileOrPath);
-      natives.fs.copy(this.#path, copy.path);
-      return copy;
-    }
-    // A directory with what's in it only when `recursive`.
-    async remove({ recursive = false } = {}) {
-      natives.fs.remove(this.#path, recursive);
-    }
-    toString() {
-      return this.#path;
-    }
-    get #info() {
-      return natives.fs.info(this.#path);
-    }
-  };
-  defineInterfaces(LocalFile2);
-  function getType2(path) {
-    return types[natives.fs.info(path).extension.toLowerCase()] ?? "";
-  }
-  __name(getType2, "getType");
-
-  // src/file-system.js
-  var pathsByHandle = /* @__PURE__ */ new WeakMap();
-  var most = 512 * 1024 * 1024;
-  var FileSystemHandle = class {
-    static {
-      __name(this, "FileSystemHandle");
-    }
-    constructor(key, path) {
-      checkInternal(key, "FileSystemHandle", "the pickers give them");
-      pathsByHandle.set(this, path);
-    }
-    get kind() {
-      return this instanceof FileSystemDirectoryHandle ? "directory" : "file";
-    }
-    get name() {
-      return natives.fs.info(getPath2(this)).name;
-    }
-    async isSameEntry(other) {
-      return pathsByHandle.get(other) === getPath2(this);
-    }
-    // Granted: scripts on desktop may change what the user's files.
-    async queryPermission() {
-      return "granted";
-    }
-    async requestPermission() {
-      return "granted";
-    }
-  };
-  var FileSystemFileHandle = class extends FileSystemHandle {
-    static {
-      __name(this, "FileSystemFileHandle");
-    }
-    async getFile() {
-      const path = getPath2(this);
-      const { name, lastModified } = natives.fs.info(path);
-      return new File([natives.fs.read(path)], name, {
-        type: getType2(path),
-        lastModified
-      });
-    }
-    // A stream that writes the file on `close()`, starting empty, or with what
-    // the file holds.
-    async createWritable({ keepExistingData = false } = {}) {
-      const path = getPath2(this);
-      return new FileSystemWritableFileStream(
-        internal,
-        path,
-        keepExistingData ? natives.fs.read(path) : new Uint8Array()
-      );
-    }
-  };
-  var FileSystemDirectoryHandle = class extends FileSystemHandle {
-    static {
-      __name(this, "FileSystemDirectoryHandle");
-    }
-    async getFileHandle(name, { create = false } = {}) {
-      return getEntry2(this, name, false, create);
-    }
-    async getDirectoryHandle(name, { create = false } = {}) {
-      return getEntry2(this, name, true, create);
-    }
-    async removeEntry(name, { recursive = false } = {}) {
-      natives.fs.remove(getEntryPath(this, name), recursive);
-    }
-    // The names from the directory down to `handle`, or `null` outside it.
-    async resolve(handle) {
-      const path = pathsByHandle.get(handle);
-      return path ? natives.fs.relative(getPath2(this), path) : null;
-    }
-    // What's in the directory, by name:
-    async *entries() {
-      for (const path of natives.fs.list(getPath2(this))) {
-        yield [natives.fs.info(path).name, createHandle(path)];
-      }
-    }
-    async *keys() {
-      for await (const [name] of this.entries()) yield name;
-    }
-    async *values() {
-      for await (const [, handle] of this.entries()) yield handle;
-    }
-    [Symbol.asyncIterator]() {
-      return this.entries();
-    }
-  };
-  var FileSystemWritableFileStream = class {
-    static {
-      __name(this, "FileSystemWritableFileStream");
-    }
-    #path;
-    #bytes;
-    #position = 0;
-    #isClosed = false;
-    constructor(key, path, bytes) {
-      checkInternal(
-        key,
-        "FileSystemWritableFileStream",
-        "createWritable() gives them"
-      );
-      this.#path = path;
-      this.#bytes = bytes;
-    }
-    // Text, a `Blob`, a buffer or a view at the position, or
-    // `{ type: 'write' | 'seek' | 'truncate', data, position, size }`.
-    async write(data) {
-      const isCommand = data && typeof data === "object" && typeof data.type === "string" && !(data instanceof Blob) && !getBufferBytes(data);
-      const { type, position, size } = isCommand ? data : { type: "write" };
-      if (type === "seek") {
-        return this.seek(position);
-      } else if (type === "truncate") {
-        return this.truncate(size);
-      } else if (type === "write") {
-        if (isCommand) data = data.data;
-        if (data == null) {
-          throw new DOMException(
-            "Invalid write(): the data is missing.",
-            "SyntaxError"
-          );
-        }
-        this.#check();
-        const { bytes } = getBody(data);
-        const start = getCount(position ?? this.#position);
-        const end = getCount(start + bytes.length);
-        if (this.#bytes.length < end) this.#resize(end);
-        this.#bytes.set(bytes, start);
-        this.#position = end;
-      } else {
-        throw new TypeError(`Invalid write() command: '${type}'.`);
-      }
-    }
-    // Where the stream writes next.
-    async seek(position) {
-      if (position == null) {
-        throw new DOMException(
-          "Invalid seek(): the position is missing.",
-          "SyntaxError"
-        );
-      }
-      this.#check();
-      this.#position = getCount(position);
-    }
-    // Its bytes cut, or filled with zeros, to `size`.
-    async truncate(size) {
-      this.#check();
-      this.#resize(getCount(size));
-      this.#position = Math.min(this.#position, this.#bytes.length);
-    }
-    // Write the file, all at once.
-    async close() {
-      this.#check();
-      this.#isClosed = true;
-      natives.fs.write(this.#path, this.#bytes, false);
-    }
-    async abort() {
-      this.#check();
-      this.#isClosed = true;
-    }
-    #check() {
-      if (this.#isClosed) {
-        throw new TypeError("Invalid stream: it is closed.");
-      }
-    }
-    #resize(size) {
-      const bytes = new Uint8Array(size);
-      bytes.set(this.#bytes.subarray(0, size));
-      this.#bytes = bytes;
-    }
-  };
-  defineInterfaces(
-    FileSystemHandle,
-    FileSystemFileHandle,
-    FileSystemDirectoryHandle,
-    FileSystemWritableFileStream
-  );
-  async function showOpenFilePicker2(options = {}) {
-    const paths = pick2(options.multiple ? "openFiles" : "openFile", options);
-    return paths.map((path) => createHandle(path, false));
-  }
-  __name(showOpenFilePicker2, "showOpenFilePicker");
-  async function showSaveFilePicker2(options = {}) {
-    const start = getStart(options);
-    const { suggestedName } = options;
-    const path = suggestedName == null ? start : start ? natives.fs.path(start, String(suggestedName)) : String(suggestedName);
-    const [picked] = pick2("saveFile", options, path);
-    if (!natives.fs.info(picked).exists) {
-      natives.fs.write(picked, new Uint8Array(), false);
-    }
-    return createHandle(picked, false);
-  }
-  __name(showSaveFilePicker2, "showSaveFilePicker");
-  async function showDirectoryPicker2(options = {}) {
-    const [picked] = pick2("chooseDirectory", { startIn: options.startIn });
-    return createHandle(picked, true);
-  }
-  __name(showDirectoryPicker2, "showDirectoryPicker");
-  function getHandlePath(handle) {
-    return pathsByHandle.get(handle) ?? null;
-  }
-  __name(getHandlePath, "getHandlePath");
-  function getPath2(handle) {
-    const path = pathsByHandle.get(handle);
-    if (!path) {
-      throw new TypeError(`Invalid handle: '${handle}', not a FileSystemHandle.`);
-    }
-    return path;
-  }
-  __name(getPath2, "getPath");
-  function getDirectoryHandle(path) {
-    return new FileSystemDirectoryHandle(internal, path);
-  }
-  __name(getDirectoryHandle, "getDirectoryHandle");
-  function createHandle(path, isDirectory = natives.fs.info(path).isDirectory) {
-    const Handle = isDirectory ? FileSystemDirectoryHandle : FileSystemFileHandle;
-    return new Handle(internal, path);
-  }
-  __name(createHandle, "createHandle");
-  function getEntryPath(directory, name) {
-    name = String(name);
-    if (!name || name === "." || name === ".." || /[/\\]/.test(name)) {
-      throw new TypeError(`Invalid name: '${name}'.`);
-    }
-    return natives.fs.path(getPath2(directory), name);
-  }
-  __name(getEntryPath, "getEntryPath");
-  function getEntry2(directory, name, isDirectory, create) {
-    const path = getEntryPath(directory, name);
-    const info = natives.fs.info(path);
-    if (info.exists) {
-      if (info.isDirectory !== isDirectory) {
-        throw new DOMException(
-          `Invalid entry: '${path}' is a ${info.isDirectory ? "directory" : "file"}.`,
-          "TypeMismatchError"
-        );
-      }
-    } else if (create) {
-      if (isDirectory) {
-        natives.fs.makeDirectory(path, false);
-      } else {
-        natives.fs.write(path, new Uint8Array(), false);
-      }
-    } else {
-      throw new DOMException(`Unable to find '${path}'.`, "NotFoundError");
-    }
-    return createHandle(path, isDirectory);
-  }
-  __name(getEntry2, "getEntry");
-  function getCount(value) {
-    const count = Number(value);
-    if (!(count >= 0 && Number.isFinite(count))) {
-      throw new TypeError(`Invalid size: '${value}'.`);
-    }
-    if (count > most) {
-      throw new DOMException(
-        `Unable to write ${count} bytes: more than a file may have here.`,
-        "QuotaExceededError"
-      );
-    }
-    return Math.trunc(count);
-  }
-  __name(getCount, "getCount");
-  function pick2(type, options, path = getStart(options)) {
-    const answer = natives.ask({ type, path, filters: getFilters(options) });
-    const paths = (Array.isArray(answer) ? answer : [answer]).filter(
-      (path2) => typeof path2 === "string"
-    );
-    if (!paths.length) {
-      throw new DOMException("The user aborted a request.", "AbortError");
-    }
-    return paths;
-  }
-  __name(pick2, "pick");
-  function getStart({ startIn }) {
-    if (startIn == null) {
-      return null;
-    } else if (typeof startIn === "object") {
-      const path = getHandlePath(startIn) ?? startIn.path;
-      if (typeof path !== "string") {
-        throw new TypeError(
-          `Invalid startIn: '${startIn}', not a handle or a LocalFile.`
-        );
-      }
-      const info = natives.fs.info(path);
-      return info.isDirectory ? path : info.parent;
-    } else {
-      return natives.fs.userDirectory(String(startIn));
-    }
-  }
-  __name(getStart, "getStart");
-  function getFilters({ types: types2, excludeAcceptAllOption }) {
-    const filters = Array.from(types2 ?? [], ({ description, accept }) => {
-      if (!accept) {
-        throw new TypeError("Invalid file type: its accept is missing.");
-      }
-      const extensions = Object.values(accept).flat().map((extension) => {
-        extension = String(extension);
-        if (!/^\.[^.]/.test(extension)) {
-          throw new TypeError(
-            `Invalid extension: '${extension}', which starts with '.'.`
-          );
-        }
-        return extension.slice(1);
-      });
-      return [
-        description || extensions.map((extension) => `.${extension}`).join(", "),
-        extensions
-      ];
-    });
-    if (filters.length && !excludeAcceptAllOption) {
-      filters.push(["All Files", []]);
-    }
-    return filters;
-  }
-  __name(getFilters, "getFilters");
 
   // src/rejections.js
   var reasonsByPromise = /* @__PURE__ */ new WeakMap();
@@ -7441,6 +7612,62 @@ ${value}\r
     }
   }
   __name(getFontBytes, "getFontBytes");
+
+  // src/location.js
+  var WorkerLocation = class {
+    static {
+      __name(this, "WorkerLocation");
+    }
+    #url;
+    constructor(key, href) {
+      checkInternal(key, "WorkerLocation", "a script has the one of its file");
+      this.#url = new URL(href);
+    }
+    get href() {
+      return this.#url.href;
+    }
+    get origin() {
+      return this.#url.origin;
+    }
+    get protocol() {
+      return this.#url.protocol;
+    }
+    get host() {
+      return this.#url.host;
+    }
+    get hostname() {
+      return this.#url.hostname;
+    }
+    get port() {
+      return this.#url.port;
+    }
+    get pathname() {
+      return this.#url.pathname;
+    }
+    get search() {
+      return this.#url.search;
+    }
+    get hash() {
+      return this.#url.hash;
+    }
+    toString() {
+      return this.#url.href;
+    }
+  };
+  defineInterfaces(WorkerLocation);
+  function setLocation(href) {
+    const location = new WorkerLocation(internal, href);
+    inject(
+      globalThis,
+      {
+        get location() {
+          return location;
+        }
+      },
+      { configurable: true }
+    );
+  }
+  __name(setLocation, "setLocation");
 
   // src/locks.js
   var Lock = class {
@@ -9446,6 +9673,10 @@ ${value}\r
   }
   if (!globalThis.OffscreenCanvas) {
     inject(globalThis, { ...canvas_exports });
+  }
+  if (!globalThis.location) {
+    inject(globalThis, { WorkerLocation });
+    Object.assign(natives, { setLocation });
   }
   if (!globalThis.FontFace) {
     inject(globalThis, {
