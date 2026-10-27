@@ -140,6 +140,7 @@ impl<E: Engine> Runtime<E> {
         let get_definition = self.engine.function("getDefinition", get_definition)?;
         let get_definition_keys = self.engine.function("getDefinitionKeys", get_definition_keys)?;
         let get_story = self.engine.function("getStory", get_story)?;
+        let get_image = self.engine.function("getImage", get_image)?;
         let get_ancestor_keys = self.engine.function("getAncestorKeys", get_ancestor_keys)?;
         let lay_out = self.engine.function("layOut", lay_out)?;
         let apply_effect = self.engine.function("apply", apply_effect)?;
@@ -174,6 +175,7 @@ impl<E: Engine> Runtime<E> {
             call.set(&functions, "getDefinition", &Value::Js(get_definition))?;
             call.set(&functions, "getDefinitionKeys", &Value::Js(get_definition_keys))?;
             call.set(&functions, "getStory", &Value::Js(get_story))?;
+            call.set(&functions, "getImage", &Value::Js(get_image))?;
             call.set(&functions, "getAncestorKeys", &Value::Js(get_ancestor_keys))?;
             call.set(&functions, "layOut", &Value::Js(lay_out))?;
             Ok(functions)
@@ -605,6 +607,34 @@ fn get_story<H>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value<H>]) -> R
     })?;
     let json = json.ok_or_else(|| Error::Script(format!("getStory: no text {id}")))?;
     Ok(Value::String(json.to_string()))
+}
+
+/// `source.getImage(key)`: the pixels of the image `key` names, in a new canvas of its size, which
+/// Paper.js's `Raster` asks for once a script reads or draws on them.
+fn get_image<H: Clone>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
+    let id = key(args).ok_or_else(|| Error::Script("getImage: no key".into()))?;
+    let image = with_bound(call, this, |doc, _| match doc.node(id).map(|node| &node.kind) {
+        Some(NodeKind::Image(image)) => doc.images.get(&image.key).map(|blob| (blob.bytes.clone(), image.width, image.height)),
+        _ => None,
+    })?;
+    let (bytes, width, height) = image.ok_or_else(|| Error::Script(format!("getImage: no image {}", id.0)))?;
+    let rgba = crate::bitmap::decode(&bytes).map_err(|e| Error::Script(format!("getImage: {e}")))?;
+    // A linked image whose file can't be read holds only its smaller preview:
+    if rgba.dimensions() != (width, height) {
+        return Err(Error::Script("getImage: the image's file can't be read".into()));
+    }
+    let canvas_class = crate::global_class(call, "OffscreenCanvas")?;
+    let size = [Value::Number(f64::from(width)), Value::Number(f64::from(height))];
+    let canvas = handle(call.construct(&canvas_class, &size)?, "OffscreenCanvas")?;
+    let context = handle(method(call, &canvas, "getContext", &[Value::String("2d".into())])?, "getContext()")?;
+    let bytes = call.new_uint8_array(rgba.as_raw())?;
+    let buffer = call.get(&bytes, "buffer")?;
+    let clamped_class = crate::global_class(call, "Uint8ClampedArray")?;
+    let clamped = handle(call.construct(&clamped_class, &[buffer])?, "Uint8ClampedArray")?;
+    let data_class = crate::global_class(call, "ImageData")?;
+    let data = call.construct(&data_class, &[Value::Js(clamped), size[0].clone(), size[1].clone()])?;
+    method(call, &context, "putImageData", &[data, Value::Number(0.0), Value::Number(0.0)])?;
+    Ok(Value::Js(canvas))
 }
 
 /// `source.layOut(json, start, key)`: the layout of a text item, by VectorCraft's text layout: of

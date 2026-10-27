@@ -119,9 +119,8 @@ fn an_item_the_document_cant_hold_is_left_out<E: Engine>() {
         runtime.take_output()
     };
     runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
-    let output = turn(&mut s, &mut runtime, "new Raster({ size: [4, 4] })\nproject.activeLayer.firstChild.fillColor = 'red'");
-    assert_eq!(output.len(), 1, "{output:?}");
-    assert!(output[0].starts_with("The new Raster isn't in the document: "), "{}", output[0]);
+    let output = turn(&mut s, &mut runtime, "new Raster({ size: [0, 0] })\nproject.activeLayer.firstChild.fillColor = 'red'");
+    assert_eq!(output, ["The new Raster isn't in the document: it has no pixels"]);
     assert_eq!(node(&s, a).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "the rest went in");
     let output = turn(&mut s, &mut runtime, "new Path.Circle({ center: [50, 50], radius: 5 })\nproject.activeLayer.lastChild.bringToFront()");
     assert_eq!(output, Vec::<String>::new(), "no message again");
@@ -179,7 +178,7 @@ fn new_items_go_in_their_places<E: Engine>() {
     );
     assert_eq!(turn(&mut s, "layer.insertChild(0, layer.lastChild)").0, ["d", "h", "g", "a", "e", "b", "f", "c"]);
     assert_eq!(turn(&mut s, "layer.reverseChildren()").0, ["c", "f", "b", "e", "a", "g", "h", "d"]);
-    let names = turn(&mut s, "layer.insertChild(0, new Raster({ size: [4, 4] }))").0;
+    let names = turn(&mut s, "layer.insertChild(0, new Raster({ size: [0, 0] }))").0;
     assert_eq!(names[0], "c", "the raster isn't in the document");
     assert_eq!(turn(&mut s, "layer.insertChild(1, new Path({ name: 'i' }))").0[..2], ["i", "c"], "a place past it is one less in the document");
     // Wherever it goes:
@@ -802,6 +801,101 @@ fn writes_symbols<E: Engine>() {
     assert_eq!((symbol.as_str(), xf.translation()), ("Box", (50.0, 200.0).into()));
 }
 
+/// A 2 × 1 image placed in the session's document: a red pixel, then a half transparent blue one.
+fn image(s: &mut Session) -> NodeId {
+    let mut png = Vec::new();
+    let pixels = image::RgbaImage::from_raw(2, 1, vec![255, 0, 0, 255, 0, 0, 255, 128]).unwrap();
+    pixels.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let placed = s.execute("file.place", &json!({"name": "pixels.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    NodeId(placed["ids"][0].as_u64().unwrap())
+}
+
+/// Images are `Raster`s, of their size and where the document has them, whose pixels scripts read.
+fn reads_images<E: Engine>() {
+    let (mut s, ..) = document();
+    let id = image(&mut s);
+    let bounds = node(&s, id).geometric_bounds().unwrap();
+    let output = run::<E>(
+        &mut s,
+        &format!(
+            "var raster = project.getItemByKey({})\n\
+             console.log(raster.className, raster.width, raster.height)\n\
+             console.log([raster.bounds.x, raster.bounds.y, raster.bounds.width, raster.bounds.height].join(' '))\n\
+             console.log(raster.getPixel(0, 0), raster.getPixel(1, 0))",
+            id.0
+        ),
+    );
+    assert_eq!(
+        output,
+        [
+            "Raster 2 1".to_string(),
+            format!("{} {} {} {}", bounds.x0, bounds.y0, bounds.width(), bounds.height()),
+            "{ red: 1, green: 0, blue: 0, alpha: 1 } { red: 0, green: 0, blue: 1, alpha: 0.50196 }".to_string(),
+        ]
+    );
+}
+
+/// What a script does to a raster goes back to its image, which keeps its pixels. A transform the
+/// script leaves alone stays exactly as it was.
+fn writes_images<E: Engine>() {
+    let (mut s, ..) = document();
+    let (moved, kept) = (image(&mut s), image(&mut s));
+    let mut turned = node(&s, kept);
+    let NodeKind::Image(image) = &mut turned.kind else { panic!("an image") };
+    image.xf = Affine::rotate(0.123456789).then_translate((200.0, 150.0).into());
+    let (xf, key) = (image.xf, image.key.clone());
+    s.execute("document.patch", &json!({ "replace": [turned] })).unwrap();
+    let before = node(&s, moved).geometric_bounds().unwrap();
+    run::<E>(
+        &mut s,
+        &format!(
+            "var moved = project.getItemByKey({}), kept = project.getItemByKey({})\n\
+             moved.scale(2)\n\
+             moved.position += [100, 50]\n\
+             kept.opacity = 0.5",
+            moved.0, kept.0
+        ),
+    );
+    let after = node(&s, moved).geometric_bounds().unwrap();
+    assert_eq!((after.width(), after.height()), (before.width() * 2.0, before.height() * 2.0));
+    assert_eq!(after.center(), before.center() + vectorcraft_geom::Vec2::new(100.0, 50.0));
+    let NodeKind::Image(image) = &node(&s, kept).kind else { panic!("an image") };
+    assert_eq!((image.xf, &image.key), (xf, &key));
+    assert_eq!(node(&s, kept).opacity, 0.5);
+}
+
+/// The pixels of the image `id` shows, as `[r, g, b, a]` by row.
+fn pixels(s: &Session, id: NodeId) -> Vec<[u8; 4]> {
+    let NodeKind::Image(image) = &node(s, id).kind else { panic!("an image") };
+    let blob = &s.active().unwrap().doc.images[&image.key];
+    image::load_from_memory(&blob.bytes).unwrap().into_rgba8().pixels().map(|p| p.0).collect()
+}
+
+/// Pixels a script changes go back to the image, embedded in the document, which stays where it is.
+fn writes_pixels<E: Engine>() {
+    let (mut s, ..) = document();
+    let id = image(&mut s);
+    let NodeKind::Image(before) = node(&s, id).kind else { panic!("an image") };
+    run::<E>(&mut s, &format!("project.getItemByKey({}).setPixel(1, 0, '#00ff00')", id.0));
+    let NodeKind::Image(after) = node(&s, id).kind else { panic!("an image") };
+    assert_ne!(after.key, before.key);
+    assert_eq!((after.width, after.height, after.xf), (before.width, before.height, before.xf));
+    assert_eq!(pixels(&s, id), [[255, 0, 0, 255], [0, 255, 0, 255]]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(pixels(&s, id), [[255, 0, 0, 255], [0, 0, 255, 128]], "one undo step");
+}
+
+/// New rasters go in as images of their pixels, where the script puts them.
+fn new_rasters_go_in<E: Engine>() {
+    let (mut s, ..) = document();
+    run::<E>(&mut s, "var raster = new Raster({ size: [3, 2], position: [100, 50] })\nraster.setPixel(0, 0, 'blue')\nraster.opacity = 0.5");
+    let added = s.active().unwrap().doc.layers[0].children().unwrap().last().unwrap().clone();
+    assert!(matches!(&added.kind, NodeKind::Image(image) if (image.width, image.height) == (3, 2)), "{:?}", added.kind);
+    assert_eq!(added.geometric_bounds().unwrap(), Rect::new(98.5, 49.0, 101.5, 51.0));
+    assert_eq!(added.opacity, 0.5);
+    assert_eq!(pixels(&s, added.id)[..2], [[0, 0, 255, 255], [0, 0, 0, 0]]);
+}
+
 /// A pattern sized to its art stays so when a script changes only its art: the tile follows it.
 fn patterns_sized_to_art_follow_it<E: Engine>() {
     let (mut s, a, b) = document();
@@ -1173,6 +1267,34 @@ fn items_move_between_documents<E: Engine>() {
     assert_eq!((bounds.x0, bounds.y0, bounds.width(), bounds.height()), (50.0, 10.0, 30.0, 20.0), "where it was: {b:?}");
 }
 
+/// An image a script moves to another document takes its pixels along, where it was.
+fn images_move_between_documents<E: Engine>() {
+    let (mut s, ..) = document();
+    let id = image(&mut s);
+    let (bounds, before) = (node(&s, id).geometric_bounds().unwrap(), pixels(&s, id));
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let [first, second] = [0, 1].map(|i| s.documents()[i].uid);
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    let bind = |runtime: &mut Runtime<E>, s: &Session, uid| {
+        let st = s.documents().iter().find(|d| d.uid == uid).unwrap();
+        runtime.bind(&scope, uid, st.doc.clone(), st.selection.clone()).unwrap();
+    };
+    bind(&mut runtime, &s, first);
+    runtime.execute(&scope, &format!("globalThis.raster = paper.project.getItemByKey({})", id.0)).unwrap();
+    bind(&mut runtime, &s, second);
+    runtime.execute(&scope, "paper.project.activeLayer.addChild(raster)").unwrap();
+    for patch in runtime.take_patches().unwrap() {
+        let index = s.documents().iter().position(|d| d.uid == patch.uid).unwrap();
+        s.set_active(index);
+        s.execute("document.patch", &patch.params).unwrap();
+    }
+    s.set_active(1);
+    let moved = s.active().unwrap().doc.layers[0].children().unwrap()[0].clone();
+    assert_eq!(moved.geometric_bounds().unwrap(), bounds);
+    assert_eq!(pixels(&s, moved.id), before);
+}
+
 /// A symbol instance a script moves to another document takes a copy of its symbol along, a new
 /// symbol there; its own document keeps the symbol and its other instances as they were.
 /// Items that use one symbol, moved to another document in two operations, each take a copy of it
@@ -1396,6 +1518,31 @@ macro_rules! engine_tests {
             #[test]
             fn writes_symbols() {
                 super::writes_symbols::<$engine>();
+            }
+
+            #[test]
+            fn reads_images() {
+                super::reads_images::<$engine>();
+            }
+
+            #[test]
+            fn writes_images() {
+                super::writes_images::<$engine>();
+            }
+
+            #[test]
+            fn writes_pixels() {
+                super::writes_pixels::<$engine>();
+            }
+
+            #[test]
+            fn new_rasters_go_in() {
+                super::new_rasters_go_in::<$engine>();
+            }
+
+            #[test]
+            fn images_move_between_documents() {
+                super::images_move_between_documents::<$engine>();
             }
 
             #[test]

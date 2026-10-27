@@ -11,12 +11,14 @@ use std::sync::Arc;
 
 use serde_json::{Map, Value as Json, json};
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
-use vectorcraft_doc::{Appearance, Document, LayerColor, LineCap, LineJoin, LiveShape, Node, NodeId, NodeKind, Scaling, TextWrap};
+use vectorcraft_doc::{
+    Appearance, Document, ImageBlob, ImageObject, LayerColor, LineCap, LineJoin, LiveShape, Node, NodeId, NodeKind, Scaling, TextWrap,
+};
 use vectorcraft_geom::{Affine, Anchor, AnchorKind, PathData, Point, SubPath};
 
 use crate::binding::{Patch, node, number};
 use crate::effects;
-use crate::host::item_json;
+use crate::host::{item_json, raster_centre};
 use crate::text;
 use crate::{Call, Error, Value, method, object};
 
@@ -25,7 +27,8 @@ mod change {
     pub const CHILDREN: u32 = 0x2;
     pub const INSERTION: u32 = 0x4;
     /// Everything that changes an item's own content or attributes.
-    pub const CONTENT: u32 = 0x8 | 0x10 | 0x20 | 0x40 | 0x80 | 0x100 | 0x200 | 0x800;
+    pub const CONTENT: u32 = 0x8 | 0x10 | 0x20 | 0x40 | 0x80 | 0x100 | 0x200 | PIXELS | 0x800;
+    pub const PIXELS: u32 = 0x400;
 }
 
 /// One entry of the change log: `reordered` when the item's children changed in order other than by
@@ -85,7 +88,7 @@ pub(crate) fn patch<H: Clone>(
     let (patterns, symbols) = written_definitions(call, doc, definitions)?;
     let mut remove = Vec::new();
     let mut replace = Vec::new();
-    let mut news = News { insert: Vec::new(), inserted: Vec::new(), new: HashMap::new(), order: Vec::new() };
+    let mut news = News { insert: Vec::new(), inserted: Vec::new(), new: HashMap::new(), order: Vec::new(), images: Vec::new() };
     let mut parents = Vec::new();
     // A compound path's children are its geometry: a change of one, or of which it has, is the
     // compound's.
@@ -104,7 +107,7 @@ pub(crate) fn patch<H: Clone>(
             }
             Some(id) => {
                 if change.flags & change::CONTENT != 0 {
-                    replace.push(replaced(call, doc, node(doc, id)?, change)?);
+                    replace.push(replaced(call, doc, node(doc, id)?, change, &mut news.images)?);
                     replaced_ids.push(id);
                     if is_text(&change.class) {
                         texts.push(change.item.clone());
@@ -134,7 +137,7 @@ pub(crate) fn patch<H: Clone>(
     for (id, item) in compounds {
         if !replaced_ids.contains(&id) {
             let change = Change::read(call, item, change::CONTENT, false)?;
-            replace.push(replaced(call, doc, node(doc, id)?, &change)?);
+            replace.push(replaced(call, doc, node(doc, id)?, &change, &mut news.images)?);
             replaced_ids.push(id);
         }
     }
@@ -147,7 +150,7 @@ pub(crate) fn patch<H: Clone>(
                 && !replaced_ids.contains(&NodeId(key as u64))
             {
                 let change = Change::read(call, linked.clone(), change::CONTENT, false)?;
-                replace.push(replaced(call, doc, node(doc, NodeId(key as u64))?, &change)?);
+                replace.push(replaced(call, doc, node(doc, NodeId(key as u64))?, &change, &mut news.images)?);
                 replaced_ids.push(NodeId(key as u64));
                 texts.push(linked);
             }
@@ -193,8 +196,10 @@ pub(crate) fn patch<H: Clone>(
         }
     }
     let mut params = Map::new();
-    let News { insert, inserted, order, .. } = news;
+    let News { insert, inserted, order, images, .. } = news;
+    let images = images.iter().map(|image| json!({ "mime": image.mime, "dataBase64": vectorcraft_format::base64_encode(&image.bytes) })).collect();
     for (key, list) in [
+        ("images", images),
         ("patterns", patterns),
         ("symbols", symbols),
         ("remove", remove),
@@ -291,6 +296,8 @@ struct News<H> {
     /// New items by Paper.js id: their index among the inserts.
     new: HashMap<u64, usize>,
     order: Vec<Json>,
+    /// The images the new and changed rasters show.
+    images: Vec<ImageBlob>,
 }
 
 impl<H: Clone> News<H> {
@@ -305,7 +312,7 @@ impl<H: Clone> News<H> {
         }
         let k = self.insert.len();
         // The rest of the script's changes go in without it, and it stays out from now on:
-        let (container, mut node) = match container_node(call, item) {
+        let (container, mut node) = match container_node(call, item, &mut self.images) {
             Ok(made) => made,
             Err(e) => {
                 call.set(item, UNWRITTEN, &Value::Bool(true))?;
@@ -355,7 +362,22 @@ impl<H: Clone> News<H> {
 
 /// The node of the new `item`, without its children, and whether it's a container, whose children
 /// go in after it.
-fn container_node<H: Clone>(call: &mut dyn Call<H>, item: &H) -> Result<(bool, Node), Error> {
+fn container_node<H: Clone>(call: &mut dyn Call<H>, item: &H, images: &mut Vec<ImageBlob>) -> Result<(bool, Node), Error> {
+    if matches!(call.get(item, "className")?, Value::String(class) if class == "Raster") {
+        let mut image =
+            ImageObject { key: String::new(), width: 0, height: 0, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+        images.push(write_pixels(call, item, &mut image)?);
+        write_matrix(call, item, &mut image)?;
+        let mut node = Node::new(NodeId(0), NodeKind::Image(Box::new(image)));
+        apply_attributes(&mut node, &attributes(call, item)?, &Json::Null);
+        node.name = match call.get(item, "name")? {
+            Value::String(name) if !name.is_empty() => Some(name),
+            _ => None,
+        };
+        node.visible = !matches!(call.get(item, "visible")?, Value::Bool(false));
+        node.locked = matches!(call.get(item, "locked")?, Value::Bool(true));
+        return Ok((false, node));
+    }
     let mut json = export(call, item)?;
     // A shape that no live shape is (a rectangle with elliptical corners) goes in as its path:
     if json.get(0).and_then(Json::as_str) == Some("Shape") && json.get(1).and_then(Json::as_object).and_then(live_shape).is_none() {
@@ -367,6 +389,41 @@ fn container_node<H: Clone>(call: &mut dyn Call<H>, item: &H) -> Result<(bool, N
         props.remove("children");
     }
     Ok((container, new_node(&json)?))
+}
+
+/// Gives `image` the raster's pixels, embedded, as a PNG of its size, which it returns.
+fn write_pixels<H: Clone>(call: &mut dyn Call<H>, raster: &H, image: &mut ImageObject) -> Result<ImageBlob, Error> {
+    if number(call.get(raster, "width")?) * number(call.get(raster, "height")?) == 0.0 {
+        return Err(Error::Script("it has no pixels".into()));
+    }
+    if !matches!(call.get(raster, "loaded")?, Value::Bool(true)) {
+        return Err(Error::Script("its image hasn't loaded".into()));
+    }
+    let data = crate::handle(method(call, raster, "getImageData", &[])?, "getImageData()")?;
+    let (width, height) = (number(call.get(&data, "width")?) as u32, number(call.get(&data, "height")?) as u32);
+    let bytes = crate::handle(call.get(&data, "data")?, "data")?;
+    let bytes = call.bytes(&bytes)?;
+    let pixels = image::RgbaImage::from_raw(width, height, bytes).ok_or_else(|| Error::Script("its pixels can't be read".into()))?;
+    let mut png = Vec::new();
+    pixels.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| Error::Script(e.to_string()))?;
+    let blob = ImageBlob::png(png);
+    *image = ImageObject { key: blob.content_key(), width, height, link: None, placement: Default::default(), ..image.clone() };
+    Ok(blob)
+}
+
+/// Gives `image` the transform of the raster's matrix, unless it's the one it has but for the
+/// precision of floats.
+fn write_matrix<H: Clone>(call: &mut dyn Call<H>, raster: &H, image: &mut ImageObject) -> Result<(), Error> {
+    let matrix = crate::handle(call.get(raster, "matrix")?, "matrix")?;
+    let mut values = [0.0; 6];
+    for (value, key) in values.iter_mut().zip(["a", "b", "c", "d", "tx", "ty"]) {
+        *value = number(call.get(&matrix, key)?);
+    }
+    let xf = Affine::new(values) * raster_centre(image).inverse();
+    if values.iter().all(|n| n.is_finite()) && !is_same_affine(&xf, &image.xf) {
+        image.xf = xf;
+    }
+    Ok(())
 }
 
 /// The property that marks an item the document can't hold, which write-back leaves out.
@@ -500,7 +557,13 @@ fn node_json(node: &Node) -> Result<Json, Error> {
 /// The node `original` with the item's changes: content for paths and compound paths, attributes
 /// for everything. Containers send no children, so they keep theirs. Text is written as
 /// [`text::written`] says, by where it is in its story.
-fn replaced<H: Clone>(call: &mut dyn Call<H>, doc: &Document, original: &Node, change: &Change<H>) -> Result<Json, Error> {
+fn replaced<H: Clone>(
+    call: &mut dyn Call<H>,
+    doc: &Document,
+    original: &Node,
+    change: &Change<H>,
+    images: &mut Vec<ImageBlob>,
+) -> Result<Json, Error> {
     let mut node = original.clone();
     let before = item_json(original, &Default::default());
     match change.class.as_str() {
@@ -543,6 +606,17 @@ fn replaced<H: Clone>(call: &mut dyn Call<H>, doc: &Document, original: &Node, c
                     *xf = matrix;
                 }
             }
+            apply_attributes(&mut node, &props, &before[1]);
+        }
+        // Read without exporting it, which would write out its pixels:
+        "Raster" => {
+            if let NodeKind::Image(image) = &mut node.kind {
+                if change.flags & change::PIXELS != 0 {
+                    images.push(write_pixels(call, &change.item, image)?);
+                }
+                write_matrix(call, &change.item, image)?;
+            }
+            let props = attributes(call, &change.item)?;
             apply_attributes(&mut node, &props, &before[1]);
         }
         "PointText" | "AreaText" | "PathText" => {

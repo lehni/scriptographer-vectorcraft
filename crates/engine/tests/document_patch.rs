@@ -437,3 +437,34 @@ fn a_document_behind_the_active_one_takes_a_patch() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(children(&s, layer).len(), 3, "undone in its document");
 }
+
+/// A PNG of one pixel of `rgba`.
+fn png(rgba: [u8; 4]) -> Vec<u8> {
+    let mut png = Vec::new();
+    image::RgbaImage::from_pixel(1, 1, image::Rgba(rgba)).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    png
+}
+
+#[test]
+fn images_go_in_under_their_content_keys() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let placed =
+        s.execute("file.place", &json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png([255, 0, 0, 255]))})).unwrap();
+    let id = placed["ids"][0].as_u64().unwrap();
+    let before = document(&mut s);
+    let blue = png([0, 0, 255, 255]);
+    let key = vectorcraft_doc::ImageBlob::png(blue.clone()).content_key();
+    let mut image = node(&mut s, id);
+    image["kind"]["key"] = json!(key);
+    let images = json!([{"mime": "image/png", "dataBase64": vectorcraft_format::base64_encode(&blue)}]);
+    s.execute("document.patch", &json!({"replace": [image], "images": images})).unwrap();
+    assert_eq!(node(&mut s, id)["kind"]["key"], json!(key));
+    assert_eq!(*s.active().unwrap().doc.images[&key].bytes, blue);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(document(&mut s), before, "one undo step");
+    assert!(!s.active().unwrap().doc.images.contains_key(&key));
+    for images in [json!([{"dataBase64": "AAAA"}]), json!([{"mime": "text/plain", "dataBase64": "AAAA"}]), json!([{"mime": "image/png"}])] {
+        assert!(s.execute("document.patch", &json!({"images": images})).is_err(), "{images}");
+    }
+}

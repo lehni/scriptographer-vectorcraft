@@ -95,15 +95,19 @@ fn pixels<H: Clone>(call: &mut dyn Call<H>, source: &Value<H>) -> Result<Arc<Pix
     #[cfg(not(target_arch = "wasm32"))]
     {
         let bytes = call.bytes(source)?;
-        decode(&bytes).map(Arc::new).map_err(|e| Error::Dom("InvalidStateError", format!("createImageBitmap: {e}")))
+        let invalid = |e: String| Error::Dom("InvalidStateError", format!("createImageBitmap: {e}"));
+        let rgba = decode(&bytes).map_err(invalid)?;
+        let side = |n: u32| u16::try_from(n).map_err(|e| invalid(e.to_string()));
+        let (width, height) = (side(rgba.width())?, side(rgba.height())?);
+        let data = rgba.pixels().map(|p| premultiply(p.0)).collect();
+        Ok(Arc::new(Pixmap::from_parts(data, width, height)))
     }
     #[cfg(target_arch = "wasm32")]
     Err(Error::Type("createImageBitmap: not an image".into()))
 }
 
 /// The image in `bytes`, in any format the app reads, within the size a canvas may have.
-#[cfg(not(target_arch = "wasm32"))]
-fn decode(bytes: &[u8]) -> Result<Pixmap, String> {
+pub(crate) fn decode(bytes: &[u8]) -> Result<image::RgbaImage, String> {
     let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|e| e.to_string())?;
     let mut limits = image::Limits::default();
     limits.max_image_width = Some(SIDE as u32);
@@ -111,12 +115,10 @@ fn decode(bytes: &[u8]) -> Result<Pixmap, String> {
     limits.max_alloc = Some((AREA * 8.0) as u64);
     reader.limits(limits);
     let rgba = reader.decode().map_err(|e| e.to_string())?.into_rgba8();
-    let (width, height) = (u16::try_from(rgba.width()).map_err(|e| e.to_string())?, u16::try_from(rgba.height()).map_err(|e| e.to_string())?);
-    if f64::from(width) * f64::from(height) > AREA {
+    if f64::from(rgba.width()) * f64::from(rgba.height()) > AREA {
         return Err("the image is too large".into());
     }
-    let data = rgba.pixels().map(|p| premultiply(p.0)).collect();
-    Ok(Pixmap::from_parts(data, width, height))
+    Ok(rgba)
 }
 
 /// `pixels` drawn into a `width` × `height` pixmap through `transform`, transparent where they

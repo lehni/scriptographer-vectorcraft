@@ -1,10 +1,11 @@
 //! The document as Paper.js sees it through its host: one record per child of a container
 //! (as columns), and each item's own content as Paper.js JSON (`importJSON` form).
 //!
-//! Layers, groups, paths, compound paths and text have Paper.js classes. Every other kind of object
-//! is a `HostItem`: Paper.js knows its bounds and attributes, never its content. VectorCraft has no
-//! per-object matrix, so records leave their matrix out (identity), and boxes are in document
-//! coordinates, but for text: its transform is its matrix, and its boxes are in its own space.
+//! Layers, groups, paths, compound paths, text, symbol instances and images have Paper.js classes.
+//! Every other kind of object is a `HostItem`: Paper.js knows its bounds and attributes, never its
+//! content. VectorCraft has no per-object matrix, so records leave their matrix out (identity), and
+//! boxes are in document coordinates, but for text, symbol instances and images: their transform is
+//! their matrix, and their boxes are in their own space.
 //! Records come without boxes: Paper.js asks for an item's ([`boxes`]) once it needs them.
 
 use std::collections::{BTreeSet, HashSet};
@@ -12,14 +13,16 @@ use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
 use vectorcraft_color::{BlendMode, Color, GradientGeom, GradientKind, Paint};
-use vectorcraft_doc::{AnchorRef, Document, LineCap, LineJoin, Node, NodeId, NodeKind, Scaling, Selection, SymbolBoxes, TextKind, TextObject};
+use vectorcraft_doc::{
+    AnchorRef, Document, ImageObject, LineCap, LineJoin, Node, NodeId, NodeKind, Scaling, Selection, SymbolBoxes, TextKind, TextObject,
+};
 use vectorcraft_geom::{Affine, PathData, Rect};
 
 use crate::effects::effect_json;
 use crate::text;
 
 /// The Paper.js classes of the records' `types`.
-pub const TYPE_NAMES: &[&str] = &["Layer", "Group", "Path", "CompoundPath", "HostItem", "PointText", "AreaText", "PathText", "SymbolItem"];
+pub const TYPE_NAMES: &[&str] = &["Layer", "Group", "Path", "CompoundPath", "HostItem", "PointText", "AreaText", "PathText", "SymbolItem", "Raster"];
 
 const LAYER: u8 = 0;
 const GROUP: u8 = 1;
@@ -30,6 +33,7 @@ const POINT_TEXT: u8 = 5;
 const AREA_TEXT: u8 = 6;
 const PATH_TEXT: u8 = 7;
 const SYMBOL_ITEM: u8 = 8;
+const RASTER: u8 = 9;
 
 /// Record flags, as Paper.js reads them.
 pub mod flags {
@@ -82,6 +86,7 @@ impl Columns {
                 0,
             ),
             NodeKind::SymbolInstance { .. } => (SYMBOL_ITEM, 0),
+            NodeKind::Image(_) => (RASTER, 0),
             _ => (HOST_ITEM, 0),
         };
         flags |= flags::STROKE_SCALING;
@@ -94,11 +99,12 @@ impl Columns {
         if selection.objects.contains(&node.id) {
             flags |= flags::SELECTED;
         }
-        // Text and symbol instances have a matrix in Paper.js, their transform, so their boxes are in
-        // their own space:
+        // Text, symbol instances and images have a matrix in Paper.js, their transform, so their boxes
+        // are in their own space:
         let matrix = match &node.kind {
             NodeKind::Text(t) => t.xf,
             NodeKind::SymbolInstance { xf, .. } => *xf,
+            NodeKind::Image(image) => raster_matrix(image),
             _ => Affine::IDENTITY,
         };
         if matrix != Affine::IDENTITY {
@@ -277,6 +283,11 @@ pub fn boxes(node: &Node, symbols: &SymbolBoxes) -> Option<[f64; 12]> {
             let bounds = art.and_then(|s| s.art.visual_bounds_with(symbols));
             (bounds, bounds, bounds)
         }
+        NodeKind::Image(image) => {
+            let (width, height) = (f64::from(image.width), f64::from(image.height));
+            let bounds = Some(Rect::new(-width / 2.0, -height / 2.0, width / 2.0, height / 2.0));
+            (bounds, bounds, bounds)
+        }
         _ => {
             let bounds = node.geometric_bounds_with(symbols);
             let stroke = node.visual_bounds_with(symbols).or(bounds);
@@ -287,6 +298,16 @@ pub fn boxes(node: &Node, symbols: &SymbolBoxes) -> Option<[f64; 12]> {
     let rect = |r: Rect| [r.x0, r.y0, r.width(), r.height()];
     let [a, b, c] = [rect(bounds), rect(stroke), rect(rough)];
     Some([a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3], c[0], c[1], c[2], c[3]])
+}
+
+/// An image's transform as a Paper.js matrix, which centres a raster on its origin.
+fn raster_matrix(image: &ImageObject) -> Affine {
+    image.xf * raster_centre(image)
+}
+
+/// The image's pixel space from its centre, where a raster's matrix starts.
+pub(crate) fn raster_centre(image: &ImageObject) -> Affine {
+    Affine::translate((f64::from(image.width) / 2.0, f64::from(image.height) / 2.0))
 }
 
 fn text_bounds(t: &TextObject) -> Option<Rect> {
@@ -366,6 +387,14 @@ pub fn item_json(node: &Node, selection: &Selection) -> Value {
             props.insert("matrix".into(), json!(xf.as_coeffs()));
             props.insert("definition".into(), json!([format!("@symbol/{symbol}")]));
             json!(["SymbolItem", props])
+        }
+        // The pixels come once a script needs them, from `getImage()`:
+        NodeKind::Image(image) => {
+            let mut props = attributes(node);
+            props.insert("applyMatrix".into(), json!(false));
+            props.insert("matrix".into(), json!(raster_matrix(image).as_coeffs()));
+            props.insert("size".into(), json!(["Size", image.width, image.height]));
+            json!(["Raster", props])
         }
         _ => json!(["HostItem", attributes(node)]),
     }
