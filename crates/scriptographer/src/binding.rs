@@ -126,6 +126,9 @@ impl<E: Engine> Runtime<E> {
             define_accessor(call, &global, &project, "artboards", artboards, None)?;
             define_accessor(call, &global, &project, "activeArtboard", active_artboard, None)?;
             call.set(&project, "trackChanges", &Value::Bool(true))?;
+            // The app draws the document, so the view doesn't, nor asks for a frame on each change:
+            let view = object(call, &project, "view")?;
+            call.set(&view, "autoUpdate", &Value::Bool(false))?;
             register(call, &project, &selected)?;
             Ok(project)
         })

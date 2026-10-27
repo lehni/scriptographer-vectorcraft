@@ -1518,9 +1518,29 @@ fn a_closed_documents_project_goes<E: Engine>() {
     runtime.apply_ids(patch, &json!({}), st.doc.clone(), st.selection.clone(), true).unwrap();
 }
 
+/// What a script changes later, in a timer or a tool's handlers, asks for no frame: the projects'
+/// views don't draw, the app does.
+fn later_changes_leave_nothing_running<E: Engine>() {
+    let (s, _, _) = document();
+    let st = s.active().unwrap();
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
+    runtime.execute(&scope, "setTimeout(() => project.activeLayer.firstChild.fillColor = 'red', 20)").unwrap();
+    // The frame Paper.js asks for after each run:
+    runtime.run_timers(17.0).unwrap();
+    runtime.run_timers(20.0).unwrap();
+    assert!(!runtime.is_running());
+}
+
 macro_rules! engine_tests {
     ($module:ident, $engine:ty) => {
         mod $module {
+            #[test]
+            fn later_changes_leave_nothing_running() {
+                super::later_changes_leave_nothing_running::<$engine>();
+            }
+
             #[test]
             fn reads_the_document() {
                 super::reads_the_document::<$engine>();
