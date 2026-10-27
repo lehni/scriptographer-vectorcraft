@@ -276,8 +276,12 @@ fn run<E: Engine>(
         let key = key?;
         let source = crate::modules::source(&key, setup.cache.as_deref())?;
         let mut runtime = Runtime::<E>::new().map_err(|e| e.to_string())?;
-        let file = url::Url::parse(&key).is_err().then(|| key.clone());
-        runtime.set_script(&Setup { file, ..setup }).map_err(|e| e.to_string())?;
+        let is_url = url::Url::parse(&key).is_ok();
+        runtime.set_script(&Setup { file: (!is_url).then(|| key.clone()), ..setup }).map_err(|e| e.to_string())?;
+        // A script from the web has its URL as its location, as a file its file's:
+        if is_url {
+            runtime.set_location(&key).map_err(|e| e.to_string())?;
+        }
         if Stop::started(interrupt, runtime.interrupt()) {
             return Err("the worker was terminated".into());
         }

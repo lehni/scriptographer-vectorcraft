@@ -1092,6 +1092,58 @@ fn fetch_reads_data_urls<E: Engine>() {
     );
 }
 
+/// A script's `location` is its file's URL, which relative URLs resolve against: `fetch()` reads
+/// the files there, only to get, and images load from them.
+fn scripts_load_files_from_their_location<E: Engine>(name: &str) {
+    let folder = std::env::temp_dir().join(format!("scriptographer-location-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    std::fs::create_dir_all(folder.join("sub")).unwrap();
+    std::fs::write(folder.join("data.json"), "{\"a\":1}").unwrap();
+    let pixels = image::RgbaImage::from_raw(2, 1, vec![255, 0, 0, 255, 0, 0, 255, 255]).unwrap();
+    pixels.save(folder.join("photo.png")).unwrap();
+    let mut runtime = Runtime::<E>::new().unwrap();
+    runtime.set_script(&Setup { file: Some(folder.join("script.js").to_string_lossy().into_owned()), ..Setup::default() }).unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    let script = "console.log(location instanceof WorkerLocation, location.protocol, location.pathname.endsWith('/script.js'), String(location) === location.href)\n\
+         const response = await fetch('data.json')\n\
+         console.log(await response.text(), response.url === new URL('data.json', location).href, (await fetch('photo.png')).headers.get('content-type'))\n\
+         for (const url of ['missing.txt', 'sub']) { try { await fetch(url) } catch (e) { console.log(e.name) } }\n\
+         try { await fetch('data.json', { method: 'PUT', body: 'x' }) } catch (e) { console.log(e.name) }\n\
+         const image = new Image()\n\
+         console.log(image instanceof HTMLImageElement, image.complete)\n\
+         image.src = 'photo.png'\n\
+         console.log(image.complete, image.src === new URL('photo.png', location).href)\n\
+         await new Promise(resolve => image.onload = resolve)\n\
+         console.log(image.complete, image.naturalWidth, image.naturalHeight, image.width)\n\
+         const context = new OffscreenCanvas(2, 1).getContext('2d')\n\
+         context.drawImage(image, 0, 0)\n\
+         console.log([...context.getImageData(0, 0, 2, 1).data].join())\n\
+         const broken = new Image()\n\
+         broken.src = 'data.json'\n\
+         await new Promise(resolve => broken.onerror = resolve)\n\
+         console.log(broken.complete, broken.naturalWidth)\n\
+         try { await broken.decode() } catch (e) { console.log(e.name) }";
+    runtime.execute(&scope, &format!("(async () => {{ try {{ {script} }} catch (e) {{ console.log('error', e.name, e.message) }} }})()")).unwrap();
+    settle(&mut runtime);
+    let _ = std::fs::remove_dir_all(&folder);
+    assert_eq!(
+        runtime.take_output(),
+        [
+            "true file: true true",
+            "{\"a\":1} true image/png",
+            "TypeError",
+            "TypeError",
+            "TypeError",
+            "true true",
+            "false true",
+            "true 2 1 2",
+            "255,0,0,255,0,0,255,255",
+            "true 0",
+            "EncodingError",
+        ]
+    );
+}
+
 /// `XMLHttpRequest` reads text in the encoding its BOM says, else in the response's charset or
 /// the one `overrideMimeType()` gives, as the standard has it.
 fn requests_read_text_in_their_charset<E: Engine>() {
@@ -2870,6 +2922,11 @@ macro_rules! engine_tests {
             #[test]
             fn fetch_reads_data_urls() {
                 super::fetch_reads_data_urls::<$engine>();
+            }
+
+            #[test]
+            fn scripts_load_files_from_their_location() {
+                super::scripts_load_files_from_their_location::<$engine>(stringify!($module));
             }
 
             #[test]
