@@ -87,6 +87,7 @@ Each `OffscreenCanvas`, `ImageBitmap`, `Path2D`, `CanvasGradient` and `CanvasPat
 - `dispatchKey(type, init)`, `hasKeyListeners()`.
 - `getSelectedKeys(project)`: the keys of the selected items, as JSON.
 - `setScript(file, directory, preferences)`: the global `script`: `file` and `directory` as `LocalFile`s, `keepAlive`, and `preferences` from their JSON (Paper.js's, so Colors and Points come back). `getPreferences()`: their JSON, which the app keeps once a unit of work is done, when it changed. `keepsAlive()`: whether the script set `script.keepAlive`.
+- `formatError(error)`: an error's text with the scripts' stack frames, as the console writes it, for errors the app reports itself.
 - `setLocation(href)`, `setupWorker(name, isShared)` (gives what receives messages or connected ports), `makePort(number)`, `getBytes(blob)`, `getGeometryValues(object)`, `notifyRejections`.
 - `watchEffects(Effect)`, `applyEffect(scope, type, parameters, art, key)` (VectorCraft).
 

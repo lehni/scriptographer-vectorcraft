@@ -42,7 +42,7 @@ impl Engine for Browser {
     fn eval(&mut self, source: &str) -> Result<Value<JsValue>, Error> {
         // The realm's own `eval`, called indirectly, runs in its global scope.
         let eval: Function = Reflect::get(&self.global, &"eval".into()).map_err(js_error)?.dyn_into().map_err(js_error)?;
-        Ok(from_js(eval.call1(&self.global, &source.into()).map_err(js_error)?))
+        Ok(from_js(eval.call1(&self.global, &source.into()).map_err(|thrown| script_error(&self.host, thrown))?))
     }
 
     fn page_value(value: JsValue) -> Option<JsValue> {
@@ -171,13 +171,13 @@ impl Call<JsValue> for BrowserCall {
     fn call(&mut self, function: &JsValue, this: &Value<JsValue>, args: &[Value<JsValue>]) -> Result<Value<JsValue>, Error> {
         let function: &Function = function.dyn_ref().ok_or_else(|| Error::Script("not a function".into()))?;
         let args: Array = args.iter().map(to_js).collect();
-        Ok(from_js(Reflect::apply(function, &to_js(this), &args).map_err(js_error)?))
+        Ok(from_js(Reflect::apply(function, &to_js(this), &args).map_err(|thrown| script_error(&self.host, thrown))?))
     }
 
     fn construct(&mut self, constructor: &JsValue, args: &[Value<JsValue>]) -> Result<Value<JsValue>, Error> {
         let constructor: &Function = constructor.dyn_ref().ok_or_else(|| Error::Script("not a constructor".into()))?;
         let args: Array = args.iter().map(to_js).collect();
-        Ok(from_js(Reflect::construct(constructor, &args).map_err(js_error)?))
+        Ok(from_js(Reflect::construct(constructor, &args).map_err(|thrown| script_error(&self.host, thrown))?))
     }
 }
 
@@ -200,6 +200,17 @@ fn call_host(function: HostFunction<JsValue>, host: &BrowserHost, this: Value<Js
             Ok(thrown) => Err(to_js(&thrown)),
             Err(_) => Err(js_sys::Error::new(&error.to_string()).into()),
         },
+    }
+}
+
+/// An error the script threw: as the bundle's `formatError()` writes it, without the runtime's
+/// stack frames, once the bundle is loaded.
+fn script_error(host: &BrowserHost, thrown: JsValue) -> Error {
+    let shared = host.try_borrow().ok().and_then(|host| host.shared.clone());
+    let format = shared.and_then(|shared| Reflect::get(&shared, &"formatError".into()).ok()).and_then(|f| f.dyn_into::<Function>().ok());
+    match format.and_then(|format| format.call1(&JsValue::UNDEFINED, &thrown).ok()).and_then(|text| text.as_string()) {
+        Some(text) => Error::Script(text),
+        None => js_error(thrown),
     }
 }
 

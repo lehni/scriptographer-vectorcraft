@@ -9862,6 +9862,7 @@ ${value}\r
     getPreferences,
     keepsAlive
   });
+  Object.assign(natives, { formatError });
   function getSelectedKeys(project) {
     return JSON.stringify(
       project.selectedItems.map((item) => item.key).filter((key) => Number.isFinite(key))
