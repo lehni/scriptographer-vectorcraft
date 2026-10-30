@@ -1,4 +1,4 @@
-//! The ports of `MessageChannel` outside a browser (`js/src/message-port.js`). A channel is two
+//! The ports of `MessageChannel` outside a browser (core's `src/message-port.js`). A channel is two
 //! ports, each a pair of channel ends crossed with the other's, so it works the same whether the
 //! two are in one runtime or in two: a port sent in a transfer list moves its ends into the
 //! [`Message`], and the runtime that receives it numbers it as a port of its own. Messages wait in
@@ -42,7 +42,7 @@ impl<H> Port<H> {
     }
 }
 
-/// The natives `js/src/message-port.js` talks through: `channel()`, which gives the numbers of
+/// The natives core's `src/message-port.js` talks through: `channel()`, which gives the numbers of
 /// two new ports, `post(number, message, ports, numbers, buffers)`, `start(number, receive)` and
 /// `close(number)`.
 pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E::Handle)>, Error> {

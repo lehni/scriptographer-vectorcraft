@@ -1,4 +1,4 @@
-//! The requests of `fetch()` outside a browser (`js/src/fetch.js`), which the runtime sends: each on
+//! The requests of `fetch()` outside a browser (core's `src/fetch.js`), which the runtime sends: each on
 //! a thread of its own (`ureq`, HTTPS through rustls). On the script's turns ([`poll`]), the script
 //! gets the response's head, then its body as it arrives. A request out keeps the script running,
 //! until its body ended or the script cancelled it.
@@ -46,7 +46,7 @@ pub(crate) struct Answer {
     pub body: Vec<u8>,
 }
 
-/// The natives `js/src/fetch.js` talks through: `request(method, url, headers, body, follow,
+/// The natives core's `src/fetch.js` talks through: `request(method, url, headers, body, follow,
 /// receive)`, which gives the request's number, and `cancel(number)`. What the server answers
 /// goes to `receive()`: the response's head (`{ status, statusText, url, redirected, headers }`),
 /// then its body a part at a time, as `Uint8Array`s, and `null` at its end; or why the request

@@ -1,4 +1,4 @@
-//! `BroadcastChannel` outside a browser (`js/src/broadcast-channel.js`). All of the app's scripts
+//! `BroadcastChannel` outside a browser (core's `src/broadcast-channel.js`). All of the app's scripts
 //! and their workers are of one origin: a message goes to every other channel of its name, in any
 //! runtime, as structured serialization keeps it, and arrives on the receiver's turn ([`poll`]),
 //! in the order the messages were posted, and to the channels of one in the order they were
@@ -34,7 +34,7 @@ pub(crate) struct Channel<H> {
     receive: H,
 }
 
-/// The natives `js/src/broadcast-channel.js` talks through: `open(name, receive)`, which gives
+/// The natives core's `src/broadcast-channel.js` talks through: `open(name, receive)`, which gives
 /// the new channel's number, `post(number, message)` and `close(number)`.
 pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E::Handle)>, Error> {
     let natives: [(&str, HostFunction<E::Handle>); 3] = [("open", open), ("post", post), ("close", close)];

@@ -1,4 +1,4 @@
-//! The effects scripts define (`new Effect({ type, label, parameters, onApply })`, `js/src/effects.js`),
+//! The effects scripts define (`new Effect({ type, label, parameters, onApply })`, core's `src/effects.js`),
 //! which the app lists in Effect › Scriptographer while their script runs
 //! ([`vectorcraft_effects::script`]), with the parameters their Palette components describe. The
 //! app never runs a script to draw one: once the script's work is done, it draws those of its
@@ -33,7 +33,7 @@ impl Default for Defined {
     }
 }
 
-/// The natives `js/src/effects.js` talks through: `define(type, label, parameters)`, the
+/// The natives core's `src/effects.js` talks through: `define(type, label, parameters)`, the
 /// parameters as JSON, and `forget(type)`.
 pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E::Handle)>, Error> {
     let natives: [(&str, HostFunction<E::Handle>); 2] = [("define", define), ("forget", forget)];

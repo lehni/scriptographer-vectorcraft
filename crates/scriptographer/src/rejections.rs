@@ -1,6 +1,6 @@
 //! `unhandledrejection` and `rejectionhandled` outside a browser: the engines track the Promises a
 //! call rejects without a handler, and the handlers added to them later, and once the call's
-//! microtasks ran, the bundle fires the events (`js/src/rejections.js`), as browsers do.
+//! microtasks ran, the bundle fires the events (core's `src/rejections.js`), as browsers do.
 
 use std::cell::RefCell;
 

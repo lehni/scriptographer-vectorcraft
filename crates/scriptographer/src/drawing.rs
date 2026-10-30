@@ -13,7 +13,7 @@
 //! The context's properties (`fillStyle`, `lineWidth`, …) are kept with its surface, as the
 //! script gave them; `save()` keeps them with the transform, clip and dashes. Each canvas, path,
 //! gradient and pattern is a slot of the runtime's (`crate::canvas::Canvases`), which its object in
-//! `js/src/canvas.js` names by its number: the functions here get it as `this`.
+//! core's `src/canvas.js` names by its number: the functions here get it as `this`.
 
 use std::sync::Arc;
 
@@ -712,7 +712,7 @@ pub(crate) fn arc_to<H: Clone, T: Target>(call: &mut dyn Call<H>, this: &Value<H
 
 /// `roundRect(x, y, w, h, ...radii)`: a rectangle with elliptical corners, the radii the
 /// horizontal and vertical ones of its top-left, top-right, bottom-right and bottom-left corners
-/// as it shows (`js/src/canvas.js` reads them as the standard has them). It's drawn from `(x, y)`
+/// as it shows (core's `src/canvas.js` reads them as the standard has them). It's drawn from `(x, y)`
 /// towards `x + w`, then `y + h`, so a negative width or height draws it the other way round;
 /// radii that don't fit shrink together.
 pub(crate) fn round_rect<H: Clone, T: Target>(call: &mut dyn Call<H>, this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {

@@ -1,5 +1,5 @@
 //! The codecs of `CompressionStream` and `DecompressionStream` outside a browser
-//! (`js/src/compression.js`): gzip, deflate (zlib) and deflate-raw over flate2, brotli over the
+//! (core's `src/compression.js`): gzip, deflate (zlib) and deflate-raw over flate2, brotli over the
 //! brotli crate. A stream's chunks go through its codec as they come, on the script's thread.
 
 use std::io::Write;
@@ -38,7 +38,7 @@ pub(crate) struct Coder {
     codec: Codec,
 }
 
-/// The natives `js/src/compression.js` talks through: `open(format, decompress)`, which gives the
+/// The natives core's `src/compression.js` talks through: `open(format, decompress)`, which gives the
 /// stream's number, `write(number, bytes)` and `finish(number)`, which give what the codec made of
 /// them, and `close(number)`.
 pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E::Handle)>, Error> {

@@ -1,4 +1,4 @@
-//! The workers of `Worker` outside a browser (`js/src/worker.js`): `new Worker(path)` runs the
+//! The workers of `Worker` outside a browser (core's `src/worker.js`): `new Worker(path)` runs the
 //! script at `path` (from the script's folder, or an `https:` URL) as a classic script on a thread
 //! of its own, in a runtime of its own, with the same APIs (and Paper.js, but no document).
 //! Messages go both ways as structured serialization keeps them ([`crate::clone`]), with the ports
@@ -123,7 +123,7 @@ pub(crate) struct Parent<H> {
     closing: bool,
 }
 
-/// The natives `js/src/worker.js` talks through: `start(url, name, receive)`, which gives the
+/// The natives core's `src/worker.js` talks through: `start(url, name, receive)`, which gives the
 /// worker's number, `post(number, data, ports, numbers, buffers)` and `terminate(number)`,
 /// `connect(url, name, port, receive)`, which gives a shared worker's number, and in the worker
 /// `self.postMessage(data, ports, numbers, buffers)`, `self.close()` and
@@ -327,7 +327,7 @@ fn run<E: Engine>(
     outbox.tell(|| FromWorker::Closed);
 }
 
-/// Gives the worker's global object what a worker's has (`setupWorker()` in `js/src/worker.js`).
+/// Gives the worker's global object what a worker's has (`setupWorker()` in core's `src/worker.js`).
 fn become_worker<E: Engine>(runtime: &mut Runtime<E>, name: &str, outbox: Arc<Outbox>, shared: bool) -> Result<(), Error> {
     runtime.engine.with_call(|call| {
         let receive = crate::call_bundle(call, "setupWorker", &[Value::String(name.to_owned()), Value::Bool(shared)])?;

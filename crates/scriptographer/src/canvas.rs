@@ -1,4 +1,4 @@
-//! The canvases of `OffscreenCanvas` outside a browser (`js/src/canvas.js`), with pixels: a
+//! The canvases of `OffscreenCanvas` outside a browser (core's `src/canvas.js`), with pixels: a
 //! vello_cpu pixmap and drawing state per canvas, in a slot the canvas's object names, which it
 //! frees when the script drops the canvas. A canvas is its own 2D context, with `fillRect`,
 //! `clearRect`, `getImageData`, `putImageData`, `convertToBlob()` (PNG), and text measuring
@@ -25,7 +25,7 @@ pub(crate) const SIDE: f64 = 16384.0;
 pub(crate) const AREA: f64 = 16384.0 * 16384.0 / 4.0;
 
 /// The slots of every canvas and `ImageBitmap` (their pixels and drawing state), `Path2D` and
-/// gradient or pattern, by their numbers, which their objects in `js/src/canvas.js` keep; and the
+/// gradient or pattern, by their numbers, which their objects in core's `src/canvas.js` keep; and the
 /// fonts the script added to its `FontFaceSet`, as the family it named each and the families of
 /// the font, as VectorCraft's font database knows them.
 pub(crate) struct Canvases<H> {
@@ -57,7 +57,7 @@ pub(crate) fn store<T>(slots: &mut Vec<Option<T>>, item: T) -> usize {
     }
 }
 
-/// The natives `js/src/canvas.js` makes its classes of, each with the slot it's for as `this`:
+/// The natives core's `src/canvas.js` makes its classes of, each with the slot it's for as `this`:
 /// `create(width, height)`, a canvas's slot, `width()`, `height()`, `resize(width, height)`,
 /// `encode(type, quality)`, `setOpaque()`, `clear()`, the context's `properties` with `get(name)` and `set(name, value, slot)`, and its
 /// `methods`; `createGradient(kind, …)`, `addColorStop()`, `createPattern(image, repetition)` and

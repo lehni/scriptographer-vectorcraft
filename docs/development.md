@@ -55,18 +55,17 @@ How the web shell (`apps/vectorcraft-web/src/web.rs`) differs from desktop:
 
 ## Scriptographer's JavaScript
 
-Scriptographer is a JavaScript scripting engine, so what its scripts see is written in JavaScript where that makes more sense than Rust (`crates/scriptographer/js/src`, ES modules), as Paper.js itself is. esbuild bundles the sources into `js/dist/scriptographer.js` (every platform) and `js/dist/scriptographer-web.js` (the web), which are committed and built into the runtime with `include_str!`, so building VectorCraft needs no Node. Changing the JavaScript needs Node 24 or newer and pnpm:
+Scriptographer is a JavaScript scripting engine, so what its scripts see is written in JavaScript where that makes more sense than Rust, as Paper.js itself is. That JavaScript lives in its own repository, scriptographer-core, which every app that runs Scriptographer's scripts shares (VectorCraft and Glyphs), so the same scripts run in each. Its `NATIVES.md` is the contract: what each app implements natively for the bundle, and what the bundle gives back.
+
+`crates/scriptographer/core` holds a copy of what the runtime loads from it: the bundles in `dist/` (`scriptographer.js` on every platform, `scriptographer-web.js` on the web), Paper.js and the libraries in `vendor/`, and `NATIVES.md`, built into the runtime with `include_str!`, so building VectorCraft needs neither Node nor scriptographer-core. `COMMIT` names the core commit they came from. To take a newer core, build and commit it there, then copy it in:
 
 ```sh
-cd crates/scriptographer/js
-pnpm install
-pnpm run build          # the bundles in dist/, from src/
-pnpm run prettier:fix   # Prettier with Penere, as Dito.js formats
+cargo xtask scriptographer-core ../scriptographer-core
 ```
 
-`cargo xtask ci` checks both (its `scriptographer-js` step): the sources formatted, and the bundles in `dist/` as `src/` builds them.
+While working on core, `SCRIPTOGRAPHER_CORE=../scriptographer-core cargo run …` builds with that checkout's `dist/` and `vendor/` instead of the copy, and `SCRIPTOGRAPHER_PAPER_JS=<file>` with another Paper.js build.
 
-The runtime evaluates the bundles first, before its own classes. They hold the browser APIs outside a browser (events, fetch's classes, `XMLHttpRequest`, `Blob`, `URL`, `WebSocket`, `Worker`, storage, encoding, the File System Access API and `LocalFile`, the geometry interfaces, `DOMException`, the console), and Scriptographer's `Dialog` and `Palette`. What a browser's realm has already, it keeps. Rust keeps what needs the machine: the network, files, threads, sockets, URL parsing, the clock, random bytes and UTF-8, and what the app answers. The runtime passes these as natives in `__scriptographer` (`js/src/natives.js`), which the bundle takes off the global object, and the bundle gives back what Rust calls into (a blob's bytes, the palettes, a worker's global object; `call_bundle()`). The canvas, structured cloning, imports and the document binding stay in Rust: the renderer reads the canvas's state on every draw, and cloned values cross threads to workers.
+The runtime evaluates the bundles first, before its own classes. They hold the browser APIs outside a browser (events, fetch's classes, `XMLHttpRequest`, `Blob`, `URL`, `WebSocket`, `Worker`, storage, encoding, the File System Access API and `LocalFile`, the geometry interfaces, `DOMException`, the console), and Scriptographer's `Dialog` and `Palette`. What a browser's realm has already, it keeps. Rust keeps what needs the machine: the network, files, threads, sockets, URL parsing, the clock, random bytes and UTF-8, and what the app answers. The runtime passes these as natives in `__scriptographer` (core's `src/natives.js`), which the bundle takes off the global object, and the bundle gives back what Rust calls into (a blob's bytes, the palettes, a worker's global object; `call_bundle()`). The canvas, structured cloning, imports and the document binding stay in Rust: the renderer reads the canvas's state on every draw, and cloned values cross threads to workers.
 
 ## Desktop graphics processor
 
