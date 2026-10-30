@@ -246,12 +246,15 @@ fn script_errors_show_the_scripts_own_frames() {
     let scope = runtime.create_scope(800.0, 600.0).unwrap();
     // Through Paper.js, whose frames sit between the script's:
     let fail = "function fail() { paper.Base.each([1], function () { throw new Error('deep') }) }\n";
-    for source in [format!("{fail}fail()"), format!("{fail}await null\nfail()")] {
+    for (source, line) in [(format!("{fail}fail()"), 2), (format!("{fail}await null\nfail()"), 3)] {
         let error = runtime.execute(&scope, &source).unwrap_err().to_string();
         let (message, frames) = error.split_once('\n').unwrap_or((&error, ""));
         assert_eq!(message, "Error: deep", "{error}");
         assert!(frames.lines().count() >= 2, "the script's frames: {error}");
         assert!(frames.lines().all(|frame| frame.contains(&url)), "only the script's frames: {error}");
+        // At the lines of the script's file: `fail` on its first, the call on the last.
+        assert!(frames.lines().any(|frame| frame.contains("at fail ") && frame.contains(&format!("{url}:1:"))), "{error}");
+        assert!(frames.lines().last().is_some_and(|frame| frame.contains(&format!("{url}:{line}:"))), "{error}");
     }
     std::fs::remove_dir_all(&folder).unwrap();
 }
