@@ -232,6 +232,30 @@ fn scripts_await_at_the_top_level<E: Engine>() {
     assert!(failure.to_string().contains("later"), "a failure in a frame is the frame's error: {failure}");
 }
 
+/// A script's error shows its own stack frames, at its file, and none of the runtime's (Paper.js,
+/// the bundle): before an `await` and after it. V8's errors have stacks; Boa's only the message.
+#[cfg(all(feature = "v8", not(target_arch = "wasm32")))]
+#[test]
+fn script_errors_show_the_scripts_own_frames() {
+    let folder = std::env::temp_dir().join(format!("scriptographer-errors-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let file = folder.join("failing.js");
+    let url = format!("file://{}", file.display());
+    let mut runtime = Runtime::<vectorcraft_scriptographer::V8>::new().unwrap();
+    runtime.set_script(&Setup { file: Some(file.to_string_lossy().into()), ..Setup::default() }).unwrap();
+    let scope = runtime.create_scope(800.0, 600.0).unwrap();
+    // Through Paper.js, whose frames sit between the script's:
+    let fail = "function fail() { paper.Base.each([1], function () { throw new Error('deep') }) }\n";
+    for source in [format!("{fail}fail()"), format!("{fail}await null\nfail()")] {
+        let error = runtime.execute(&scope, &source).unwrap_err().to_string();
+        let (message, frames) = error.split_once('\n').unwrap_or((&error, ""));
+        assert_eq!(message, "Error: deep", "{error}");
+        assert!(frames.lines().count() >= 2, "the script's frames: {error}");
+        assert!(frames.lines().all(|frame| frame.contains(&url)), "only the script's frames: {error}");
+    }
+    std::fs::remove_dir_all(&folder).unwrap();
+}
+
 /// V8's `WebAssembly`, its Promises too (Boa has none; browsers their own).
 #[cfg(all(feature = "v8", not(target_arch = "wasm32")))]
 #[test]

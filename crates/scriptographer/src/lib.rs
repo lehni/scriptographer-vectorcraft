@@ -457,16 +457,8 @@ impl<E: Engine> Runtime<E> {
     pub fn execute(&mut self, scope: &Scope<E::Handle>, source: &str) -> Result<(), Error> {
         let url = self.script_url();
         let failed = self.engine.function("failed", |call, _, args| {
-            let reason = args.first().cloned().unwrap_or(Value::Undefined);
-            let mut message = call.to_string(&reason)?;
-            // The stack where the engine's starts with the error, as V8's does.
-            if let Value::Js(error) = &reason
-                && let Value::String(stack) = call.get(error, "stack")?
-                && stack.starts_with(&message)
-            {
-                message = stack;
-            }
-            call.host()?.borrow_mut().failure = Some(Error::Script(message));
+            let failure = call_bundle(call, "formatError", args)?;
+            call.host()?.borrow_mut().failure = Some(Error::Script(call.to_string(&failure)?));
             Ok(Value::Undefined)
         })?;
         self.engine.with_call(|call| {

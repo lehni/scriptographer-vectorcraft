@@ -455,7 +455,8 @@ extern "C" fn track_rejection(message: v8::PromiseRejectMessage) {
     }
 }
 
-/// The exception caught by `scope`, as an error with the script's stack if it has one.
+/// The exception caught by `scope`, as an error with the script's stack: as the bundle writes it
+/// once it's loaded, else as V8 has it.
 fn exception(scope: &mut v8::PinnedRef<'_, v8::TryCatch<v8::HandleScope>>) -> Error {
     // A terminated script's exception is V8's own, which reads `null`.
     let exception = scope.exception().filter(|_| !scope.has_terminated());
@@ -464,7 +465,19 @@ fn exception(scope: &mut v8::PinnedRef<'_, v8::TryCatch<v8::HandleScope>>) -> Er
         return Error::Script(reason.into());
     };
     let stack = scope.stack_trace().filter(|stack| stack.is_string());
-    Error::Script(stack.unwrap_or(exception).to_rust_string_lossy(scope))
+    let text = format_error(scope, exception).unwrap_or_else(|| stack.unwrap_or(exception).to_rust_string_lossy(scope));
+    Error::Script(text)
+}
+
+/// `exception` as the bundle's `formatError()` writes it, without the runtime's stack frames.
+fn format_error(scope: &mut v8::PinnedRef<'_, v8::TryCatch<v8::HandleScope>>, exception: v8::Local<v8::Value>) -> Option<String> {
+    let shared = context_data(scope).ok()?.host.try_borrow().ok()?.shared.clone()?;
+    let shared = v8::Local::new(scope, shared).to_object(scope)?;
+    let name = v8::String::new(scope, "formatError")?;
+    let format = v8::Local::<v8::Function>::try_from(shared.get(scope, name.into())?).ok()?;
+    let undefined = v8::undefined(scope).into();
+    let text = format.call(scope, undefined, &[exception])?;
+    text.is_string().then(|| text.to_rust_string_lossy(scope))
 }
 
 fn handle(scope: &v8::PinScope<'_, '_>, value: v8::Local<v8::Value>) -> Handle {
