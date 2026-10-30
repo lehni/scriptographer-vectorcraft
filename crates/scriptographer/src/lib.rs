@@ -37,6 +37,7 @@ pub mod host;
 #[cfg(not(target_arch = "wasm32"))]
 mod locks;
 mod modules;
+pub mod overlay;
 mod palette;
 mod path2d;
 mod rejections;

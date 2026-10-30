@@ -33,7 +33,7 @@ fn send_at(s: &Session, worker: &Worker, now: f64, work: Work) {
     // The styles the app gives scripts.
     let paint = &s.paint;
     let style = vectorcraft_scriptographer::host::current_style(&paint.fill, &paint.stroke, paint.stroke_width, &s.new_type_style().fill);
-    worker.send(Request::Run { uid: st.uid, doc: st.doc.clone(), selection: st.selection.clone(), artboard: 0, style, now, work });
+    worker.send(Request::Run { uid: st.uid, doc: st.doc.clone(), selection: st.selection.clone(), artboard: 0, style, now, view: None, work });
 }
 
 /// Applies the replies until `Done`, as the app does, and returns `Done`'s error.

@@ -308,6 +308,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         print_tiling_overlay(app, &painter, &xf);
     }
     original_path_overlay(app, &painter, &xf);
+    crate::scripts::paint_overlays(app, &painter, &xf);
 
     let revolve_edit = app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active);
     let view_info = app.view_info();

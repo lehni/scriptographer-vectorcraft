@@ -28,7 +28,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, NodeId};
+use vectorcraft_doc::{Document, NodeId, Selection};
+use vectorcraft_geom::{Affine, Point};
+use vectorcraft_scriptographer::overlay::{Overlay, View};
 use vectorcraft_scriptographer::worker::{Pointer, Reply, Request, Work, Worker};
 use vectorcraft_scriptographer::{Key, Modifiers, MouseEvent, PaletteEvent, Setup};
 use vectorcraft_tools::Cursor;
@@ -77,6 +79,8 @@ pub struct Scripts {
     documents: Vec<u64>,
     /// The active document as of the last frame, to tell the scripts when the user switches.
     active: Option<u64>,
+    /// Its view on the canvas as of the last frame, which the scripts' draw handlers draw for.
+    view: Option<View>,
     /// The scripts folders whose `__init__` scripts ran.
     initialized: Option<Vec<ScriptFolder>>,
     /// The tool script the Scriptographer Tool button stands for: the last one run, until it fails.
@@ -157,6 +161,8 @@ struct Running {
     effects: bool,
     /// The document as the script last had it.
     seen: Option<Arc<Document>>,
+    /// Its selection as the script's last work had it.
+    selection: Option<Selection>,
     /// The document its last work went to (`DocState::uid`).
     uid: Option<u64>,
     /// The work it was sent and hasn't finished.
@@ -184,6 +190,18 @@ struct Running {
     answers: VecDeque<bool>,
     /// Whether it set `script.keepAlive`: it then goes on when another script runs.
     keep_alive: bool,
+    /// What its draw handlers last drew, if anything: it then keeps running.
+    overlay: Option<Drawn>,
+}
+
+/// What a script's draw handlers drew in the document `uid`, as it was then with its selection, and
+/// its texture once shown.
+struct Drawn {
+    uid: u64,
+    doc: Arc<Document>,
+    selection: Selection,
+    overlay: Overlay,
+    texture: Option<egui::TextureHandle>,
 }
 
 /// A script's palette, as the panel shows it.
@@ -215,6 +233,7 @@ enum Kind {
     Activate,
     Handler,
     Switch,
+    Draw,
     /// An answer to a dialog, on the web.
     #[cfg(target_arch = "wasm32")]
     Answer,
@@ -225,6 +244,12 @@ impl Scripts {
     #[cfg(test)]
     pub fn is_running(&self) -> bool {
         self.running.iter().chain(&self.console).any(|s| s.wake.is_some() || s.effects || (s.busy.is_some() && s.asking.is_none()))
+    }
+
+    /// What the running scripts' draw handlers last drew.
+    #[cfg(test)]
+    pub fn drawn(&self) -> Vec<Overlay> {
+        self.running.iter().filter_map(|s| s.overlay.as_ref().map(|d| d.overlay.clone())).collect()
     }
 
     /// How long until a script needs a frame, in seconds from `now` on the app's clock: none while
@@ -546,6 +571,7 @@ fn start(app: &VectorcraftApp, name: String, path: Option<PathBuf>, source: Stri
         wake: None,
         effects: false,
         seen: None,
+        selection: None,
         uid: None,
         busy: None,
         queued,
@@ -558,6 +584,7 @@ fn start(app: &VectorcraftApp, name: String, path: Option<PathBuf>, source: Stri
         listening: false,
         answers: VecDeque::new(),
         keep_alive: false,
+        overlay: None,
     })
 }
 
@@ -619,6 +646,7 @@ pub(crate) fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
         }
     }
     app.scripts.active = active;
+    app.scripts.view = view(app, ctx);
     app.scripts.documents = documents;
     if app.scripts.running.is_empty() && app.scripts.console.is_none() {
         return;
@@ -676,7 +704,15 @@ fn pump(app: &mut VectorcraftApp, script: &mut Running, mut frame: Option<f64>, 
                 None => match frame.take() {
                     // On the web, its Promise continuations change its project after its work.
                     Some(_) if script.wake.is_some_and(|wake| wake <= now) || is_behind(app, script) || script.worker.has_changes() => Work::Frame,
-                    _ => return Ok(script.wake.is_some() || script.effects || script.tool || script.open || script.listening),
+                    _ if is_drawn_stale(app, script) => Work::Draw,
+                    _ => {
+                        return Ok(script.wake.is_some()
+                            || script.effects
+                            || script.tool
+                            || script.open
+                            || script.listening
+                            || script.overlay.is_some());
+                    }
                 },
             };
             send(app, script, now, work)?;
@@ -714,6 +750,16 @@ fn is_behind(app: &VectorcraftApp, script: &Running) -> bool {
     script.effects && app.session.active().is_some_and(|d| !script.seen.as_ref().is_some_and(|seen| Arc::ptr_eq(seen, &d.doc)))
 }
 
+/// Whether the script's draw handlers drew the active document for something else than the canvas
+/// shows: the view panned or zoomed since, or the user changed the document or its selection.
+fn is_drawn_stale(app: &VectorcraftApp, script: &Running) -> bool {
+    let (Some(drawn), Some(state)) = (&script.overlay, app.session.active()) else {
+        return false;
+    };
+    drawn.uid == state.uid
+        && (Some(drawn.overlay.view) != app.scripts.view || !Arc::ptr_eq(&drawn.doc, &state.doc) || drawn.selection != state.selection)
+}
+
 /// Sends `work` to the script at `now` (milliseconds since it started), with the active document.
 fn send(app: &mut VectorcraftApp, script: &mut Running, now: f64, work: Work) -> Result<(), String> {
     let index = match &work {
@@ -733,6 +779,7 @@ fn send(app: &mut VectorcraftApp, script: &mut Running, now: f64, work: Work) ->
         Work::Activate(_) => Kind::Activate,
         Work::Handler(_) => Kind::Handler,
         Work::Switch(_) => Kind::Switch,
+        Work::Draw => Kind::Draw,
         #[cfg(target_arch = "wasm32")]
         Work::Answer(_) | Work::Picked(_) => Kind::Answer,
         Work::Mouse(events) => {
@@ -747,8 +794,11 @@ fn send(app: &mut VectorcraftApp, script: &mut Running, now: f64, work: Work) ->
     let text = app.session.new_type_style();
     let style = vectorcraft_scriptographer::host::current_style(&paint.fill, &paint.stroke, paint.stroke_width, &text.fill);
     script.seen = Some(doc.clone());
+    script.selection = Some(selection.clone());
     script.uid = Some(uid);
-    script.worker.send(Request::Run { uid, doc, selection, artboard, style, now, work });
+    // Its draw handlers draw for the view of the active document, the one the canvas shows:
+    let view = app.scripts.view.filter(|_| app.session.active_index() == Some(index));
+    script.worker.send(Request::Run { uid, doc, selection, artboard, style, now, view, work });
     Ok(())
 }
 
@@ -777,7 +827,7 @@ fn settle(app: &mut VectorcraftApp, script: &mut Running, until: Instant) -> Opt
                 #[cfg(not(target_arch = "wasm32"))]
                 return None;
             }
-            Reply::Done { output, error, wake, effects, tool, keys, palettes, open, listening, keep_alive } => {
+            Reply::Done { output, error, wake, effects, tool, keys, palettes, open, listening, keep_alive, overlay } => {
                 show_output(app, output);
                 script.busy = None;
                 script.wake = wake;
@@ -785,6 +835,13 @@ fn settle(app: &mut VectorcraftApp, script: &mut Running, until: Instant) -> Opt
                 script.open = open;
                 script.listening = listening;
                 script.keep_alive = keep_alive;
+                // As the script left the document, its changes applied:
+                script.overlay = match (overlay, script.uid, &script.seen, &script.selection) {
+                    (Some(overlay), Some(uid), Some(doc), Some(selection)) => {
+                        Some(Drawn { uid, doc: doc.clone(), selection: selection.clone(), overlay, texture: None })
+                    }
+                    _ => None,
+                };
                 show_palettes(script, palettes);
                 return Some(Done { error: error.or(failed), tool, keys });
             }
@@ -1128,6 +1185,43 @@ pub(crate) fn flush_pointer(app: &mut VectorcraftApp, now: f64, dt: f64) {
             }
         }
         to_tool(app, [Work::Mouse(events)]);
+    }
+}
+
+/// The active document's view on the canvas, which the scripts' draw handlers draw for: from the
+/// document to the canvas, in points.
+fn view(app: &VectorcraftApp, ctx: &egui::Context) -> Option<View> {
+    let (rect, v) = (app.canvas_rect?, app.view()?);
+    let to_canvas = Affine::translate((-f64::from(rect.min.x), -f64::from(rect.min.y))) * crate::canvas::Xf::new(rect, v).affine();
+    let (width, height) = (f64::from(rect.width()), f64::from(rect.height()));
+    Some(View { width, height, pixel_ratio: f64::from(ctx.pixels_per_point()), matrix: to_canvas.as_coeffs() })
+}
+
+/// Shows what the scripts' draw handlers drew over the active document, where the view `xf` puts
+/// it: moved and scaled with the view as it pans and zooms, until they draw again.
+pub(crate) fn paint_overlays(app: &mut VectorcraftApp, painter: &egui::Painter, xf: &crate::canvas::Xf) {
+    let active = app.session.active().map(|d| d.uid);
+    for script in app.scripts.running.iter_mut().chain(&mut app.scripts.console) {
+        let Some(drawn) = script.overlay.as_mut().filter(|d| Some(d.uid) == active) else {
+            continue;
+        };
+        let overlay = &drawn.overlay;
+        let texture = drawn.texture.get_or_insert_with(|| {
+            let size = [usize::from(overlay.width()), usize::from(overlay.height())];
+            let image = egui::ColorImage::from_rgba_premultiplied(size, overlay.rgba());
+            painter.ctx().load_texture("script-overlay", image, egui::TextureOptions::LINEAR)
+        });
+        let to_screen = xf.affine() * Affine::new(overlay.view.matrix).inverse();
+        let (w, h) = (overlay.view.width, overlay.view.height);
+        let mut mesh = egui::Mesh::with_texture(texture.id());
+        for (x, y) in [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)] {
+            let p = to_screen * Point::new(x * w, y * h);
+            let uv = egui::pos2(x as f32, y as f32);
+            mesh.vertices.push(egui::epaint::Vertex { pos: egui::pos2(p.x as f32, p.y as f32), uv, color: egui::Color32::WHITE });
+        }
+        mesh.add_triangle(0, 1, 2);
+        mesh.add_triangle(0, 2, 3);
+        painter.add(mesh);
     }
 }
 

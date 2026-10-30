@@ -331,6 +331,58 @@ fn scripts_wake_the_app_when_their_timers_are_due() {
     assert!(wait(&mut app, 61.2) > 1e6, "but need no frames");
 }
 
+/// Whether an overlay has a pixel drawn where the document's point (x, y) is.
+fn is_drawn_at(overlay: &vectorcraft_scriptographer::overlay::Overlay, x: f64, y: f64) -> bool {
+    let [a, b, c, d, tx, ty] = overlay.view.matrix;
+    let ratio = overlay.view.pixel_ratio;
+    let (px, py) = (((a * x + c * y + tx) * ratio) as usize, ((b * x + d * y + ty) * ratio) as usize);
+    overlay.rgba()[(py * usize::from(overlay.width()) + px) * 4 + 3] > 0
+}
+
+/// A script whose items draw keeps running, and its items draw for the canvas's view, again once
+/// the view zoomed, once the user moved them, and once the user changed the selection.
+#[test]
+fn draw_handlers_draw_again_when_the_view_or_the_document_changes() {
+    let (mut app, id) = app();
+    let ctx = egui::Context::default();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0)));
+    // The canvas shows the rectangle, at (10, 10):
+    let view = app.view_mut().unwrap();
+    (view.center, view.zoom) = (vectorcraft_geom::Point::new(100.0, 100.0), 1.0);
+    crate::scripts::frame(&mut app, &ctx, 0.0);
+    let path = tempfile_path::Path::new(
+        "const item = project.activeLayer.firstChild
+        item.onDraw = event => event.context.fillRect(item.bounds.x, item.bounds.y, 1, 1)
+        item.onDrawSelection = event => {
+            const { x, y } = event.matrix.transform(item.bounds.center)
+            event.context.fillRect(x, y, 1, 1)
+        }",
+    );
+    let result = app.run("ui.runScript", json!({ "path": path.0.to_string_lossy() })).unwrap();
+    assert_eq!(result["running"], true);
+    // Paper.js's own frame after the script ran, which draws too:
+    for now in [0.1, 0.2] {
+        crate::scripts::frame(&mut app, &ctx, now);
+    }
+    let drawn = app.scripts.drawn();
+    assert_eq!((drawn.len(), drawn[0].view.width, drawn[0].view.height), (1, 800.0, 600.0));
+    assert!(is_drawn_at(&drawn[0], 10.5, 10.5));
+    app.view_mut().unwrap().zoom = 2.0;
+    crate::scripts::frame(&mut app, &ctx, 1.0);
+    let zoomed = app.scripts.drawn();
+    assert_eq!(zoomed[0].view.matrix[0], drawn[0].view.matrix[0] * 2.0, "drawn again for the zoomed view");
+    app.run("object.move", json!({"ids": [id], "dx": 50, "dy": 0})).unwrap();
+    crate::scripts::frame(&mut app, &ctx, 2.0);
+    let moved = &app.scripts.drawn()[0];
+    assert!(is_drawn_at(moved, 60.5, 10.5) && !is_drawn_at(moved, 10.5, 10.5), "drawn again where the user moved it");
+    // The rectangle is selected, as it was made:
+    assert!(is_drawn_at(moved, 75.2, 20.2));
+    app.run("select.none", json!({})).unwrap();
+    crate::scripts::frame(&mut app, &ctx, 3.0);
+    assert!(!is_drawn_at(&app.scripts.drawn()[0], 75.2, 20.2), "drawn again without the selection");
+    app.run("ui.stopScripts", json!({})).unwrap();
+}
+
 /// While the Scriptographer Tool is the active tool, the canvas shows its pencil.
 #[test]
 fn the_tool_has_its_own_cursor() {
