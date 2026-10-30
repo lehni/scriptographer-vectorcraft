@@ -57,7 +57,7 @@ How the web shell (`apps/vectorcraft-web/src/web.rs`) differs from desktop:
 
 Scriptographer is a JavaScript scripting engine, so what its scripts see is written in JavaScript where that makes more sense than Rust, as Paper.js itself is. That JavaScript lives in its own repository, scriptographer-core, which every app that runs Scriptographer's scripts shares (VectorCraft and Glyphs), so the same scripts run in each. Its `NATIVES.md` is the contract: what each app implements natively for the bundle, and what the bundle gives back.
 
-`crates/scriptographer/core` holds a copy of what the runtime loads from it: the bundles in `dist/` (`scriptographer.js` on every platform, `scriptographer-web.js` on the web), Paper.js and the libraries in `vendor/`, and `NATIVES.md`, built into the runtime with `include_str!`, so building VectorCraft needs neither Node nor scriptographer-core. `COMMIT` names the core commit they came from. To take a newer core, build and commit it there, then copy it in:
+`crates/scriptographer/core` holds a copy of what the runtime loads from it: the bundles in `dist/` (`scriptographer.js` on every platform, `scriptographer-web.js` on the web), Paper.js and the libraries in `vendor/`, and `NATIVES.md`, built into the runtime with `include_str!`, so building VectorCraft needs neither Node nor scriptographer-core. `COMMIT` names the core commit they came from, and `LICENSE.txt` is core's licence (MIT). To take a newer core, build and commit it there, then copy it in:
 
 ```sh
 cargo xtask scriptographer-core ../scriptographer-core
