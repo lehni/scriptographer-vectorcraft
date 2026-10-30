@@ -27,7 +27,7 @@ pub(crate) struct Binding<H> {
 /// active artboard, `project.activeArtboard`.
 pub(crate) struct Bound<H> {
     uid: u64,
-    project: H,
+    pub(crate) project: H,
     pub doc: Arc<Document>,
     selection: Selection,
     artboard: usize,

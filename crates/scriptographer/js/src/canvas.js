@@ -135,6 +135,14 @@ export class OffscreenCanvas {
   }
 }
 
+// The slot of the pixels of a canvas of these, which the runtime reads; none
+// for a browser's (`drawOverlay()`):
+export function canvasSurface(canvas) {
+  return canvas instanceof OffscreenCanvas
+    ? getCanvasSurface(canvas)
+    : undefined
+}
+
 let getContextSurface
 
 export class OffscreenCanvasRenderingContext2D {

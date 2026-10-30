@@ -10,6 +10,7 @@ use vectorcraft_color::{Color, Gradient, GradientGeom, GradientKind, GradientPai
 use vectorcraft_doc::{LiveShape, Node, NodeId, NodeKind};
 use vectorcraft_engine::Session;
 use vectorcraft_geom::{Affine, Point, Rect};
+use vectorcraft_scriptographer::overlay::{Overlay, View};
 use vectorcraft_scriptographer::{Engine, Runtime};
 
 /// A session with one layer holding two rectangles, a (bottom) and b.
@@ -1533,12 +1534,80 @@ fn later_changes_leave_nothing_running<E: Engine>() {
     assert!(!runtime.is_running());
 }
 
+/// The red in an overlay at the device pixel (x, y).
+fn red(overlay: &Overlay, x: usize, y: usize) -> u8 {
+    let i = (y * usize::from(overlay.width()) + x) * 4;
+    overlay.rgba()[i]
+}
+
+/// The items' draw handlers draw over the document where the view shows it, in the items'
+/// coordinates: an item's own, and its class's for each item of it. Without handlers, nothing
+/// draws.
+fn draw_handlers_draw_where_the_view_shows_the_items<E: Engine>() {
+    let (s, _, _) = document();
+    let st = s.active().unwrap();
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
+    // Zoomed to 200%, on a screen of two device pixels per point:
+    let view = View { width: 200.0, height: 100.0, pixel_ratio: 2.0, matrix: [2.0, 0.0, 0.0, 2.0, 0.0, 0.0] };
+    assert!(runtime.draw_overlay(view).unwrap().is_none());
+    let mark = "event => { event.context.fillStyle = 'red'; const { x, y } = event.item.bounds; event.context.fillRect(x, y, 4, 4) }";
+    runtime.execute(&scope, &format!("project.activeLayer.firstChild.onDraw = {mark}")).unwrap();
+    let overlay = runtime.draw_overlay(view).unwrap().unwrap();
+    assert_eq!((overlay.width(), overlay.height()), (400, 200));
+    // a, at (10, 10), is at (40, 40) in device pixels; b, at (50, 10), has no handler:
+    assert_eq!((red(&overlay, 44, 44), red(&overlay, 36, 44), red(&overlay, 204, 44)), (255, 0, 0));
+    runtime.execute(&scope, &format!("project.activeLayer.firstChild.onDraw = null; Path.prototype.onDraw = {mark}")).unwrap();
+    let overlay = runtime.draw_overlay(view).unwrap().unwrap();
+    assert_eq!((red(&overlay, 44, 44), red(&overlay, 204, 44)), (255, 255));
+    runtime.execute(&scope, "Path.prototype.onDraw = null").unwrap();
+    assert!(runtime.draw_overlay(view).unwrap().is_none());
+}
+
+/// `onDrawSelection` draws for the selected items only, with the view's matrix, and the
+/// selection draws nothing else.
+fn draw_selection_handlers_draw_the_selected_items<E: Engine>() {
+    let (s, _, _) = document();
+    let st = s.active().unwrap();
+    let mut runtime = Runtime::<E>::new().unwrap();
+    let scope = runtime.create_scope(400.0, 300.0).unwrap();
+    runtime.bind(&scope, st.uid, st.doc.clone(), st.selection.clone()).unwrap();
+    let view = View { width: 200.0, height: 100.0, pixel_ratio: 1.0, matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0] };
+    runtime
+        .execute(
+            &scope,
+            "Path.prototype.onDrawSelection = event => {
+                const { x, y } = event.matrix.transform(event.item.bounds.center)
+                event.context.fillStyle = 'red'
+                event.context.fillRect(x - 2, y - 2, 4, 4)
+            }
+            project.deselectAll()",
+        )
+        .unwrap();
+    assert!(runtime.draw_overlay(view).unwrap().is_none());
+    runtime.execute(&scope, "project.activeLayer.lastChild.selected = true").unwrap();
+    let overlay = runtime.draw_overlay(view).unwrap().unwrap();
+    // b's center is (65, 20), a's (25, 20); b's corner, where a selection draws a handle, stays clear:
+    assert_eq!((red(&overlay, 65, 20), red(&overlay, 25, 20), red(&overlay, 50, 10)), (255, 0, 0));
+}
+
 macro_rules! engine_tests {
     ($module:ident, $engine:ty) => {
         mod $module {
             #[test]
             fn later_changes_leave_nothing_running() {
                 super::later_changes_leave_nothing_running::<$engine>();
+            }
+
+            #[test]
+            fn draw_handlers_draw_where_the_view_shows_the_items() {
+                super::draw_handlers_draw_where_the_view_shows_the_items::<$engine>();
+            }
+
+            #[test]
+            fn draw_selection_handlers_draw_the_selected_items() {
+                super::draw_selection_handlers_draw_the_selected_items::<$engine>();
             }
 
             #[test]

@@ -76,7 +76,7 @@ pub(crate) fn create<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &
 }
 
 /// The pixels of an image's bytes, an `ImageData`, or a canvas or a bitmap by its slot.
-fn pixels<H: Clone>(call: &mut dyn Call<H>, source: &Value<H>) -> Result<Arc<Pixmap>, Error> {
+pub(crate) fn pixels<H: Clone>(call: &mut dyn Call<H>, source: &Value<H>) -> Result<Arc<Pixmap>, Error> {
     let Value::Js(source) = source else {
         return crate::canvas::image_pixels(call, source);
     };

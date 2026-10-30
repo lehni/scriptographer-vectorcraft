@@ -14,14 +14,16 @@ use std::time::Duration;
 use serde_json::Value as Json;
 use vectorcraft_doc::{Document, NodeId, Selection};
 
+use crate::overlay::{Overlay, View};
 use crate::{Engine, Error, Key, Modifiers, MouseEvent, PaletteEvent, Patch, PlatformEngine, Runtime, Scope, Setup};
 
 /// What the app asks a worker to do.
 pub enum Request {
     /// Make the document `uid` the active one, and catch up with it, its active artboard and the
     /// style new art takes in the app (as [`crate::host::current_style`] makes it), then do `work`
-    /// at `now`, in milliseconds since the script started.
-    Run { uid: u64, doc: Arc<Document>, selection: Selection, artboard: usize, style: Json, now: f64, work: Work },
+    /// at `now`, in milliseconds since the script started, and draw the overlay of its draw
+    /// handlers for the document's `view`, when the app shows one.
+    Run { uid: u64, doc: Arc<Document>, selection: Selection, artboard: usize, style: Json, now: f64, view: Option<View>, work: Work },
     /// The answer to [`Reply::Changes`]: `document.patch`'s result, and the document after it.
     /// `behind` when the document had changed in other ways since the patch's base.
     Applied { result: Json, doc: Arc<Document>, selection: Selection, behind: bool },
@@ -56,6 +58,9 @@ pub enum Work {
     /// Nothing but the document the work comes with, the document `uid`: the script catches up
     /// with it, and its project becomes the active one, as the user switches documents.
     Switch(u64),
+    /// Nothing but the overlay of the draw handlers, for the view the work comes with, which
+    /// panned or zoomed since they last drew.
+    Draw,
     /// The user's answer to the oldest of the script's dialogs, on the web, where the script didn't
     /// wait for it ([`crate::Runtime::answer`]).
     #[cfg(target_arch = "wasm32")]
@@ -86,7 +91,7 @@ pub enum Reply {
     /// a frame once the document changed, whether it made a tool, whether that tool handles keys,
     /// the palettes that are new or changed (as [`crate::Runtime::take_palettes`] has them),
     /// whether it has palettes open, whether it listens for keys on its `document` or `window`,
-    /// and whether it set `script.keepAlive`.
+    /// whether it set `script.keepAlive`, and what its draw handlers drew, if anything.
     Done {
         output: Vec<String>,
         error: Option<String>,
@@ -98,6 +103,7 @@ pub enum Reply {
         open: bool,
         listening: bool,
         keep_alive: bool,
+        overlay: Option<Overlay>,
     },
 }
 
@@ -109,6 +115,8 @@ struct Script<E: Engine> {
     /// The app's style, as last set as each document's project's current style: set again only
     /// when the app's changes, so a style the script sets itself stays until then.
     styles: Vec<(u64, Json)>,
+    /// What its draw handlers drew after its last work, for its `Done`.
+    overlay: Option<Overlay>,
 }
 
 impl<E: Engine> Script<E> {
@@ -117,12 +125,12 @@ impl<E: Engine> Script<E> {
         let mut runtime = Runtime::<E>::new()?;
         runtime.set_script(setup)?;
         let scope = runtime.create_scope(size.0, size.1)?;
-        Ok(Self { runtime, scope, pending: Default::default(), styles: Vec::new() })
+        Ok(Self { runtime, scope, pending: Default::default(), styles: Vec::new(), overlay: None })
     }
 
     fn handle(&mut self, request: Request) -> Vec<Reply> {
         match request {
-            Request::Run { uid, doc, selection, artboard, style, now, work } => self.run(uid, doc, selection, artboard, style, now, work),
+            Request::Run { uid, doc, selection, artboard, style, now, view, work } => self.run(uid, doc, selection, artboard, style, now, view, work),
             // An answer no dialog waits for.
             Request::Answer(_) => Vec::new(),
             Request::Applied { result, doc, selection, behind } => match self.pending.pop_front() {
@@ -145,7 +153,17 @@ impl<E: Engine> Script<E> {
     /// Does `work` with the document `uid` active, and replies what it changed, even when it
     /// threw, as a browser keeps what a script did before an error.
     #[allow(clippy::too_many_arguments)]
-    fn run(&mut self, uid: u64, doc: Arc<Document>, selection: Selection, artboard: usize, style: Json, now: f64, work: Work) -> Vec<Reply> {
+    fn run(
+        &mut self,
+        uid: u64,
+        doc: Arc<Document>,
+        selection: Selection,
+        artboard: usize,
+        style: Json,
+        now: f64,
+        view: Option<View>,
+        work: Work,
+    ) -> Vec<Reply> {
         self.runtime.set_now(now);
         if let Err(e) = self.runtime.bind(&self.scope, uid, doc, selection) {
             return vec![self.done(Some(e.to_string()))];
@@ -178,7 +196,7 @@ impl<E: Engine> Script<E> {
             Work::Palette(id, event) => self.runtime.palette_event(id, event),
             Work::Activate(active) => self.runtime.activate_tool(&self.scope, active),
             Work::Handler(name) => self.runtime.call_handler(name).map(|_| ()),
-            Work::Switch(_) => Ok(()),
+            Work::Switch(_) | Work::Draw => Ok(()),
             #[cfg(target_arch = "wasm32")]
             Work::Answer(answer) => self.runtime.answer(&answer),
             #[cfg(target_arch = "wasm32")]
@@ -193,8 +211,10 @@ impl<E: Engine> Script<E> {
             changes => changes,
         };
         let changes = changes.map(|changes| replies.extend(changes));
+        // The handlers draw the project as the script left it, its changes included:
+        let drawn = view.map_or(Ok(None), |view| self.runtime.draw_overlay(view)).map(|overlay| self.overlay = overlay);
         replies.extend(prevented.map(|prevented| Reply::Key { prevented }));
-        replies.push(self.done(result.and(changes).err().map(|e| e.to_string())));
+        replies.push(self.done(result.and(changes).and(drawn).err().map(|e| e.to_string())));
         replies
     }
 
@@ -243,7 +263,8 @@ impl<E: Engine> Script<E> {
             Ok(()) => error,
             Err(e) => error.or(Some(e.to_string())),
         };
-        Reply::Done { output: self.runtime.take_output(), error, wake, effects, tool, keys, palettes, open, listening, keep_alive }
+        let overlay = self.overlay.take();
+        Reply::Done { output: self.runtime.take_output(), error, wake, effects, tool, keys, palettes, open, listening, keep_alive, overlay }
     }
 }
 
@@ -288,6 +309,7 @@ impl Worker {
                             open: false,
                             listening: false,
                             keep_alive: false,
+                            overlay: None,
                         });
                         return;
                     }

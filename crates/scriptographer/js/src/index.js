@@ -13,6 +13,7 @@ import { createConsole } from './console.js'
 import { Crypto } from './crypto.js'
 import { setupDialog } from './dialog.js'
 import { applyEffect, watchEffects } from './effects.js'
+import { drawOverlay } from './overlay.js'
 import { DOMException } from './dom-exception.js'
 import {
   TextDecoder,
@@ -168,7 +169,8 @@ if (natives.fs) {
   inject(navigator, { storage: new StorageManager() }, { writable: false })
 }
 if (!globalThis.OffscreenCanvas) {
-  inject(globalThis, { ...canvas })
+  const { canvasSurface, ...classes } = canvas
+  inject(globalThis, { ...classes })
 }
 // The script's URL, once the runtime knows its file; a browser has the page's:
 if (!globalThis.location) {
@@ -195,6 +197,8 @@ inject(globalThis, { Palette })
 Object.assign(natives, { takePalettes, hasPalettes, handlePaletteEvent })
 // What it watches the scripts' effects with, and draws them with:
 Object.assign(natives, { watchEffects, applyEffect })
+// What it draws the overlay of the items' draw handlers with:
+Object.assign(natives, { drawOverlay })
 // What it fires the keys typed on the canvas with, and asks whether a script
 // waits for them:
 setupKeys()
