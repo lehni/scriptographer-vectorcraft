@@ -37,6 +37,7 @@ mod fs;
 pub mod host;
 #[cfg(not(target_arch = "wasm32"))]
 mod locks;
+#[cfg(not(target_arch = "wasm32"))]
 mod modules;
 pub mod overlay;
 mod palette;
@@ -154,7 +155,7 @@ pub struct Host<H> {
     asked: std::collections::VecDeque<dialog::Asked<H>>,
     /// What `Dialog` uses of the script's realm.
     dialog_globals: Option<dialog::Globals<H>>,
-    /// The script's file, which its imports are relative to.
+    /// The script's file.
     file: Option<std::path::PathBuf>,
     /// The script's folder, which relative paths of `LocalFile`s are in.
     directory: Option<std::path::PathBuf>,
@@ -162,10 +163,6 @@ pub struct Host<H> {
     /// them.
     #[cfg(not(target_arch = "wasm32"))]
     private_directory: Option<std::path::PathBuf>,
-    /// What `import` needs, once a script runs.
-    loader: Option<modules::Loader<H>>,
-    /// The modules the scripts imported.
-    modules: Vec<modules::Module<H>>,
     /// When the runtime started, for `performance.now()` outside a browser.
     #[cfg(not(target_arch = "wasm32"))]
     started: Option<std::time::Instant>,
@@ -226,8 +223,6 @@ pub struct Host<H> {
     /// The folder of the copies of what scripts import from the web ([`Setup`]), which its workers
     /// use too.
     cache: Option<std::path::PathBuf>,
-    /// The [`HANDLERS`] the scripts defined, by name.
-    handlers: Vec<(&'static str, H)>,
     /// Why a script with top-level `await` failed, once it did, for the call it happened in.
     failure: Option<Error>,
     /// The effects the scripts define.
@@ -281,8 +276,6 @@ impl<H> Default for Host<H> {
             directory: None,
             #[cfg(not(target_arch = "wasm32"))]
             private_directory: None,
-            loader: None,
-            modules: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
             #[cfg(not(target_arch = "wasm32"))]
             started: None,
@@ -326,7 +319,6 @@ impl<H> Default for Host<H> {
             session_storage: storage::Storage::default(),
             language: None,
             cache: None,
-            handlers: Vec::new(),
             failure: None,
             rejections: Vec::new(),
             script_effects: script_effects::Defined::default(),
@@ -339,8 +331,6 @@ pub struct Runtime<E: Engine> {
     engine: E,
     host: Rc<RefCell<Host<E::Handle>>>,
     paper: E::Handle,
-    /// The loader of `import`s ([`modules::load`]).
-    load: E::Handle,
 }
 
 /// What the app gives a script when it starts: its file (none for code typed in the console), the
@@ -383,7 +373,7 @@ impl<E: Engine> Runtime<E> {
         let natives = [
             vec![("print", engine.function("print", print)?), ("ask", engine.function("ask", dialog::ask_native)?)],
             #[cfg(not(target_arch = "wasm32"))]
-            vec![("dom", engine.function("dom", dom::load)?)],
+            vec![("dom", engine.function("dom", dom::load)?), ("readModule", engine.function("readModule", modules::read)?)],
             #[cfg(not(target_arch = "wasm32"))]
             web::natives(&mut engine)?,
         ]
@@ -439,8 +429,7 @@ impl<E: Engine> Runtime<E> {
         dialog::install(&mut engine, &global)?;
         install_globals(&mut engine)?;
         let paper = engine.with_call(|call| object(call, &global, "paper"))?;
-        let load = engine.function("load", modules::load)?;
-        let mut runtime = Self { engine, host, paper, load };
+        let mut runtime = Self { engine, host, paper };
         clone::install(&mut runtime.engine, &global)?;
         Ok(runtime)
     }
@@ -461,15 +450,12 @@ impl<E: Engine> Runtime<E> {
         })
     }
 
-    /// Compiles and runs `source` as PaperScript in `scope`, with its `import`s ([`modules`]). The
-    /// [`HANDLERS`] it defines are kept for [`Runtime::call_handler`]: with top-level `await`, once
-    /// it has finished, and its failure is the error of this call, or of the frame it happens in
-    /// ([`Runtime::run_timers`]).
+    /// Compiles and runs `source` as PaperScript in `scope`, with its `import`s, through the
+    /// bundle's `executeScript()`, which keeps the [`HANDLERS`] it exports for
+    /// [`Runtime::call_handler`]: with top-level `await`, once it has finished, and its failure is
+    /// the error of this call, or of the frame it happens in ([`Runtime::run_timers`]).
     pub fn execute(&mut self, scope: &Scope<E::Handle>, source: &str) -> Result<(), Error> {
-        let kept = self.engine.function("kept", |call, _, args| {
-            keep_handlers(call, args.first())?;
-            Ok(Value::Undefined)
-        })?;
+        let url = self.script_url();
         let failed = self.engine.function("failed", |call, _, args| {
             let reason = args.first().cloned().unwrap_or(Value::Undefined);
             let mut message = call.to_string(&reason)?;
@@ -483,23 +469,24 @@ impl<E: Engine> Runtime<E> {
             call.host()?.borrow_mut().failure = Some(Error::Script(message));
             Ok(Value::Undefined)
         })?;
-        let (paper, host, load) = (&self.paper, &self.host, &self.load);
         self.engine.with_call(|call| {
-            let paperscript = object(call, paper, "PaperScript")?;
-            modules::set_up(call, paper, &scope.0, load.clone())?;
-            let url = host.borrow().file.as_ref().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
-            // The script itself is PaperScript, whatever its name.
-            let options = modules::options(call, &url, true)?;
-            let exports = method(call, &paperscript, "execute", &[Value::String(source.to_owned()), Value::Js(scope.0.clone()), Value::Js(options)])?;
-            // A script with top-level `await` gives a Promise of its exports.
-            match &exports {
-                Value::Js(promise) if matches!(call.get(promise, "then")?, Value::Js(_)) => {
-                    method(call, promise, "then", &[Value::Js(kept), Value::Js(failed)]).map(|_| ())
-                }
-                _ => keep_handlers(call, Some(&exports)),
+            let args = [Value::Js(scope.0.clone()), Value::String(source.to_owned()), Value::String(url)];
+            if let Value::Js(finished) = call_bundle(call, "executeScript", &args)? {
+                method(call, &finished, "catch", &[Value::Js(failed)])?;
             }
+            Ok(())
         })?;
         self.failure()
+    }
+
+    /// The URL of the script's file, which its imports resolve against; none for code typed in
+    /// the console, or on the web.
+    fn script_url(&self) -> String {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(url) = self.host.borrow().file.as_ref().and_then(|file| url::Url::from_file_path(file).ok()) {
+            return url.into();
+        }
+        String::new()
     }
 
     /// Runs `source` as a classic script in the realm's global scope, as a browser's `<script>`
@@ -511,12 +498,7 @@ impl<E: Engine> Runtime<E> {
     /// Calls the script's handler `name` (one of [`HANDLERS`]), when it defines one. Returns
     /// whether it did.
     pub fn call_handler(&mut self, name: &str) -> Result<bool, Error> {
-        let handler = self.host.borrow().handlers.iter().find(|(n, _)| *n == name).map(|(_, h)| h.clone());
-        let Some(handler) = handler else {
-            return Ok(false);
-        };
-        self.engine.with_call(|call| call.call(&handler, &Value::Undefined, &[]))?;
-        Ok(true)
+        self.engine.with_call(|call| Ok(matches!(call_bundle(call, "callHandler", &[Value::String(name.into())])?, Value::Bool(true))))
     }
 
     /// Adds the items in `json`, Paper.js JSON, to the scope's project (`project.importJSON()`).
@@ -677,34 +659,20 @@ impl<E: Engine> Runtime<E> {
             host.file = file.map(std::path::PathBuf::from);
             host.directory = directory.clone();
         }
+        let preferences = match self.host.borrow().local_storage.with(|s| s.preferences.clone()) {
+            kept @ serde_json::Value::Object(_) => Value::String(kept.to_string()),
+            _ => Value::Null,
+        };
+        // On the web, scripts have no files.
+        #[cfg(not(target_arch = "wasm32"))]
+        let path = |path: Option<&std::path::Path>| path.map_or(Value::Null, |path| Value::String(path.to_string_lossy().into_owned()));
+        #[cfg(not(target_arch = "wasm32"))]
+        let paths = [path(file.map(std::path::Path::new)), path(directory.as_deref())];
+        #[cfg(target_arch = "wasm32")]
+        let paths = [Value::Null, Value::Null];
         self.engine.with_call(|call| {
-            let script = call.new_object()?;
-            // On the web, scripts have no files.
-            #[cfg(not(target_arch = "wasm32"))]
-            let (file, directory) = (
-                match file {
-                    Some(file) => new_local_file(call, file)?,
-                    None => Value::Null,
-                },
-                match &directory {
-                    Some(directory) => new_local_file(call, &directory.to_string_lossy())?,
-                    None => Value::Null,
-                },
-            );
-            #[cfg(target_arch = "wasm32")]
-            let (file, directory) = (Value::Null, Value::Null);
-            call.set(&script, "file", &file)?;
-            call.set(&script, "directory", &directory)?;
-            call.set(&script, "keepAlive", &Value::Bool(false))?;
-            let preferences = match self.host.borrow().local_storage.with(|s| s.preferences.clone()) {
-                kept @ serde_json::Value::Object(_) => kept,
-                _ => serde_json::json!({}),
-            };
-            // As Paper.js serializes them, so they come back as Colors, Points…
-            let base = object(call, &self.paper, "Base")?;
-            let preferences = method(call, &base, "importJSON", &[Value::String(preferences.to_string())])?;
-            call.set(&script, "preferences", &preferences)?;
-            call.set(&global, "script", &Value::Js(script))?;
+            let [file, directory] = paths;
+            call_bundle(call, "setScript", &[file, directory, preferences])?;
             if let (Some(language), Value::Js(navigator)) = (language, call.get(&global, "navigator")?) {
                 set_language(call, &navigator, language)?;
             }
@@ -725,16 +693,9 @@ impl<E: Engine> Runtime<E> {
 
     /// Keeps `script.preferences` with the script's `localStorage`, when they changed.
     pub fn keep_preferences(&mut self) -> Result<(), Error> {
-        let global = self.engine.global()?;
-        let preferences = self.engine.with_call(|call| {
-            let Value::Js(script) = call.get(&global, "script")? else {
-                return Ok(None);
-            };
-            let preferences = call.get(&script, "preferences")?;
-            let globals = dialog::globals(call)?;
-            dialog::to_json(call, &globals, &preferences).map(Some)
-        })?;
-        if let Some(preferences) = preferences {
+        let preferences = self.engine.with_call(|call| call_bundle(call, "getPreferences", &[]))?;
+        if let Value::String(preferences) = preferences {
+            let preferences = serde_json::from_str(&preferences).map_err(|e| Error::Script(format!("script.preferences: {e}")))?;
             self.host.borrow().local_storage.with(|s| s.keep_preferences(preferences));
         }
         Ok(())
@@ -742,13 +703,7 @@ impl<E: Engine> Runtime<E> {
 
     /// Whether the script set `script.keepAlive`.
     pub fn keep_alive(&mut self) -> Result<bool, Error> {
-        let global = self.engine.global()?;
-        self.engine.with_call(|call| {
-            let Value::Js(script) = call.get(&global, "script")? else {
-                return Ok(false);
-            };
-            Ok(matches!(call.get(&script, "keepAlive")?, Value::Bool(true)))
-        })
+        self.engine.with_call(|call| Ok(matches!(call_bundle(call, "keepsAlive", &[])?, Value::Bool(true))))
     }
 
     /// A way to stop the runtime's scripts from another thread, where the engine has one.
@@ -898,22 +853,6 @@ impl<E: Engine> Runtime<E> {
 }
 
 /// The options of an event Paper.js dispatches: the keys held.
-/// Keeps the [`HANDLERS`] in a script's `exports` for [`Runtime::call_handler`].
-fn keep_handlers<H: Clone>(call: &mut dyn Call<H>, exports: Option<&Value<H>>) -> Result<(), Error> {
-    let Some(Value::Js(exports)) = exports else {
-        return Ok(());
-    };
-    for name in HANDLERS {
-        if let Value::Js(handler) = call.get(exports, name)? {
-            let host = call.host()?;
-            let mut host = host.borrow_mut();
-            host.handlers.retain(|(n, _)| n != &name);
-            host.handlers.push((name, handler));
-        }
-    }
-    Ok(())
-}
-
 fn event_options<H>(call: &mut dyn Call<H>, modifiers: Modifiers) -> Result<H, Error> {
     let held = call.new_object()?;
     for (name, down) in [("shift", modifiers.shift), ("control", modifiers.control), ("alt", modifiers.alt), ("meta", modifiers.meta)] {
@@ -963,13 +902,6 @@ fn print<H>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Resu
     let line = call.to_string(args.first().unwrap_or(&Value::Undefined))?;
     call.host()?.borrow_mut().print(line);
     Ok(Value::Undefined)
-}
-
-/// A `LocalFile` of `path` (core's `src/local-file.js`).
-#[cfg(not(target_arch = "wasm32"))]
-fn new_local_file<H: Clone>(call: &mut dyn Call<H>, path: &str) -> Result<Value<H>, Error> {
-    let class = global_class(call, "LocalFile")?;
-    call.construct(&class, &[Value::String(path.to_owned())])
 }
 
 /// Calls the function `name` the bundle gave the runtime (core's `src/index.js`) with `args`.
