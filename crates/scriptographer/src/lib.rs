@@ -3,8 +3,9 @@
 //! A [`Runtime`] loads Paper.js into a JavaScript [`Engine`]: V8 on desktop, the browser's engine
 //! on the web, Boa where V8 isn't available. The globals Paper.js needs from its host (`self`,
 //! `navigator`, `console`, `setInterval`) are written here once, over the engine interface, or in
-//! JavaScript (`js/src`). Each
-//! [`Scope`] is a `PaperScope` with its own project and view, in which scripts run as PaperScript.
+//! JavaScript, in the bundle VectorCraft shares with Scriptographer's other hosts
+//! (scriptographer-core, copied into `core/`). Each [`Scope`] is a `PaperScope` with its own
+//! project and view, in which scripts run as PaperScript.
 
 #![forbid(unsafe_code)]
 
@@ -90,20 +91,20 @@ pub type PlatformEngine = V8;
 #[cfg(all(feature = "boa", not(feature = "v8"), not(target_arch = "wasm32")))]
 pub type PlatformEngine = Boa;
 
-/// Paper.js with the PaperScript compiler and items backed by a host document: the vendored
-/// `paper-hosted.js` build of Paper.js 0.14.0-develop (MIT; `dist/paper-hosted.js` of the npm package),
-/// or the build `SCRIPTOGRAPHER_PAPER_JS` names (see `build.rs`).
+/// Paper.js with the PaperScript compiler and items backed by a host document: the
+/// `paper-hosted.js` build of Paper.js's `develop` that scriptographer-core vendors (MIT), or the
+/// build `SCRIPTOGRAPHER_PAPER_JS` names (see `build.rs`).
 const PAPER_JS: &str = include_str!(env!("SCRIPTOGRAPHER_PAPER_JS_PATH"));
 
 /// Acorn 8.19.0 (MIT; `dist/acorn.js` of the npm package), which PaperScript prefers to the Acorn
 /// 0.5 Paper.js bundles when it finds it as `self.acorn`: scripts can use today's JavaScript.
-const ACORN: &str = include_str!("../vendor/acorn.js");
+const ACORN: &str = include_str!(concat!(env!("SCRIPTOGRAPHER_CORE_PATH"), "/vendor/acorn.js"));
 
-/// What scripts see that's written in JavaScript (`js/src`, bundled by `pnpm run build`).
-const SCRIPTOGRAPHER_JS: &str = include_str!("../js/dist/scriptographer.js");
+/// What scripts see that's written in JavaScript: scriptographer-core's bundle (see `build.rs`).
+const SCRIPTOGRAPHER_JS: &str = include_str!(concat!(env!("SCRIPTOGRAPHER_CORE_PATH"), "/dist/scriptographer.js"));
 /// What scripts see on the web that's written in JavaScript.
 #[cfg(target_arch = "wasm32")]
-const SCRIPTOGRAPHER_WEB_JS: &str = include_str!("../js/dist/scriptographer-web.js");
+const SCRIPTOGRAPHER_WEB_JS: &str = include_str!(concat!(env!("SCRIPTOGRAPHER_CORE_PATH"), "/dist/scriptographer-web.js"));
 
 /// The version of the Paper.js build scripts run with, as its header names it (`0.13.0-develop`).
 pub fn paper_version() -> &'static str {
@@ -212,7 +213,7 @@ pub struct Host<H> {
     exceptions: Option<exception::Classes<H>>,
     /// The realm's global object, for its classes ([`global_class`]).
     global: Option<H>,
-    /// What the runtime and the JavaScript bundle share (`js/src/natives.js`): the natives it
+    /// What the runtime and the JavaScript bundle share (core's `src/natives.js`): the natives it
     /// passes, and the functions the bundle gives back.
     shared: Option<H>,
     /// What `structuredClone()` uses of the realm.
@@ -376,7 +377,7 @@ impl<E: Engine> Runtime<E> {
         let global = engine.global()?;
         host.borrow_mut().global = Some(global.clone());
         // What's written in JavaScript, before the classes that build on it (`LocalFile` on
-        // `File`), with the natives it needs (`js/src/natives.js`): `print()` for the script's
+        // `File`), with the natives it needs (core's `src/natives.js`): `print()` for the script's
         // output, `ask()` for its dialogs, the storages' items, and outside a browser what the
         // browser's APIs need of the runtime.
         let natives = [
@@ -957,21 +958,21 @@ fn handle<H>(value: Value<H>, name: &str) -> Result<H, Error> {
 }
 
 /// `print(text)`: a line of the script's output ([`Runtime::take_output`]), as the console writes
-/// it (`js/src/console.js`).
+/// it (core's `src/console.js`).
 fn print<H>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let line = call.to_string(args.first().unwrap_or(&Value::Undefined))?;
     call.host()?.borrow_mut().print(line);
     Ok(Value::Undefined)
 }
 
-/// A `LocalFile` of `path` (`js/src/local-file.js`).
+/// A `LocalFile` of `path` (core's `src/local-file.js`).
 #[cfg(not(target_arch = "wasm32"))]
 fn new_local_file<H: Clone>(call: &mut dyn Call<H>, path: &str) -> Result<Value<H>, Error> {
     let class = global_class(call, "LocalFile")?;
     call.construct(&class, &[Value::String(path.to_owned())])
 }
 
-/// Calls the function `name` the bundle gave the runtime (`js/src/index.js`) with `args`.
+/// Calls the function `name` the bundle gave the runtime (core's `src/index.js`) with `args`.
 pub(crate) fn call_bundle<H: Clone>(call: &mut dyn Call<H>, name: &str, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let shared = call.host()?.borrow().shared.clone().ok_or_else(|| Error::Script("the bundle is not set up".into()))?;
     method(call, &shared, name, args)

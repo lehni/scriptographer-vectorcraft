@@ -102,16 +102,31 @@
     isSecureContext: () => isSecureContext,
     performance: () => performance2,
     queueMicrotask: () => queueMicrotask2,
-    reportError: () => reportError
+    reportError: () => reportError2
   });
 
   // src/format-error.js
   function formatError(err) {
     const text = String(err);
     const stack = err?.stack;
-    return typeof stack === "string" && stack.startsWith(text) ? stack : text;
+    if (typeof stack !== "string") return text;
+    const frames = (stack.startsWith(text) ? stack.slice(text.length) : stack).split("\n").filter((line) => {
+      const file = getFile(line);
+      return !!file && getFolder(file) !== runtimeFolder;
+    });
+    return [text, ...frames].join("\n");
   }
   __name(formatError, "formatError");
+  function getFile(frame) {
+    return frame.match(/([a-z][\w+.-]*:[^\s()@]+):\d+:\d+\)?$/i)?.[1];
+  }
+  __name(getFile, "getFile");
+  function getFolder(file) {
+    return file.slice(0, file.lastIndexOf("/") + 1);
+  }
+  __name(getFolder, "getFolder");
+  var runtimeFile = new Error().stack?.split("\n").map(getFile).find(Boolean);
+  var runtimeFolder = runtimeFile ? getFolder(runtimeFile) : null;
 
   // src/global-scope.js
   var isSecureContext = true;
@@ -130,15 +145,15 @@
       try {
         callback();
       } catch (err) {
-        reportError(err);
+        reportError2(err);
       }
     });
   }
   __name(queueMicrotask2, "queueMicrotask");
-  function reportError(err) {
+  function reportError2(err) {
     console.error(`Uncaught ${formatError(err)}`);
   }
-  __name(reportError, "reportError");
+  __name(reportError2, "reportError");
   var alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   function atob2(data) {
     let text = String(data).replace(/[\t\n\f\r ]/g, "");
@@ -263,7 +278,7 @@
               throw new TypeError("Invalid listener: it has no handleEvent().");
             }
           } catch (err) {
-            reportError(err);
+            reportError2(err);
           }
           state.passive = false;
           if (state.stopImmediately) break;
@@ -518,21 +533,21 @@
             return handlersByTarget.get(this)?.[type]?.handler ?? null;
           },
           set [`on${type}`](handler2) {
-            let handlers = handlersByTarget.get(this);
-            if (!handlers) {
-              handlers = {};
-              handlersByTarget.set(this, handlers);
+            let handlers2 = handlersByTarget.get(this);
+            if (!handlers2) {
+              handlers2 = {};
+              handlersByTarget.set(this, handlers2);
             }
-            const entry = handlers[type];
+            const entry = handlers2[type];
             if (typeof handler2 !== "function") {
               if (entry) {
                 this.removeEventListener(type, entry.listener);
-                delete handlers[type];
+                delete handlers2[type];
               }
             } else if (entry) {
               entry.handler = handler2;
             } else {
-              const entry2 = handlers[type] = { handler: handler2 };
+              const entry2 = handlers2[type] = { handler: handler2 };
               entry2.listener = function(event) {
                 if (entry2.handler.call(this, event) === false) {
                   event.preventDefault();
@@ -709,7 +724,7 @@
     WritableStreamDefaultWriter: () => WritableStreamDefaultWriter
   });
 
-  // ../vendor/web-streams-polyfill.mjs
+  // vendor/web-streams-polyfill.mjs
   /**
    * @license
    * web-streams-polyfill v4.3.0
@@ -7143,7 +7158,7 @@ ${stack}` : ""));
     const body = await Body.read(request);
     signal?.throwIfAborted();
     if (url.startsWith("file:") && natives.fs) {
-      return getFile(method, url.replace(/#.*$/s, ""));
+      return getFile2(method, url.replace(/#.*$/s, ""));
     }
     if (url.startsWith("data:")) {
       const href = url.replace(/#.*$/s, "");
@@ -7208,7 +7223,7 @@ ${stack}` : ""));
   }
   __name(fetch2, "fetch");
   var mostBytes = 512 * 1024 * 1024;
-  function getFile(method, url) {
+  function getFile2(method, url) {
     if (method !== "GET" && method !== "HEAD") {
       throw new TypeError(`fetch failed: '${url}' can only be read.`);
     }
@@ -7227,7 +7242,7 @@ ${stack}` : ""));
     });
     return setResponse(response, { url, redirected: false, type: "basic" });
   }
-  __name(getFile, "getFile");
+  __name(getFile2, "getFile");
   function getData(url) {
     const data = url.slice("data:".length);
     const comma = data.indexOf(",");
@@ -7908,6 +7923,118 @@ ${value}\r
   }
   __name(call, "call");
 
+  // src/modules.js
+  var modules = /* @__PURE__ */ new Map();
+  function getOptions3(scope, url, isPaperScript, handlers2) {
+    return {
+      url,
+      load: /* @__PURE__ */ __name((specifier, importer, attributes) => load(scope, specifier, importer, attributes), "load"),
+      evaluate: natives.evaluate,
+      handlers: handlers2,
+      paperFeatures: isPaperScript ? void 0 : { operatorOverloading: false }
+    };
+  }
+  __name(getOptions3, "getOptions");
+  function load(scope, specifier, importer, attributes) {
+    const fail = /* @__PURE__ */ __name((message) => {
+      throw new Error(`import '${specifier}': ${message}`);
+    }, "fail");
+    let url;
+    try {
+      url = new URL(specifier, importer || void 0);
+    } catch {
+      fail("it names no file the script can find");
+    }
+    const type = attributes?.type;
+    if (type != null && type !== "paperscript" && type !== "javascript") {
+      throw new TypeError(
+        `import '${specifier}': '${type}' isn't a type of module`
+      );
+    }
+    const isPaperScript = type ? type === "paperscript" : /\.pjs$/i.test(url.pathname);
+    const key = `${isPaperScript ? "paperscript" : "javascript"} ${url.href}`;
+    if (modules.has(key)) {
+      return modules.get(key) ?? fail("it imports itself, through its imports");
+    }
+    if (/^https?:$/.test(url.protocol)) natives.print(`import ${url.href}`);
+    let source;
+    try {
+      source = natives.readModule(url.href);
+    } catch (err) {
+      fail(err.message);
+    }
+    modules.set(key, null);
+    try {
+      const exports = scope.PaperScript.execute(
+        source,
+        scope,
+        getOptions3(scope, url.href, isPaperScript)
+      );
+      modules.set(key, exports);
+      return exports;
+    } catch (err) {
+      modules.delete(key);
+      throw err;
+    }
+  }
+  __name(load, "load");
+
+  // src/script.js
+  function setScript(file, directory, preferences) {
+    inject(globalThis, {
+      script: {
+        file: file ? new LocalFile2(file) : null,
+        directory: directory ? new LocalFile2(directory) : null,
+        keepAlive: false,
+        preferences: preferences ? paper.Base.importJSON(preferences) : {}
+      }
+    });
+  }
+  __name(setScript, "setScript");
+  function getPreferences() {
+    const preferences = globalThis.script?.preferences;
+    return preferences ? paper.Base.exportJSON(preferences) : null;
+  }
+  __name(getPreferences, "getPreferences");
+  function keepsAlive() {
+    return globalThis.script?.keepAlive === true;
+  }
+  __name(keepsAlive, "keepsAlive");
+  var handlerNames = [
+    "onStartup",
+    "onShutdown",
+    "onStop",
+    "onAppActivate",
+    "onAppDeactivate",
+    "onEditOptions"
+  ];
+  var handlers = {};
+  function executeScript(scope, source, url) {
+    const exported = scope.PaperScript.execute(
+      source,
+      scope,
+      getOptions3(scope, url, true, handlerNames)
+    );
+    if (typeof exported?.then === "function") {
+      exported.then(
+        (exported2) => Object.assign(handlers, exported2),
+        (err) => reportError(err)
+      );
+    } else {
+      Object.assign(handlers, exported);
+    }
+  }
+  __name(executeScript, "executeScript");
+  function callHandler(name) {
+    const handler2 = handlers[name];
+    if (typeof handler2 === "function") {
+      handler2();
+      return true;
+    }
+    return false;
+  }
+  __name(callHandler, "callHandler");
+
   // src/storage.js
   var sessions = /* @__PURE__ */ new WeakMap();
   var Storage = class {
@@ -8025,7 +8152,7 @@ ${value}\r
   };
   defineInterfaces(StorageManager);
 
-  // ../vendor/urlpattern-polyfill.mjs
+  // vendor/urlpattern-polyfill.mjs
   var Pe2 = Object.defineProperty;
   var a2 = /* @__PURE__ */ __name((e2, t2) => Pe2(e2, "name", { value: t2, configurable: true }), "a");
   var P2 = class {
@@ -9367,7 +9494,7 @@ ${value}\r
         this.#timer = setTimeout(() => this.#fail("timeout"), this.#timeout);
       }
       const isCurrent = /* @__PURE__ */ __name(() => this.#request === request, "isCurrent");
-      const load = /* @__PURE__ */ __name(async () => {
+      const load2 = /* @__PURE__ */ __name(async () => {
         const response = await fetch(this.#url, {
           method: this.#method,
           headers: this.#headers,
@@ -9413,7 +9540,7 @@ ${value}\r
           fireProgress(this, "loadend", loaded, total);
         }
       }, "load");
-      load().catch(() => {
+      load2().catch(() => {
         if (isCurrent()) this.#fail("error");
       });
     }
@@ -9730,6 +9857,13 @@ ${value}\r
   setupKeys();
   Object.assign(natives, { dispatchKey, hasKeyListeners });
   Object.assign(natives, { getSelectedKeys });
+  Object.assign(natives, {
+    executeScript,
+    callHandler,
+    setScript,
+    getPreferences,
+    keepsAlive
+  });
   function getSelectedKeys(project) {
     return JSON.stringify(
       project.selectedItems.map((item) => item.key).filter((key) => Number.isFinite(key))

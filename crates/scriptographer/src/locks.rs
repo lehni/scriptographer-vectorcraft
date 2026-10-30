@@ -1,4 +1,4 @@
-//! `navigator.locks` outside a browser (`js/src/locks.js`): the Web Locks of all of the app's
+//! `navigator.locks` outside a browser (core's `src/locks.js`): the Web Locks of all of the app's
 //! scripts and their workers, as of one origin. A lock that's free is granted at once; one that
 //! frees up later goes to the next request for it, on the requesting script's turn ([`poll`]).
 //! A runtime that ends lets go of its locks and requests ([`forget`]).
@@ -87,7 +87,7 @@ fn manager() -> std::sync::MutexGuard<'static, Manager> {
     MANAGER.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// The natives `js/src/locks.js` talks through: `request(name, exclusive, ifAvailable, steal,
+/// The natives core's `src/locks.js` talks through: `request(name, exclusive, ifAvailable, steal,
 /// receive)`, which gives the request's number and whether it's `granted`, `waiting` or
 /// `unavailable`, `release(number)`, `cancel(number)` and `query()`. What a request hears later,
 /// `granted` or `stolen`, goes to `receive()`.

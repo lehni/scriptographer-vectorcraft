@@ -1,4 +1,4 @@
-//! Scriptographer's `Palette` (`js/src/palette.js`), a panel that stays open while the script
+//! Scriptographer's `Palette` (core's `src/palette.js`), a panel that stays open while the script
 //! runs. The host shows the palettes [`Runtime::take_palettes`] reports, and sends what the user
 //! does with [`Runtime::palette_event`].
 

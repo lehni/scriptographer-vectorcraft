@@ -1,7 +1,7 @@
 //! `Path2D` for scripts outside a browser: a path to fill, stroke, clip with or test points
 //! against, built with the context's path methods (in its own coordinates; the context's transform
 //! applies when it's drawn) or from SVG path data. Its path is kept in a slot, as a canvas's pixels
-//! are, which `js/src/canvas.js` frees when the script drops it.
+//! are, which core's `src/canvas.js` frees when the script drops it.
 
 use svgtypes::{SimplePathSegment, SimplifyingPathParser};
 use vello_cpu::kurbo::{Affine, BezPath};

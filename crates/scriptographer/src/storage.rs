@@ -5,7 +5,7 @@
 //! script runs and when it ends. The runtimes of a script share it while any of them runs, as the
 //! pages of an origin do, so one that runs it again has what the last one kept. A script without a
 //! file or a folder, and `sessionStorage`, keep theirs while the script runs. Each holds up to
-//! 5 MB, as browsers allow. Scripts reach them through `js/src/storage.js`.
+//! 5 MB, as browsers allow. Scripts reach them through core's `src/storage.js`.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
@@ -161,7 +161,7 @@ impl Storage {
     }
 }
 
-/// The natives `js/src/storage.js` keeps the items with, each with whether it's `sessionStorage`
+/// The natives core's `src/storage.js` keeps the items with, each with whether it's `sessionStorage`
 /// first: `getItem(session, key)`, `setItem(session, key, value)`, `removeItem(session, key)`,
 /// `clear(session)` and `keys(session)`.
 pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E::Handle)>, Error> {

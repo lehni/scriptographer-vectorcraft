@@ -1,4 +1,4 @@
-//! What the runtime reads and makes of the `Blob`s of `js/src/blob.js`, which gives the runtime
+//! What the runtime reads and makes of the `Blob`s of core's `src/blob.js`, which gives the runtime
 //! their bytes (`getBytes()`), for structured cloning.
 
 use crate::{Call, Error, Value};

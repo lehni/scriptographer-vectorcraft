@@ -1,4 +1,4 @@
-//! The connections of `EventSource` outside a browser (`js/src/event-source.js`): a connection's
+//! The connections of `EventSource` outside a browser (core's `src/event-source.js`): a connection's
 //! thread requests the stream (`ureq`), reads its events as the HTML standard parses them, and
 //! once the stream ends or breaks, connects again after the reconnection time, with the last
 //! event's id. What it reads goes to the script on its turn ([`poll`]). An open connection keeps
@@ -40,7 +40,7 @@ pub(crate) struct Connection<H> {
     _link: Arc<()>,
 }
 
-/// The natives `js/src/event-source.js` talks through: `open(url, receive)`, which gives the
+/// The natives core's `src/event-source.js` talks through: `open(url, receive)`, which gives the
 /// connection's number, and `close(number)`.
 pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E::Handle)>, Error> {
     let natives: [(&str, HostFunction<E::Handle>); 2] = [("open", open), ("close", close)];

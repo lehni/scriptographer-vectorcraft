@@ -1,11 +1,11 @@
-//! What `URL` and `URLSearchParams` outside a browser (`js/src/url.js`) parse with: the `url`
+//! What `URL` and `URLSearchParams` outside a browser (core's `src/url.js`) parse with: the `url`
 //! crate, which follows the same WHATWG URL standard, its setters too (`url::quirks`).
 
 use url::{Url, quirks};
 
 use crate::{Call, Engine, Error, HostFunction, Value};
 
-/// The natives `js/src/url.js` parses with: `parse(url, base)`, the URL's parts or `null`,
+/// The natives core's `src/url.js` parses with: `parse(url, base)`, the URL's parts or `null`,
 /// `set(href, part, value)`, the parts once `part` is set, `parseQuery(query)`, its
 /// `[name, value]` pairs, and `serializeQuery(pairs)`.
 pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E::Handle)>, Error> {

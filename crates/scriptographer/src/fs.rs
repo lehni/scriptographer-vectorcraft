@@ -1,5 +1,5 @@
-//! What `LocalFile`, the File System Access API and `fetch()` on desktop (`js/src/local-file.js`,
-//! `js/src/file-system.js` and `js/src/fetch.js`) need of the runtime: the file system, by path. A relative path is from
+//! What `LocalFile`, the File System Access API and `fetch()` on desktop (core's `src/local-file.js`,
+//! core's `src/file-system.js` and core's `src/fetch.js`) need of the runtime: the file system, by path. A relative path is from
 //! the script's folder. What fails throws the `DOMException` browsers give: `NotFoundError`,
 //! `NotAllowedError`, …
 

@@ -45,6 +45,9 @@ commands:
   stats [--exact] count tests and lines per crate (--exact: ask the test harness via `-- --list`)
   web-fonts       copy the craft-fonts faces in crates/text/web-fonts.txt into the web site (the Trunk
                   post_build hook; a no-op without CRAFT_FONTS_DIR)
+  scriptographer-core <dir>
+                  copy Scriptographer's bundle from a clean scriptographer-core checkout into
+                  crates/scriptographer/core
 ";
 
 fn main() -> ExitCode {
@@ -68,6 +71,7 @@ fn main() -> ExitCode {
         Some("version") => version::run(&root(), &rest),
         Some("stats") => stats::run(&root(), rest.contains(&"--exact")),
         Some("web-fonts") => web_fonts::run(&root()),
+        Some("scriptographer-core") => cmd_scriptographer_core(&rest),
         Some("-h" | "--help" | "help") | None => {
             print!("{USAGE}");
             Ok(())
@@ -250,15 +254,48 @@ fn cmd_doctests() -> Result<(), String> {
     run(c, "cargo test --workspace --doc")
 }
 
-/// Scriptographer's JavaScript (`crates/scriptographer/js`): formatted with Prettier and Penere,
-/// and the bundles in its `dist/` built from its sources. Needs Node 24 or newer and pnpm.
-fn cmd_scriptographer_js() -> Result<(), String> {
-    let folder = root().join("crates/scriptographer/js");
-    for args in [&["install", "--frozen-lockfile"][..], &["run", "check"]] {
-        let mut c = Command::new("pnpm");
-        c.current_dir(&folder).args(args);
-        let line = format!("pnpm {} (in crates/scriptographer/js; needs Node 24+ and pnpm)", args.join(" "));
-        run(c, &line)?;
+/// `cargo xtask scriptographer-core <dir>`: copies what the runtime loads from a checkout of
+/// scriptographer-core (`dist/`, `vendor/`, `NATIVES.md`) into `crates/scriptographer/core`, and
+/// its commit into `COMMIT`. The checkout must be clean, so the commit names what was copied.
+fn cmd_scriptographer_core(rest: &[&str]) -> Result<(), String> {
+    let [from] = rest else { return Err(format!("usage: cargo xtask scriptographer-core <dir>\n\n{USAGE}")) };
+    let from = Path::new(from);
+    let git = |args: &[&str]| -> Result<String, String> {
+        let out = Command::new("git").current_dir(from).args(args).output().map_err(|e| format!("git: {e}"))?;
+        if !out.status.success() {
+            return Err(format!("git {}: {}", args.join(" "), String::from_utf8_lossy(&out.stderr).trim()));
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_owned())
+    };
+    if !git(&["status", "--porcelain"])?.is_empty() {
+        return Err(format!("{} has uncommitted changes", from.display()));
+    }
+    let commit = git(&["rev-parse", "HEAD"])?;
+    let to = root().join("crates/scriptographer/core");
+    for folder in ["dist", "vendor"] {
+        let target = to.join(folder);
+        if target.exists() {
+            std::fs::remove_dir_all(&target).map_err(|e| format!("{}: {e}", target.display()))?;
+        }
+        copy_dir(&from.join(folder), &target)?;
+    }
+    let copy = |name: &str| std::fs::copy(from.join(name), to.join(name)).map_err(|e| format!("{name}: {e}"));
+    copy("NATIVES.md")?;
+    std::fs::write(to.join("COMMIT"), format!("{commit}\n")).map_err(|e| format!("COMMIT: {e}"))?;
+    eprintln!("copied scriptographer-core {commit}");
+    Ok(())
+}
+
+fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(to).map_err(|e| format!("{}: {e}", to.display()))?;
+    for entry in std::fs::read_dir(from).map_err(|e| format!("{}: {e}", from.display()))? {
+        let path = entry.map_err(|e| format!("{}: {e}", from.display()))?.path();
+        let target = to.join(path.file_name().unwrap_or_default());
+        if path.is_dir() {
+            copy_dir(&path, &target)?;
+        } else {
+            std::fs::copy(&path, &target).map_err(|e| format!("{}: {e}", path.display()))?;
+        }
     }
     Ok(())
 }
@@ -306,7 +343,6 @@ fn cmd_ci() -> Result<(), String> {
                 run(c, "cargo test -p vectorcraft-ui-egui --no-default-features --test install_fonts")
             }),
         ),
-        ("scriptographer-js", Box::new(cmd_scriptographer_js)),
         ("pdf-deps", Box::new(|| pdf_deps::run(&root()))),
         ("assets", Box::new(|| assets::run(&root()))),
         ("brands", Box::new(|| brands::run(&root()))),

@@ -13,7 +13,7 @@ pub(crate) struct Classes<H> {
 }
 
 /// Keeps the realm's error classes, `DOMException` the browser's or that of
-/// `js/src/dom-exception.js`.
+/// core's `src/dom-exception.js`.
 pub(crate) fn install<E: Engine>(engine: &mut E, global: &E::Handle) -> Result<(), Error> {
     engine.with_call(|call| {
         let classes = Classes {

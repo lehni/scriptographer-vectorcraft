@@ -420,7 +420,7 @@ fn make_container<H: Clone>(
     Ok(container)
 }
 
-/// The numbers of a geometry object (`getGeometryValues()` in `js/src/geometry.js`, from its own
+/// The numbers of a geometry object (`getGeometryValues()` in core's `src/geometry.js`, from its own
 /// fields): a point's `x`, `y`, `z` and `w`, a rect's `x`, `y`, `width` and `height`, a quad's
 /// points' sixteen, a matrix's sixteen and whether it's 2D. None for another object.
 fn geometry_values<H: Clone>(call: &mut dyn Call<H>, original: &H) -> Result<Option<Vec<f64>>, Error> {

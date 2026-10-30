@@ -1,4 +1,4 @@
-//! What Scriptographer's `Dialog` (`js/src/dialog.js`) asks the app with: the host answers
+//! What Scriptographer's `Dialog` (core's `src/dialog.js`) asks the app with: the host answers
 //! ([`Runtime::set_ask`]) once the user did, in a dialog the app shows, and scripts on desktop wait
 //! for it, as they did in Scriptographer. On the web, where scripts can't wait, the questions wait
 //! in a queue the app takes one at a time ([`Runtime::take_question`]), and its answer settles
@@ -57,7 +57,7 @@ pub(crate) fn ask<H>(call: &mut dyn Call<H>, question: Json) -> Result<Json, Err
     answer
 }
 
-/// `ask(question)`, which `js/src/dialog.js` asks with: the answer.
+/// `ask(question)`, which core's `src/dialog.js` asks with: the answer.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn ask_native<H: Clone>(call: &mut dyn Call<H>, _this: &Value<H>, args: &[Value<H>]) -> Result<Value<H>, Error> {
     let globals = globals(call)?;

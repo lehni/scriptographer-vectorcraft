@@ -1,4 +1,4 @@
-//! The sockets of `WebSocket` outside a browser (`js/src/websocket.js`), over tungstenite and
+//! The sockets of `WebSocket` outside a browser (core's `src/websocket.js`), over tungstenite and
 //! rustls: a socket's thread connects, then reads (a little at a time) and writes what the script
 //! sends; what it reads goes back to the script on its turn ([`poll`], from `Runtime::run_timers`).
 //! An open socket keeps the script running.
@@ -43,7 +43,7 @@ pub(crate) struct Socket<H> {
     incoming: Receiver<Incoming>,
 }
 
-/// The natives `js/src/websocket.js` talks through: `open(url, protocols, receive)`, which gives
+/// The natives core's `src/websocket.js` talks through: `open(url, protocols, receive)`, which gives
 /// the socket's number, `send(number, data)` (text, or bytes) and `close(number, code, reason)`.
 pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E::Handle)>, Error> {
     let natives: [(&str, HostFunction<E::Handle>); 3] = [("open", open), ("send", send), ("close", close)];

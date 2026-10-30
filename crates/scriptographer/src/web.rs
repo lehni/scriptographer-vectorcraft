@@ -1,4 +1,4 @@
-//! What the browser's everyday APIs outside a browser (`js/src/encoding.js`, `crypto.js` and
+//! What the browser's everyday APIs outside a browser (core's `src/encoding.js`, `crypto.js` and
 //! `global-scope.js`) need of the runtime: its clock, random bytes, and UTF-8.
 
 use std::time::Instant;
@@ -17,7 +17,7 @@ pub(crate) fn natives<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E:
     natives.into_iter().map(|(name, f)| Ok((name, engine.function(name, f)?))).collect()
 }
 
-/// The natives `js/src/encoding.js` encodes and decodes with: `encode(text)`, its UTF-8 bytes, and
+/// The natives core's `src/encoding.js` encodes and decodes with: `encode(text)`, its UTF-8 bytes, and
 /// `decode(bytes, fatal)`, their text, invalid sequences replaced, or `null` when they're `fatal`.
 pub(crate) fn encoding<E: Engine>(engine: &mut E) -> Result<Vec<(&'static str, E::Handle)>, Error> {
     let natives: [(&str, HostFunction<E::Handle>); 2] = [("encode", encode), ("decode", decode)];

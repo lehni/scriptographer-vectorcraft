@@ -1,6 +1,6 @@
 //! The overlay of the items' draw handlers (`onDraw`, `onDrawSelection`, on items or on their
 //! classes), which the app shows over the document: once a script's work is done, Paper.js's
-//! hosted `project.draw()` draws them into a canvas of the view's size (`js/src/overlay.js`),
+//! hosted `project.draw()` draws them into a canvas of the view's size (core's `src/overlay.js`),
 //! whose pixels the app shows until the next work draws them again, moved with the view as it
 //! pans and zooms meanwhile.
 
