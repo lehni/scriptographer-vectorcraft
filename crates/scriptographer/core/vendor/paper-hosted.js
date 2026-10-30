@@ -1,5 +1,5 @@
 /*!
- * Paper.js v0.16.0-HEAD - The Swiss Army Knife of Vector Graphics Scripting.
+ * Paper.js v0.16.0-develop - The Swiss Army Knife of Vector Graphics Scripting.
  * http://paperjs.org/
  *
  * Copyright (c) 2011 - 2020, Jürg Lehni & Jonathan Puckey
@@ -9,7 +9,7 @@
  *
  * All rights reserved.
  *
- * Date: Fri Oct 30 08:04:25 2026 +0100
+ * Date: Fri Oct 30 21:38:29 2026 +0100
  *
  ***
  *
@@ -896,7 +896,7 @@ var PaperScope = Base.extend({
 		}
 	},
 
-	version: "0.16.0-HEAD",
+	version: "0.16.0-develop",
 
 	getProject: function() {
 		return this._project;
@@ -28026,9 +28026,8 @@ Base.exports.PaperScript = function() {
 				|| agent.webkit && version >= 537.76
 				|| agent.firefox && version >= 23
 				|| agent.node)) {
-			if (agent.node) {
-				offset -= 2;
-			} else if (window && url && !window.location.href.indexOf(url)) {
+			if (!agent.node && window && url
+					&& !window.location.href.indexOf(url)) {
 				var html = document.getElementsByTagName('html')[0].innerHTML,
 					index = html.indexOf(code);
 				if (index >= 0) {
@@ -28186,7 +28185,9 @@ Base.exports.PaperScript = function() {
 			delete document.__paperscript__;
 			head.removeChild(script);
 		} else {
-			func = Function('return ' + signature + code + '\n}')();
+			func = (0, eval)(
+				'(' + signature + code + '\n})'
+			);
 		}
 
 		function install(exports) {
