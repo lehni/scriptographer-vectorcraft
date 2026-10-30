@@ -102,7 +102,7 @@
     isSecureContext: () => isSecureContext,
     performance: () => performance2,
     queueMicrotask: () => queueMicrotask2,
-    reportError: () => reportError2
+    reportError: () => reportError
   });
 
   // src/format-error.js
@@ -145,15 +145,15 @@
       try {
         callback();
       } catch (err) {
-        reportError2(err);
+        reportError(err);
       }
     });
   }
   __name(queueMicrotask2, "queueMicrotask");
-  function reportError2(err) {
+  function reportError(err) {
     console.error(`Uncaught ${formatError(err)}`);
   }
-  __name(reportError2, "reportError");
+  __name(reportError, "reportError");
   var alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   function atob2(data) {
     let text = String(data).replace(/[\t\n\f\r ]/g, "");
@@ -278,7 +278,7 @@
               throw new TypeError("Invalid listener: it has no handleEvent().");
             }
           } catch (err) {
-            reportError2(err);
+            reportError(err);
           }
           state.passive = false;
           if (state.stopImmediately) break;
@@ -8016,13 +8016,11 @@ ${value}\r
       getOptions3(scope, url, true, handlerNames)
     );
     if (typeof exported?.then === "function") {
-      exported.then(
-        (exported2) => Object.assign(handlers, exported2),
-        (err) => reportError(err)
-      );
-    } else {
-      Object.assign(handlers, exported);
+      return exported.then((exported2) => {
+        Object.assign(handlers, exported2);
+      });
     }
+    Object.assign(handlers, exported);
   }
   __name(executeScript, "executeScript");
   function callHandler(name) {
